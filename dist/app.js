@@ -2,18 +2,20 @@
 const $=s=>document.querySelector(s), QUESTION_COUNT=100;
 const defaults={crystals:0,earnedCrystals:0,solved:[],upgrades:[],x:230,y:176,sound:false,ferryTicket:false,bait:0,fishingLure:false,sponsorshipAnnounced:false,catches:{},tradingTickets:0,squishyInventory:null,squishyClaims:0};
 const PROFILE_KEY='skyseed-profiles-v1';
+const AGE_LEVELS=['5-6','7-8','9-10','11-12'];
+const normalizeAge=age=>AGE_LEVELS.includes(age)?age:'11-12';
 let ageLevel='11-12',storageOK=true,profiles=[],profileId='legacy';
 try{
-ageLevel=localStorage.getItem('skyseed-age')==='9-10'?'9-10':'11-12';
+ageLevel=normalizeAge(localStorage.getItem('skyseed-age'));
 const stored=JSON.parse(localStorage.getItem(PROFILE_KEY));
 if(stored&&Array.isArray(stored.profiles)){
-const ids=new Set();profiles=stored.profiles.filter(p=>p&&typeof p.id==='string'&&/^(legacy|p[0-9]+)$/.test(p.id)&&!ids.has(p.id)&&ids.add(p.id)&&typeof p.name==='string'&&p.name.trim()).map(p=>({id:p.id,name:p.name.trim().slice(0,24),character:p.character==='girl'?'girl':'boy',ferryTicket:p.ferryTicket===true,age:p.age==='9-10'?'9-10':'11-12'}));
+const ids=new Set();profiles=stored.profiles.filter(p=>p&&typeof p.id==='string'&&/^(legacy|p[0-9]+)$/.test(p.id)&&!ids.has(p.id)&&ids.add(p.id)&&typeof p.name==='string'&&p.name.trim()).map(p=>({id:p.id,name:p.name.trim().slice(0,24),character:p.character==='girl'?'girl':'boy',ferryTicket:p.ferryTicket===true,age:normalizeAge(p.age)}));
 if(profiles.length){profileId=profiles.some(p=>p.id===stored.active)?stored.active:profiles[0].id;ageLevel=profiles.find(p=>p.id===profileId).age;}
 }
 }catch{storageOK=false;}
 if(!profiles.length)profiles=[{id:'legacy',name:'Explorer',character:'boy',age:ageLevel}];
 function currentProfile(){return profiles.find(p=>p.id===profileId);}
-function progressKey(id=profileId,age=ageLevel){return id==='legacy'?(age==='9-10'?'skyseed-v1-9-10':'skyseed-v1'):`skyseed-profile-${id}-${age}`;}
+function progressKey(id=profileId,age=ageLevel){return id==='legacy'?(age==='11-12'?'skyseed-v1':`skyseed-v1-${age}`):`skyseed-profile-${id}-${age}`;}
 let KEY=progressKey();
 function escapeHTML(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function characterColors(character=currentProfile().character){return character==='girl'?{shirt:'#698ca4',accent:'#91b7bd',hair:'#5c3d38',hat:'#b9a0ce'}:{shirt:'#ba704a',accent:'#d08b55',hair:'#654a37',hat:'#dfb568'};}
@@ -50,8 +52,8 @@ function switchProfile(id){
 if(id===profileId||!profiles.some(p=>p.id===id))return;
 if(voyage){$('#profileFeedback').textContent='Switch profiles after the ferry arrives.';$('#profileSelect').value=profileId;return;}
 save();cancelFlash();for(const dialog of ['challenge','flash','sponsorship'])if($('#'+dialog).open)$('#'+dialog).close();
-closeMapPanel();stopFishing();boating=false;swimming=false;diveAnimation=null;shoreClimb=null;sharkFins=[];boatPosition={x:182,y:283};pendingCast=null;fishSet='classic';keys.clear();
-profileId=id;ageLevel=currentProfile().age;KEY=progressKey();state=loadProgress();questions=ageLevel==='9-10'?youngerQuestions:olderQuestions;
+closeMapPanel();stopFishing();clearLochDragon();boating=false;swimming=false;diveAnimation=null;shoreClimb=null;sharkFins=[];boatPosition={x:182,y:283};pendingCast=null;fishSet='classic';keys.clear();
+profileId=id;ageLevel=currentProfile().age;KEY=progressKey();state=loadProgress();questions=questionsByAge[ageLevel];
 player.x=Number.isFinite(state.x)?state.x:230;player.y=Number.isFinite(state.y)?state.y:176;
 if(!canWalk(player.x,player.y)){player.x=230;player.y=176;}
 active=0;answerComplete=false;near=-1;update();checkSponsorship();openMapPanel('settingsPanel');$('#profileFeedback').textContent='';draw();toast(`${currentProfile().name}’s island is ready!`);
@@ -62,9 +64,9 @@ try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.solved)&
 loaded.earnedCrystals=Math.max(loaded.solved.length*5,Math.floor(Number(loaded.earnedCrystals)||0));
 loaded.bait=Math.max(0,Math.min(5,Math.floor(Number(loaded.bait)||0)));
 loaded.fishingLure=loaded.fishingLure===true;loaded.catches=Object.fromEntries(['barracuda','stingray','shark','snook','octopus','marlin'].map(id=>[id,Math.max(0,Math.floor(Number(loaded.catches?.[id])||0))]));
-// Migrate passes earned in either age level into permanent profile ownership.
+// Migrate passes earned in any age level into permanent profile ownership.
 let ownsPass=currentProfile().ferryTicket===true||loaded.ferryTicket===true;
-try{for(const age of ['9-10','11-12'])if(JSON.parse(localStorage.getItem(progressKey(profileId,age)))?.ferryTicket===true)ownsPass=true;}catch{storageOK=false;}
+for(const age of AGE_LEVELS){try{if(JSON.parse(localStorage.getItem(progressKey(profileId,age)))?.ferryTicket===true)ownsPass=true;}catch{storageOK=false;}}
 currentProfile().ferryTicket=ownsPass;loaded.ferryTicket=ownsPass;
 loaded.tradingTickets=Number.isSafeInteger(loaded.tradingTickets)&&loaded.tradingTickets>=0?loaded.tradingTickets:0;
 return loaded;
@@ -152,6 +154,14 @@ $('#tradeFeedback').textContent=`Traded ${offered.name} for ${received.name}. On
 }
 let flashRun=null,flashTimer;
 function flashQuestion(){
+if(ageLevel==='5-6'){
+const total=2+Math.floor(Math.random()*9),part=1+Math.floor(Math.random()*total);
+return Math.random()<.5?{q:`${part} + ${total-part}`,answer:total}:{q:`${total} − ${part}`,answer:total-part};
+}
+if(ageLevel==='7-8'){
+const a=1+Math.floor(Math.random()*10),b=[2,5,10][Math.floor(Math.random()*3)],op=Math.floor(Math.random()*4);
+return op===0?{q:`${a} + ${b}`,answer:a+b}:op===1?{q:`${a+b} − ${b}`,answer:a}:op===2?{q:`${a} × ${b}`,answer:a*b}:{q:`${a*b} ÷ ${b}`,answer:a};
+}
 const a=2+Math.floor(Math.random()*(ageLevel==='9-10'?10:18)),b=2+Math.floor(Math.random()*10),op=Math.floor(Math.random()*4);
 return op===0?{q:`${a} + ${b}`,answer:a+b}:op===1?{q:`${a+b} − ${b}`,answer:a}:op===2?{q:`${a} × ${b}`,answer:a*b}:{q:`${a*b} ÷ ${b}`,answer:a};
 }
@@ -183,7 +193,7 @@ $('#flashClock').textContent=won?'Ticket earned!':'Try a fresh streak';$('#flash
 $('#flashBody').innerHTML=`<div class="celebration"><h2>${won?'🎟 You earned a trading ticket!':message}</h2><p>${won?'Swap one of your squishees for another in the same tier at the trading counter.':'A wrong answer or 15-second timeout ends the streak. You can try again as often as you like.'}</p><button class="primary" id="flashRetry">${won?'Earn another ticket':'Try again'}</button><button class="text-button" data-flash-back>Back to the trading counter ↗</button></div>`;
 $('#flashRetry').onclick=startFlash;$('[data-flash-back]').onclick=()=>$('#flash').close();
 }
-const player={x:230,y:176};if(Number.isFinite(state.x)&&Number.isFinite(state.y)){player.x=state.x;player.y=state.y;}
+const player={x:230,y:176,facing:'down'};if(Number.isFinite(state.x)&&Number.isFinite(state.y)){player.x=state.x;player.y=state.y;}
 const locations=[{name:'Explorer’s cottage',x:218,y:139,icon:'⌂',ids:[0,1,2,3],color:'#f1cc86'},{name:'Moonwater pond',x:144,y:181,icon:'≈',ids:[4,5,6,7],color:'#abd4de'},{name:'Sunseed garden',x:286,y:205,icon:'✿',ids:[8,9,10,11],color:'#eab4a3'},{name:'Whispering woods',x:109,y:108,icon:'♠',ids:[12,13,14,15],color:'#c3d79b'},{name:'Crystal cavern',x:393,y:95,icon:'◆',ids:[16,17,18,19],color:'#cebde8'}];
 locations.forEach((l,i)=>{const positions=[[218,139],[500,150],[760,155],[300,435],[740,435]];[l.x,l.y]=positions[i];});
 const upgrades=[{id:'cottage',name:'A cozy cottage',sub:'Give your explorer a home',cost:15,icon:'⌂'},{id:'garden',name:'A blooming garden',sub:'Bring a little color to the island',cost:20,icon:'✿'},{id:'bridge',name:'The woodland bridge',sub:'Restore the scenic woodland crossing',cost:25,icon:'≋'}];
@@ -298,13 +308,70 @@ locations.forEach((location,i)=>{location.ids.push(...Array.from({length:16},(_,
 const youngerByLocation=[{"title": "Cottage supply count 1", "skill": "Addition", "q": "There are 136 nails in one box and 85 in another. How many nails altogether?", "answer": 221, "kind": "guided", "hint": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "136 + 85 = 221 nails."], "steps": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "136 + 85 = 221 nails."], "explain": "136 + 85 = 221 nails."}, {"title": "Biscuits for visitors 1", "skill": "Subtraction", "q": "You bake 405 biscuits and share 127. How many are left?", "answer": 278, "kind": "guided", "hint": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "405 − 127 = 278 biscuits."], "steps": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "405 − 127 = 278 biscuits."], "explain": "405 − 127 = 278 biscuits."}, {"title": "Lantern shelves 1", "skill": "Times tables", "q": "There are 4 shelves with 6 lanterns on each. How many lanterns?", "answer": 24, "kind": "guided", "hint": ["Each shelf is one equal group.", "Add 6 a total of 4 times, or multiply.", "4 × 6 = 24 lanterns."], "steps": ["Each shelf is one equal group.", "Add 6 a total of 4 times, or multiply.", "4 × 6 = 24 lanterns."], "explain": "4 × 6 = 24 lanterns."}, {"title": "Breakfast baskets 1", "skill": "Division", "q": "Share 15 apples equally into 3 baskets. How many apples in each?", "answer": 5, "kind": "guided", "hint": ["Think of equal groups.", "Which number times 3 equals 15?", "15 ÷ 3 = 5 apples."], "steps": ["Think of equal groups.", "Which number times 3 equals 15?", "15 ÷ 3 = 5 apples."], "explain": "15 ÷ 3 = 5 apples."}, {"title": "Cottage supply count 2", "skill": "Addition", "q": "There are 173 nails in one box and 104 in another. How many nails altogether?", "answer": 277, "kind": "guided", "hint": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "173 + 104 = 277 nails."], "steps": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "173 + 104 = 277 nails."], "explain": "173 + 104 = 277 nails."}, {"title": "Biscuits for visitors 2", "skill": "Subtraction", "q": "You bake 448 biscuits and share 143. How many are left?", "answer": 305, "kind": "guided", "hint": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "448 − 143 = 305 biscuits."], "steps": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "448 − 143 = 305 biscuits."], "explain": "448 − 143 = 305 biscuits."}, {"title": "Lantern shelves 2", "skill": "Times tables", "q": "There are 5 shelves with 7 lanterns on each. How many lanterns?", "answer": 35, "kind": "guided", "hint": ["Each shelf is one equal group.", "Add 7 a total of 5 times, or multiply.", "5 × 7 = 35 lanterns."], "steps": ["Each shelf is one equal group.", "Add 7 a total of 5 times, or multiply.", "5 × 7 = 35 lanterns."], "explain": "5 × 7 = 35 lanterns."}, {"title": "Breakfast baskets 2", "skill": "Division", "q": "Share 24 apples equally into 4 baskets. How many apples in each?", "answer": 6, "kind": "guided", "hint": ["Think of equal groups.", "Which number times 4 equals 24?", "24 ÷ 4 = 6 apples."], "steps": ["Think of equal groups.", "Which number times 4 equals 24?", "24 ÷ 4 = 6 apples."], "explain": "24 ÷ 4 = 6 apples."}, {"title": "Cottage supply count 3", "skill": "Addition", "q": "There are 210 nails in one box and 123 in another. How many nails altogether?", "answer": 333, "kind": "guided", "hint": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "210 + 123 = 333 nails."], "steps": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "210 + 123 = 333 nails."], "explain": "210 + 123 = 333 nails."}, {"title": "Biscuits for visitors 3", "skill": "Subtraction", "q": "You bake 491 biscuits and share 159. How many are left?", "answer": 332, "kind": "guided", "hint": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "491 − 159 = 332 biscuits."], "steps": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "491 − 159 = 332 biscuits."], "explain": "491 − 159 = 332 biscuits."}, {"title": "Lantern shelves 3", "skill": "Times tables", "q": "There are 6 shelves with 8 lanterns on each. How many lanterns?", "answer": 48, "kind": "guided", "hint": ["Each shelf is one equal group.", "Add 8 a total of 6 times, or multiply.", "6 × 8 = 48 lanterns."], "steps": ["Each shelf is one equal group.", "Add 8 a total of 6 times, or multiply.", "6 × 8 = 48 lanterns."], "explain": "6 × 8 = 48 lanterns."}, {"title": "Breakfast baskets 3", "skill": "Division", "q": "Share 35 apples equally into 5 baskets. How many apples in each?", "answer": 7, "kind": "guided", "hint": ["Think of equal groups.", "Which number times 5 equals 35?", "35 ÷ 5 = 7 apples."], "steps": ["Think of equal groups.", "Which number times 5 equals 35?", "35 ÷ 5 = 7 apples."], "explain": "35 ÷ 5 = 7 apples."}, {"title": "Cottage supply count 4", "skill": "Addition", "q": "There are 247 nails in one box and 142 in another. How many nails altogether?", "answer": 389, "kind": "guided", "hint": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "247 + 142 = 389 nails."], "steps": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "247 + 142 = 389 nails."], "explain": "247 + 142 = 389 nails."}, {"title": "Biscuits for visitors 4", "skill": "Subtraction", "q": "You bake 534 biscuits and share 175. How many are left?", "answer": 359, "kind": "guided", "hint": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "534 − 175 = 359 biscuits."], "steps": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "534 − 175 = 359 biscuits."], "explain": "534 − 175 = 359 biscuits."}, {"title": "Lantern shelves 4", "skill": "Times tables", "q": "There are 7 shelves with 6 lanterns on each. How many lanterns?", "answer": 42, "kind": "guided", "hint": ["Each shelf is one equal group.", "Add 6 a total of 7 times, or multiply.", "7 × 6 = 42 lanterns."], "steps": ["Each shelf is one equal group.", "Add 6 a total of 7 times, or multiply.", "7 × 6 = 42 lanterns."], "explain": "7 × 6 = 42 lanterns."}, {"title": "Breakfast baskets 4", "skill": "Division", "q": "Share 24 apples equally into 3 baskets. How many apples in each?", "answer": 8, "kind": "guided", "hint": ["Think of equal groups.", "Which number times 3 equals 24?", "24 ÷ 3 = 8 apples."], "steps": ["Think of equal groups.", "Which number times 3 equals 24?", "24 ÷ 3 = 8 apples."], "explain": "24 ÷ 3 = 8 apples."}, {"title": "Cottage supply count 5", "skill": "Addition", "q": "There are 284 nails in one box and 161 in another. How many nails altogether?", "answer": 445, "kind": "guided", "hint": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "284 + 161 = 445 nails."], "steps": ["Line up hundreds, tens, and ones.", "Add the ones first, then tens, then hundreds. Regroup if needed.", "284 + 161 = 445 nails."], "explain": "284 + 161 = 445 nails."}, {"title": "Biscuits for visitors 5", "skill": "Subtraction", "q": "You bake 577 biscuits and share 191. How many are left?", "answer": 386, "kind": "guided", "hint": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "577 − 191 = 386 biscuits."], "steps": ["Start with the total baked.", "Subtract ones, tens, and hundreds, exchanging a ten or hundred when needed.", "577 − 191 = 386 biscuits."], "explain": "577 − 191 = 386 biscuits."}, {"title": "Lantern shelves 5", "skill": "Times tables", "q": "There are 8 shelves with 7 lanterns on each. How many lanterns?", "answer": 56, "kind": "guided", "hint": ["Each shelf is one equal group.", "Add 7 a total of 8 times, or multiply.", "8 × 7 = 56 lanterns."], "steps": ["Each shelf is one equal group.", "Add 7 a total of 8 times, or multiply.", "8 × 7 = 56 lanterns."], "explain": "8 × 7 = 56 lanterns."}, {"title": "Breakfast baskets 5", "skill": "Division", "q": "Share 36 apples equally into 4 baskets. How many apples in each?", "answer": 9, "kind": "guided", "hint": ["Think of equal groups.", "Which number times 4 equals 36?", "36 ÷ 4 = 9 apples."], "steps": ["Think of equal groups.", "Which number times 4 equals 36?", "36 ÷ 4 = 9 apples."], "explain": "36 ÷ 4 = 9 apples."}, {"title": "Pond jug fractions 1", "skill": "Adding fractions", "q": "A jug has 2/6 litre of water. Add 1/6 litre. What fraction of a litre is in the jug?", "answer": 0.5, "kind": "guided", "hint": ["The pieces have the same denominator.", "Add the top numbers: 2 + 1 = 3.", "2/6 + 1/6 = 3/6 litre."], "steps": ["The pieces have the same denominator.", "Add the top numbers: 2 + 1 = 3.", "2/6 + 1/6 = 3/6 litre."], "explain": "2/6 + 1/6 = 3/6 litre."}, {"title": "Rope pieces 1", "skill": "Subtracting fractions", "q": "You have 5/6 metre of rope and use 2/6 metre. What fraction of a metre remains?", "answer": 0.5, "kind": "guided", "hint": ["Keep the denominator the same.", "Subtract the top numbers: 5 − 2 = 3.", "5/6 − 2/6 = 3/6 metre."], "steps": ["Keep the denominator the same.", "Subtract the top numbers: 5 − 2 = 3.", "5/6 − 2/6 = 3/6 metre."], "explain": "5/6 − 2/6 = 3/6 metre."}, {"title": "Duckling groups 1", "skill": "Unit fractions", "q": "There are 8 ducklings. One out of 2 equal groups swims away. How many ducklings swim away?", "answer": 4, "kind": "guided", "hint": ["Find 1/2 of 8.", "Divide the total into 2 equal groups.", "8 ÷ 2 = 4 ducklings."], "steps": ["Find 1/2 of 8.", "Divide the total into 2 equal groups.", "8 ÷ 2 = 4 ducklings."], "explain": "8 ÷ 2 = 4 ducklings."}, {"title": "Pond trail markers 1", "skill": "Tenths", "q": "Write 3/10 as a decimal.", "answer": 0.3, "kind": "guided", "hint": ["The first place after the decimal point is tenths.", "3/10 means 3 tenths.", "3/10 = 0.3."], "steps": ["The first place after the decimal point is tenths.", "3/10 means 3 tenths.", "3/10 = 0.3."], "explain": "3/10 = 0.3."}, {"title": "Pond jug fractions 2", "skill": "Adding fractions", "q": "A jug has 3/7 litre of water. Add 1/7 litre. What fraction of a litre is in the jug?", "answer": 0.5714285714285714, "kind": "guided", "hint": ["The pieces have the same denominator.", "Add the top numbers: 3 + 1 = 4.", "3/7 + 1/7 = 4/7 litre."], "steps": ["The pieces have the same denominator.", "Add the top numbers: 3 + 1 = 4.", "3/7 + 1/7 = 4/7 litre."], "explain": "3/7 + 1/7 = 4/7 litre."}, {"title": "Rope pieces 2", "skill": "Subtracting fractions", "q": "You have 6/7 metre of rope and use 2/7 metre. What fraction of a metre remains?", "answer": 0.5714285714285714, "kind": "guided", "hint": ["Keep the denominator the same.", "Subtract the top numbers: 6 − 2 = 4.", "6/7 − 2/7 = 4/7 metre."], "steps": ["Keep the denominator the same.", "Subtract the top numbers: 6 − 2 = 4.", "6/7 − 2/7 = 4/7 metre."], "explain": "6/7 − 2/7 = 4/7 metre."}, {"title": "Duckling groups 2", "skill": "Unit fractions", "q": "There are 15 ducklings. One out of 3 equal groups swims away. How many ducklings swim away?", "answer": 5, "kind": "guided", "hint": ["Find 1/3 of 15.", "Divide the total into 3 equal groups.", "15 ÷ 3 = 5 ducklings."], "steps": ["Find 1/3 of 15.", "Divide the total into 3 equal groups.", "15 ÷ 3 = 5 ducklings."], "explain": "15 ÷ 3 = 5 ducklings."}, {"title": "Pond trail markers 2", "skill": "Tenths", "q": "Write 4/10 as a decimal.", "answer": 0.4, "kind": "guided", "hint": ["The first place after the decimal point is tenths.", "4/10 means 4 tenths.", "4/10 = 0.4."], "steps": ["The first place after the decimal point is tenths.", "4/10 means 4 tenths.", "4/10 = 0.4."], "explain": "4/10 = 0.4."}, {"title": "Pond jug fractions 3", "skill": "Adding fractions", "q": "A jug has 4/8 litre of water. Add 1/8 litre. What fraction of a litre is in the jug?", "answer": 0.625, "kind": "guided", "hint": ["The pieces have the same denominator.", "Add the top numbers: 4 + 1 = 5.", "4/8 + 1/8 = 5/8 litre."], "steps": ["The pieces have the same denominator.", "Add the top numbers: 4 + 1 = 5.", "4/8 + 1/8 = 5/8 litre."], "explain": "4/8 + 1/8 = 5/8 litre."}, {"title": "Rope pieces 3", "skill": "Subtracting fractions", "q": "You have 7/8 metre of rope and use 2/8 metre. What fraction of a metre remains?", "answer": 0.625, "kind": "guided", "hint": ["Keep the denominator the same.", "Subtract the top numbers: 7 − 2 = 5.", "7/8 − 2/8 = 5/8 metre."], "steps": ["Keep the denominator the same.", "Subtract the top numbers: 7 − 2 = 5.", "7/8 − 2/8 = 5/8 metre."], "explain": "7/8 − 2/8 = 5/8 metre."}, {"title": "Duckling groups 3", "skill": "Unit fractions", "q": "There are 24 ducklings. One out of 4 equal groups swims away. How many ducklings swim away?", "answer": 6, "kind": "guided", "hint": ["Find 1/4 of 24.", "Divide the total into 4 equal groups.", "24 ÷ 4 = 6 ducklings."], "steps": ["Find 1/4 of 24.", "Divide the total into 4 equal groups.", "24 ÷ 4 = 6 ducklings."], "explain": "24 ÷ 4 = 6 ducklings."}, {"title": "Pond trail markers 3", "skill": "Tenths", "q": "Write 5/10 as a decimal.", "answer": 0.5, "kind": "guided", "hint": ["The first place after the decimal point is tenths.", "5/10 means 5 tenths.", "5/10 = 0.5."], "steps": ["The first place after the decimal point is tenths.", "5/10 means 5 tenths.", "5/10 = 0.5."], "explain": "5/10 = 0.5."}, {"title": "Pond jug fractions 4", "skill": "Adding fractions", "q": "A jug has 5/9 litre of water. Add 1/9 litre. What fraction of a litre is in the jug?", "answer": 0.6666666666666666, "kind": "guided", "hint": ["The pieces have the same denominator.", "Add the top numbers: 5 + 1 = 6.", "5/9 + 1/9 = 6/9 litre."], "steps": ["The pieces have the same denominator.", "Add the top numbers: 5 + 1 = 6.", "5/9 + 1/9 = 6/9 litre."], "explain": "5/9 + 1/9 = 6/9 litre."}, {"title": "Rope pieces 4", "skill": "Subtracting fractions", "q": "You have 8/9 metre of rope and use 2/9 metre. What fraction of a metre remains?", "answer": 0.6666666666666666, "kind": "guided", "hint": ["Keep the denominator the same.", "Subtract the top numbers: 8 − 2 = 6.", "8/9 − 2/9 = 6/9 metre."], "steps": ["Keep the denominator the same.", "Subtract the top numbers: 8 − 2 = 6.", "8/9 − 2/9 = 6/9 metre."], "explain": "8/9 − 2/9 = 6/9 metre."}, {"title": "Duckling groups 4", "skill": "Unit fractions", "q": "There are 35 ducklings. One out of 5 equal groups swims away. How many ducklings swim away?", "answer": 7, "kind": "guided", "hint": ["Find 1/5 of 35.", "Divide the total into 5 equal groups.", "35 ÷ 5 = 7 ducklings."], "steps": ["Find 1/5 of 35.", "Divide the total into 5 equal groups.", "35 ÷ 5 = 7 ducklings."], "explain": "35 ÷ 5 = 7 ducklings."}, {"title": "Pond trail markers 4", "skill": "Tenths", "q": "Write 6/10 as a decimal.", "answer": 0.6, "kind": "guided", "hint": ["The first place after the decimal point is tenths.", "6/10 means 6 tenths.", "6/10 = 0.6."], "steps": ["The first place after the decimal point is tenths.", "6/10 means 6 tenths.", "6/10 = 0.6."], "explain": "6/10 = 0.6."}, {"title": "Pond jug fractions 5", "skill": "Adding fractions", "q": "A jug has 6/10 litre of water. Add 1/10 litre. What fraction of a litre is in the jug?", "answer": 0.7, "kind": "guided", "hint": ["The pieces have the same denominator.", "Add the top numbers: 6 + 1 = 7.", "6/10 + 1/10 = 7/10 litre."], "steps": ["The pieces have the same denominator.", "Add the top numbers: 6 + 1 = 7.", "6/10 + 1/10 = 7/10 litre."], "explain": "6/10 + 1/10 = 7/10 litre."}, {"title": "Rope pieces 5", "skill": "Subtracting fractions", "q": "You have 9/10 metre of rope and use 2/10 metre. What fraction of a metre remains?", "answer": 0.7, "kind": "guided", "hint": ["Keep the denominator the same.", "Subtract the top numbers: 9 − 2 = 7.", "9/10 − 2/10 = 7/10 metre."], "steps": ["Keep the denominator the same.", "Subtract the top numbers: 9 − 2 = 7.", "9/10 − 2/10 = 7/10 metre."], "explain": "9/10 − 2/10 = 7/10 metre."}, {"title": "Duckling groups 5", "skill": "Unit fractions", "q": "There are 48 ducklings. One out of 6 equal groups swims away. How many ducklings swim away?", "answer": 8, "kind": "guided", "hint": ["Find 1/6 of 48.", "Divide the total into 6 equal groups.", "48 ÷ 6 = 8 ducklings."], "steps": ["Find 1/6 of 48.", "Divide the total into 6 equal groups.", "48 ÷ 6 = 8 ducklings."], "explain": "48 ÷ 6 = 8 ducklings."}, {"title": "Pond trail markers 5", "skill": "Tenths", "q": "Write 7/10 as a decimal.", "answer": 0.7, "kind": "guided", "hint": ["The first place after the decimal point is tenths.", "7/10 means 7 tenths.", "7/10 = 0.7."], "steps": ["The first place after the decimal point is tenths.", "7/10 means 7 tenths.", "7/10 = 0.7."], "explain": "7/10 = 0.7."}, {"title": "Flower bed squares 1", "skill": "Area", "q": "A rectangular flower bed is 3 m long and 4 m wide. What is its area in square metres?", "answer": 12, "kind": "guided", "hint": ["Area counts the unit squares inside.", "Use length × width: 3 × 4.", "The area is 12 square metres."], "steps": ["Area counts the unit squares inside.", "Use length × width: 3 × 4.", "The area is 12 square metres."], "explain": "The area is 12 square metres."}, {"title": "Garden fence 1", "skill": "Perimeter", "q": "A rectangular garden is 5 m long and 3 m wide. How many metres of fence go all the way around?", "answer": 16, "kind": "guided", "hint": ["Perimeter means the distance around the outside.", "Add all four sides: 5 + 3 + 5 + 3.", "The perimeter is 16 metres."], "steps": ["Perimeter means the distance around the outside.", "Add all four sides: 5 + 3 + 5 + 3.", "The perimeter is 16 metres."], "explain": "The perimeter is 16 metres."}, {"title": "Growing sunflower 1", "skill": "Length conversion", "q": "A sunflower is 2 m 15 cm tall. How tall is it in centimetres?", "answer": 215, "kind": "guided", "hint": ["1 metre equals 100 centimetres.", "2 metres = 200 centimetres.", "200 + 15 = 215 cm."], "steps": ["1 metre equals 100 centimetres.", "2 metres = 200 centimetres.", "200 + 15 = 215 cm."], "explain": "200 + 15 = 215 cm."}, {"title": "Seed jar mass 1", "skill": "Mass conversion", "q": "A seed jar weighs 2 kg 25 g. How many grams is that?", "answer": 2025, "kind": "guided", "hint": ["1 kilogram equals 1,000 grams.", "2 kilograms = 2000 grams.", "2000 + 25 = 2025 grams."], "steps": ["1 kilogram equals 1,000 grams.", "2 kilograms = 2000 grams.", "2000 + 25 = 2025 grams."], "explain": "2000 + 25 = 2025 grams."}, {"title": "Flower bed squares 2", "skill": "Area", "q": "A rectangular flower bed is 4 m long and 5 m wide. What is its area in square metres?", "answer": 20, "kind": "guided", "hint": ["Area counts the unit squares inside.", "Use length × width: 4 × 5.", "The area is 20 square metres."], "steps": ["Area counts the unit squares inside.", "Use length × width: 4 × 5.", "The area is 20 square metres."], "explain": "The area is 20 square metres."}, {"title": "Garden fence 2", "skill": "Perimeter", "q": "A rectangular garden is 6 m long and 4 m wide. How many metres of fence go all the way around?", "answer": 20, "kind": "guided", "hint": ["Perimeter means the distance around the outside.", "Add all four sides: 6 + 4 + 6 + 4.", "The perimeter is 20 metres."], "steps": ["Perimeter means the distance around the outside.", "Add all four sides: 6 + 4 + 6 + 4.", "The perimeter is 20 metres."], "explain": "The perimeter is 20 metres."}, {"title": "Growing sunflower 2", "skill": "Length conversion", "q": "A sunflower is 3 m 25 cm tall. How tall is it in centimetres?", "answer": 325, "kind": "guided", "hint": ["1 metre equals 100 centimetres.", "3 metres = 300 centimetres.", "300 + 25 = 325 cm."], "steps": ["1 metre equals 100 centimetres.", "3 metres = 300 centimetres.", "300 + 25 = 325 cm."], "explain": "300 + 25 = 325 cm."}, {"title": "Seed jar mass 2", "skill": "Mass conversion", "q": "A seed jar weighs 3 kg 28 g. How many grams is that?", "answer": 3028, "kind": "guided", "hint": ["1 kilogram equals 1,000 grams.", "3 kilograms = 3000 grams.", "3000 + 28 = 3028 grams."], "steps": ["1 kilogram equals 1,000 grams.", "3 kilograms = 3000 grams.", "3000 + 28 = 3028 grams."], "explain": "3000 + 28 = 3028 grams."}, {"title": "Flower bed squares 3", "skill": "Area", "q": "A rectangular flower bed is 5 m long and 6 m wide. What is its area in square metres?", "answer": 30, "kind": "guided", "hint": ["Area counts the unit squares inside.", "Use length × width: 5 × 6.", "The area is 30 square metres."], "steps": ["Area counts the unit squares inside.", "Use length × width: 5 × 6.", "The area is 30 square metres."], "explain": "The area is 30 square metres."}, {"title": "Garden fence 3", "skill": "Perimeter", "q": "A rectangular garden is 7 m long and 5 m wide. How many metres of fence go all the way around?", "answer": 24, "kind": "guided", "hint": ["Perimeter means the distance around the outside.", "Add all four sides: 7 + 5 + 7 + 5.", "The perimeter is 24 metres."], "steps": ["Perimeter means the distance around the outside.", "Add all four sides: 7 + 5 + 7 + 5.", "The perimeter is 24 metres."], "explain": "The perimeter is 24 metres."}, {"title": "Growing sunflower 3", "skill": "Length conversion", "q": "A sunflower is 4 m 35 cm tall. How tall is it in centimetres?", "answer": 435, "kind": "guided", "hint": ["1 metre equals 100 centimetres.", "4 metres = 400 centimetres.", "400 + 35 = 435 cm."], "steps": ["1 metre equals 100 centimetres.", "4 metres = 400 centimetres.", "400 + 35 = 435 cm."], "explain": "400 + 35 = 435 cm."}, {"title": "Seed jar mass 3", "skill": "Mass conversion", "q": "A seed jar weighs 4 kg 31 g. How many grams is that?", "answer": 4031, "kind": "guided", "hint": ["1 kilogram equals 1,000 grams.", "4 kilograms = 4000 grams.", "4000 + 31 = 4031 grams."], "steps": ["1 kilogram equals 1,000 grams.", "4 kilograms = 4000 grams.", "4000 + 31 = 4031 grams."], "explain": "4000 + 31 = 4031 grams."}, {"title": "Flower bed squares 4", "skill": "Area", "q": "A rectangular flower bed is 6 m long and 4 m wide. What is its area in square metres?", "answer": 24, "kind": "guided", "hint": ["Area counts the unit squares inside.", "Use length × width: 6 × 4.", "The area is 24 square metres."], "steps": ["Area counts the unit squares inside.", "Use length × width: 6 × 4.", "The area is 24 square metres."], "explain": "The area is 24 square metres."}, {"title": "Garden fence 4", "skill": "Perimeter", "q": "A rectangular garden is 8 m long and 3 m wide. How many metres of fence go all the way around?", "answer": 22, "kind": "guided", "hint": ["Perimeter means the distance around the outside.", "Add all four sides: 8 + 3 + 8 + 3.", "The perimeter is 22 metres."], "steps": ["Perimeter means the distance around the outside.", "Add all four sides: 8 + 3 + 8 + 3.", "The perimeter is 22 metres."], "explain": "The perimeter is 22 metres."}, {"title": "Growing sunflower 4", "skill": "Length conversion", "q": "A sunflower is 5 m 45 cm tall. How tall is it in centimetres?", "answer": 545, "kind": "guided", "hint": ["1 metre equals 100 centimetres.", "5 metres = 500 centimetres.", "500 + 45 = 545 cm."], "steps": ["1 metre equals 100 centimetres.", "5 metres = 500 centimetres.", "500 + 45 = 545 cm."], "explain": "500 + 45 = 545 cm."}, {"title": "Seed jar mass 4", "skill": "Mass conversion", "q": "A seed jar weighs 5 kg 34 g. How many grams is that?", "answer": 5034, "kind": "guided", "hint": ["1 kilogram equals 1,000 grams.", "5 kilograms = 5000 grams.", "5000 + 34 = 5034 grams."], "steps": ["1 kilogram equals 1,000 grams.", "5 kilograms = 5000 grams.", "5000 + 34 = 5034 grams."], "explain": "5000 + 34 = 5034 grams."}, {"title": "Flower bed squares 5", "skill": "Area", "q": "A rectangular flower bed is 7 m long and 5 m wide. What is its area in square metres?", "answer": 35, "kind": "guided", "hint": ["Area counts the unit squares inside.", "Use length × width: 7 × 5.", "The area is 35 square metres."], "steps": ["Area counts the unit squares inside.", "Use length × width: 7 × 5.", "The area is 35 square metres."], "explain": "The area is 35 square metres."}, {"title": "Garden fence 5", "skill": "Perimeter", "q": "A rectangular garden is 9 m long and 4 m wide. How many metres of fence go all the way around?", "answer": 26, "kind": "guided", "hint": ["Perimeter means the distance around the outside.", "Add all four sides: 9 + 4 + 9 + 4.", "The perimeter is 26 metres."], "steps": ["Perimeter means the distance around the outside.", "Add all four sides: 9 + 4 + 9 + 4.", "The perimeter is 26 metres."], "explain": "The perimeter is 26 metres."}, {"title": "Growing sunflower 5", "skill": "Length conversion", "q": "A sunflower is 6 m 55 cm tall. How tall is it in centimetres?", "answer": 655, "kind": "guided", "hint": ["1 metre equals 100 centimetres.", "6 metres = 600 centimetres.", "600 + 55 = 655 cm."], "steps": ["1 metre equals 100 centimetres.", "6 metres = 600 centimetres.", "600 + 55 = 655 cm."], "explain": "600 + 55 = 655 cm."}, {"title": "Seed jar mass 5", "skill": "Mass conversion", "q": "A seed jar weighs 6 kg 37 g. How many grams is that?", "answer": 6037, "kind": "guided", "hint": ["1 kilogram equals 1,000 grams.", "6 kilograms = 6000 grams.", "6000 + 37 = 6037 grams."], "steps": ["1 kilogram equals 1,000 grams.", "6 kilograms = 6000 grams.", "6000 + 37 = 6037 grams."], "explain": "6000 + 37 = 6037 grams."}, {"title": "Forest stepping stones 1", "skill": "Number patterns", "q": "What comes next: 4, 6, 8, 10, …?", "answer": 12, "kind": "guided", "hint": ["Find the difference between neighbouring numbers.", "Add 2 each time.", "10 + 2 = 12."], "steps": ["Find the difference between neighbouring numbers.", "Add 2 each time.", "10 + 2 = 12."], "explain": "10 + 2 = 12."}, {"title": "Woodland seed packs 1", "skill": "Multiplication", "q": "A pack holds 23 seeds. How many seeds are in 3 packs?", "answer": 69, "kind": "guided", "hint": ["Split 23 into 20 + 3.", "Multiply each part by 3.", "23 × 3 = 69 seeds."], "steps": ["Split 23 into 20 + 3.", "Multiply each part by 3.", "23 × 3 = 69 seeds."], "explain": "23 × 3 = 69 seeds."}, {"title": "Acorn collecting 1", "skill": "Two-step problems", "q": "You collect 4 bags of 7 acorns, then give away 6 acorns. How many remain?", "answer": 22, "kind": "guided", "hint": ["First work out how many acorns are in all the bags.", "4 × 7 = 28 acorns.", "28 − 6 = 22 acorns left."], "steps": ["First work out how many acorns are in all the bags.", "4 × 7 = 28 acorns.", "28 − 6 = 22 acorns left."], "explain": "28 − 6 = 22 acorns left."}, {"title": "Forest walk time 1", "skill": "Time conversion", "q": "A walk takes 1 hours and 15 minutes. How many minutes is that?", "answer": 75, "kind": "guided", "hint": ["One hour has 60 minutes.", "1 hours = 60 minutes.", "60 + 15 = 75 minutes."], "steps": ["One hour has 60 minutes.", "1 hours = 60 minutes.", "60 + 15 = 75 minutes."], "explain": "60 + 15 = 75 minutes."}, {"title": "Forest stepping stones 2", "skill": "Number patterns", "q": "What comes next: 5, 8, 11, 14, …?", "answer": 17, "kind": "guided", "hint": ["Find the difference between neighbouring numbers.", "Add 3 each time.", "14 + 3 = 17."], "steps": ["Find the difference between neighbouring numbers.", "Add 3 each time.", "14 + 3 = 17."], "explain": "14 + 3 = 17."}, {"title": "Woodland seed packs 2", "skill": "Multiplication", "q": "A pack holds 27 seeds. How many seeds are in 4 packs?", "answer": 108, "kind": "guided", "hint": ["Split 27 into 20 + 7.", "Multiply each part by 4.", "27 × 4 = 108 seeds."], "steps": ["Split 27 into 20 + 7.", "Multiply each part by 4.", "27 × 4 = 108 seeds."], "explain": "27 × 4 = 108 seeds."}, {"title": "Acorn collecting 2", "skill": "Two-step problems", "q": "You collect 5 bags of 8 acorns, then give away 7 acorns. How many remain?", "answer": 33, "kind": "guided", "hint": ["First work out how many acorns are in all the bags.", "5 × 8 = 40 acorns.", "40 − 7 = 33 acorns left."], "steps": ["First work out how many acorns are in all the bags.", "5 × 8 = 40 acorns.", "40 − 7 = 33 acorns left."], "explain": "40 − 7 = 33 acorns left."}, {"title": "Forest walk time 2", "skill": "Time conversion", "q": "A walk takes 2 hours and 20 minutes. How many minutes is that?", "answer": 140, "kind": "guided", "hint": ["One hour has 60 minutes.", "2 hours = 120 minutes.", "120 + 20 = 140 minutes."], "steps": ["One hour has 60 minutes.", "2 hours = 120 minutes.", "120 + 20 = 140 minutes."], "explain": "120 + 20 = 140 minutes."}, {"title": "Forest stepping stones 3", "skill": "Number patterns", "q": "What comes next: 6, 10, 14, 18, …?", "answer": 22, "kind": "guided", "hint": ["Find the difference between neighbouring numbers.", "Add 4 each time.", "18 + 4 = 22."], "steps": ["Find the difference between neighbouring numbers.", "Add 4 each time.", "18 + 4 = 22."], "explain": "18 + 4 = 22."}, {"title": "Woodland seed packs 3", "skill": "Multiplication", "q": "A pack holds 31 seeds. How many seeds are in 5 packs?", "answer": 155, "kind": "guided", "hint": ["Split 31 into 30 + 1.", "Multiply each part by 5.", "31 × 5 = 155 seeds."], "steps": ["Split 31 into 30 + 1.", "Multiply each part by 5.", "31 × 5 = 155 seeds."], "explain": "31 × 5 = 155 seeds."}, {"title": "Acorn collecting 3", "skill": "Two-step problems", "q": "You collect 6 bags of 9 acorns, then give away 8 acorns. How many remain?", "answer": 46, "kind": "guided", "hint": ["First work out how many acorns are in all the bags.", "6 × 9 = 54 acorns.", "54 − 8 = 46 acorns left."], "steps": ["First work out how many acorns are in all the bags.", "6 × 9 = 54 acorns.", "54 − 8 = 46 acorns left."], "explain": "54 − 8 = 46 acorns left."}, {"title": "Forest walk time 3", "skill": "Time conversion", "q": "A walk takes 3 hours and 25 minutes. How many minutes is that?", "answer": 205, "kind": "guided", "hint": ["One hour has 60 minutes.", "3 hours = 180 minutes.", "180 + 25 = 205 minutes."], "steps": ["One hour has 60 minutes.", "3 hours = 180 minutes.", "180 + 25 = 205 minutes."], "explain": "180 + 25 = 205 minutes."}, {"title": "Forest stepping stones 4", "skill": "Number patterns", "q": "What comes next: 7, 12, 17, 22, …?", "answer": 27, "kind": "guided", "hint": ["Find the difference between neighbouring numbers.", "Add 5 each time.", "22 + 5 = 27."], "steps": ["Find the difference between neighbouring numbers.", "Add 5 each time.", "22 + 5 = 27."], "explain": "22 + 5 = 27."}, {"title": "Woodland seed packs 4", "skill": "Multiplication", "q": "A pack holds 35 seeds. How many seeds are in 3 packs?", "answer": 105, "kind": "guided", "hint": ["Split 35 into 30 + 5.", "Multiply each part by 3.", "35 × 3 = 105 seeds."], "steps": ["Split 35 into 30 + 5.", "Multiply each part by 3.", "35 × 3 = 105 seeds."], "explain": "35 × 3 = 105 seeds."}, {"title": "Acorn collecting 4", "skill": "Two-step problems", "q": "You collect 4 bags of 10 acorns, then give away 9 acorns. How many remain?", "answer": 31, "kind": "guided", "hint": ["First work out how many acorns are in all the bags.", "4 × 10 = 40 acorns.", "40 − 9 = 31 acorns left."], "steps": ["First work out how many acorns are in all the bags.", "4 × 10 = 40 acorns.", "40 − 9 = 31 acorns left."], "explain": "40 − 9 = 31 acorns left."}, {"title": "Forest walk time 4", "skill": "Time conversion", "q": "A walk takes 1 hours and 30 minutes. How many minutes is that?", "answer": 90, "kind": "guided", "hint": ["One hour has 60 minutes.", "1 hours = 60 minutes.", "60 + 30 = 90 minutes."], "steps": ["One hour has 60 minutes.", "1 hours = 60 minutes.", "60 + 30 = 90 minutes."], "explain": "60 + 30 = 90 minutes."}, {"title": "Forest stepping stones 5", "skill": "Number patterns", "q": "What comes next: 8, 14, 20, 26, …?", "answer": 32, "kind": "guided", "hint": ["Find the difference between neighbouring numbers.", "Add 6 each time.", "26 + 6 = 32."], "steps": ["Find the difference between neighbouring numbers.", "Add 6 each time.", "26 + 6 = 32."], "explain": "26 + 6 = 32."}, {"title": "Woodland seed packs 5", "skill": "Multiplication", "q": "A pack holds 39 seeds. How many seeds are in 4 packs?", "answer": 156, "kind": "guided", "hint": ["Split 39 into 30 + 9.", "Multiply each part by 4.", "39 × 4 = 156 seeds."], "steps": ["Split 39 into 30 + 9.", "Multiply each part by 4.", "39 × 4 = 156 seeds."], "explain": "39 × 4 = 156 seeds."}, {"title": "Acorn collecting 5", "skill": "Two-step problems", "q": "You collect 5 bags of 11 acorns, then give away 10 acorns. How many remain?", "answer": 45, "kind": "guided", "hint": ["First work out how many acorns are in all the bags.", "5 × 11 = 55 acorns.", "55 − 10 = 45 acorns left."], "steps": ["First work out how many acorns are in all the bags.", "5 × 11 = 55 acorns.", "55 − 10 = 45 acorns left."], "explain": "55 − 10 = 45 acorns left."}, {"title": "Forest walk time 5", "skill": "Time conversion", "q": "A walk takes 2 hours and 35 minutes. How many minutes is that?", "answer": 155, "kind": "guided", "hint": ["One hour has 60 minutes.", "2 hours = 120 minutes.", "120 + 35 = 155 minutes."], "steps": ["One hour has 60 minutes.", "2 hours = 120 minutes.", "120 + 35 = 155 minutes."], "explain": "120 + 35 = 155 minutes."}, {"title": "Cavern shop change 1", "skill": "Money", "q": "A torch costs 125 cents and a map costs 75 cents. You pay 500 cents. How many cents change do you get?", "answer": 300, "kind": "guided", "hint": ["First add the two prices.", "125 + 75 = 200 cents.", "500 − 200 = 300 cents change."], "steps": ["First add the two prices.", "125 + 75 = 200 cents.", "500 − 200 = 300 cents change."], "explain": "500 − 200 = 300 cents change."}, {"title": "Crystal path lengths 1", "skill": "Adding decimals", "q": "One path is 1.25 m and another is 0.50 m. What is the combined length?", "answer": 1.75, "kind": "guided", "hint": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "1.25 + 0.50 = 1.75 metres."], "steps": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "1.25 + 0.50 = 1.75 metres."], "explain": "1.25 + 0.50 = 1.75 metres."}, {"title": "Crystal sharing puzzle 1", "skill": "Missing numbers", "q": "Fill in the missing number: □ × 3 = 18.", "answer": 6, "kind": "guided", "hint": ["Multiplication and division undo each other.", "Calculate 18 ÷ 3.", "The missing number is 6: 6 × 3 = 18."], "steps": ["Multiplication and division undo each other.", "Calculate 18 ÷ 3.", "The missing number is 6: 6 × 3 = 18."], "explain": "The missing number is 6: 6 × 3 = 18."}, {"title": "Crystal estimate 1", "skill": "Rounding", "q": "Round 142 to the nearest 10.", "answer": 140, "kind": "guided", "hint": ["Look at the ones digit.", "The ones digit is 2. If it is 5 or more round up; otherwise round down.", "142 rounded to the nearest 10 is 140."], "steps": ["Look at the ones digit.", "The ones digit is 2. If it is 5 or more round up; otherwise round down.", "142 rounded to the nearest 10 is 140."], "explain": "142 rounded to the nearest 10 is 140."}, {"title": "Cavern shop change 2", "skill": "Money", "q": "A torch costs 150 cents and a map costs 85 cents. You pay 500 cents. How many cents change do you get?", "answer": 265, "kind": "guided", "hint": ["First add the two prices.", "150 + 85 = 235 cents.", "500 − 235 = 265 cents change."], "steps": ["First add the two prices.", "150 + 85 = 235 cents.", "500 − 235 = 265 cents change."], "explain": "500 − 235 = 265 cents change."}, {"title": "Crystal path lengths 2", "skill": "Adding decimals", "q": "One path is 1.75 m and another is 0.60 m. What is the combined length?", "answer": 2.35, "kind": "guided", "hint": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "1.75 + 0.60 = 2.35 metres."], "steps": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "1.75 + 0.60 = 2.35 metres."], "explain": "1.75 + 0.60 = 2.35 metres."}, {"title": "Crystal sharing puzzle 2", "skill": "Missing numbers", "q": "Fill in the missing number: □ × 4 = 28.", "answer": 7, "kind": "guided", "hint": ["Multiplication and division undo each other.", "Calculate 28 ÷ 4.", "The missing number is 7: 7 × 4 = 28."], "steps": ["Multiplication and division undo each other.", "Calculate 28 ÷ 4.", "The missing number is 7: 7 × 4 = 28."], "explain": "The missing number is 7: 7 × 4 = 28."}, {"title": "Crystal estimate 2", "skill": "Rounding", "q": "Round 255 to the nearest 10.", "answer": 260, "kind": "guided", "hint": ["Look at the ones digit.", "The ones digit is 5. If it is 5 or more round up; otherwise round down.", "255 rounded to the nearest 10 is 260."], "steps": ["Look at the ones digit.", "The ones digit is 5. If it is 5 or more round up; otherwise round down.", "255 rounded to the nearest 10 is 260."], "explain": "255 rounded to the nearest 10 is 260."}, {"title": "Cavern shop change 3", "skill": "Money", "q": "A torch costs 175 cents and a map costs 95 cents. You pay 500 cents. How many cents change do you get?", "answer": 230, "kind": "guided", "hint": ["First add the two prices.", "175 + 95 = 270 cents.", "500 − 270 = 230 cents change."], "steps": ["First add the two prices.", "175 + 95 = 270 cents.", "500 − 270 = 230 cents change."], "explain": "500 − 270 = 230 cents change."}, {"title": "Crystal path lengths 3", "skill": "Adding decimals", "q": "One path is 2.25 m and another is 0.70 m. What is the combined length?", "answer": 2.95, "kind": "guided", "hint": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "2.25 + 0.70 = 2.95 metres."], "steps": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "2.25 + 0.70 = 2.95 metres."], "explain": "2.25 + 0.70 = 2.95 metres."}, {"title": "Crystal sharing puzzle 3", "skill": "Missing numbers", "q": "Fill in the missing number: □ × 5 = 40.", "answer": 8, "kind": "guided", "hint": ["Multiplication and division undo each other.", "Calculate 40 ÷ 5.", "The missing number is 8: 8 × 5 = 40."], "steps": ["Multiplication and division undo each other.", "Calculate 40 ÷ 5.", "The missing number is 8: 8 × 5 = 40."], "explain": "The missing number is 8: 8 × 5 = 40."}, {"title": "Crystal estimate 3", "skill": "Rounding", "q": "Round 368 to the nearest 10.", "answer": 370, "kind": "guided", "hint": ["Look at the ones digit.", "The ones digit is 8. If it is 5 or more round up; otherwise round down.", "368 rounded to the nearest 10 is 370."], "steps": ["Look at the ones digit.", "The ones digit is 8. If it is 5 or more round up; otherwise round down.", "368 rounded to the nearest 10 is 370."], "explain": "368 rounded to the nearest 10 is 370."}, {"title": "Cavern shop change 4", "skill": "Money", "q": "A torch costs 200 cents and a map costs 105 cents. You pay 500 cents. How many cents change do you get?", "answer": 195, "kind": "guided", "hint": ["First add the two prices.", "200 + 105 = 305 cents.", "500 − 305 = 195 cents change."], "steps": ["First add the two prices.", "200 + 105 = 305 cents.", "500 − 305 = 195 cents change."], "explain": "500 − 305 = 195 cents change."}, {"title": "Crystal path lengths 4", "skill": "Adding decimals", "q": "One path is 2.75 m and another is 0.80 m. What is the combined length?", "answer": 3.55, "kind": "guided", "hint": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "2.75 + 0.80 = 3.55 metres."], "steps": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "2.75 + 0.80 = 3.55 metres."], "explain": "2.75 + 0.80 = 3.55 metres."}, {"title": "Crystal sharing puzzle 4", "skill": "Missing numbers", "q": "Fill in the missing number: □ × 3 = 27.", "answer": 9, "kind": "guided", "hint": ["Multiplication and division undo each other.", "Calculate 27 ÷ 3.", "The missing number is 9: 9 × 3 = 27."], "steps": ["Multiplication and division undo each other.", "Calculate 27 ÷ 3.", "The missing number is 9: 9 × 3 = 27."], "explain": "The missing number is 9: 9 × 3 = 27."}, {"title": "Crystal estimate 4", "skill": "Rounding", "q": "Round 481 to the nearest 10.", "answer": 480, "kind": "guided", "hint": ["Look at the ones digit.", "The ones digit is 1. If it is 5 or more round up; otherwise round down.", "481 rounded to the nearest 10 is 480."], "steps": ["Look at the ones digit.", "The ones digit is 1. If it is 5 or more round up; otherwise round down.", "481 rounded to the nearest 10 is 480."], "explain": "481 rounded to the nearest 10 is 480."}, {"title": "Cavern shop change 5", "skill": "Money", "q": "A torch costs 225 cents and a map costs 115 cents. You pay 500 cents. How many cents change do you get?", "answer": 160, "kind": "guided", "hint": ["First add the two prices.", "225 + 115 = 340 cents.", "500 − 340 = 160 cents change."], "steps": ["First add the two prices.", "225 + 115 = 340 cents.", "500 − 340 = 160 cents change."], "explain": "500 − 340 = 160 cents change."}, {"title": "Crystal path lengths 5", "skill": "Adding decimals", "q": "One path is 3.25 m and another is 0.90 m. What is the combined length?", "answer": 4.15, "kind": "guided", "hint": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "3.25 + 0.90 = 4.15 metres."], "steps": ["Line up the decimal points.", "Add hundredths, then tenths, then whole metres.", "3.25 + 0.90 = 4.15 metres."], "explain": "3.25 + 0.90 = 4.15 metres."}, {"title": "Crystal sharing puzzle 5", "skill": "Missing numbers", "q": "Fill in the missing number: □ × 4 = 40.", "answer": 10, "kind": "guided", "hint": ["Multiplication and division undo each other.", "Calculate 40 ÷ 4.", "The missing number is 10: 10 × 4 = 40."], "steps": ["Multiplication and division undo each other.", "Calculate 40 ÷ 4.", "The missing number is 10: 10 × 4 = 40."], "explain": "The missing number is 10: 10 × 4 = 40."}, {"title": "Crystal estimate 5", "skill": "Rounding", "q": "Round 594 to the nearest 10.", "answer": 590, "kind": "guided", "hint": ["Look at the ones digit.", "The ones digit is 4. If it is 5 or more round up; otherwise round down.", "594 rounded to the nearest 10 is 590."], "steps": ["Look at the ones digit.", "The ones digit is 4. If it is 5 or more round up; otherwise round down.", "594 rounded to the nearest 10 is 590."], "explain": "594 rounded to the nearest 10 is 590."}];
 const youngerQuestions=[];
 locations.forEach((l,i)=>l.ids.forEach((id,j)=>{youngerQuestions[id]=youngerByLocation[i*20+j];}));
-let questions=ageLevel==='9-10'?youngerQuestions:olderQuestions;
+// Each new bracket has five sets of 20, mapped onto the existing island IDs.
+function buildEarlyQuestions(level){
+const groups=Array.from({length:5},()=>[]);
+const add=(island,title,skill,q,answer,steps,visual='')=>groups[island].push({title,skill,q,answer,kind:'guided',hint:steps,steps,explain:steps[2],visual});
+const dots=n=>Array.from({length:n},(_,i)=>(i>0&&i%5===0?'  ':'')+'●').join(' ');
+if(level==='5-6'){
+for(let n=1;n<=10;n++){
+add(0,`Count the shells ${n}`,'Counting',`Count the shells in ${['Mia','Leo','Ava','Noah','Isla','Finn','Zoe','Owen','Ruby','Max'][n-1]}’s collection. How many are there?`,n,['Touch each dot once. Each dot stands for one shell.','Say the counting numbers as you touch the dots.',`There ${n===1?'is 1 shell':`are ${n} shells`}.`],dots(n));
+add(0,`One more ${n}`,'Number order',`What number comes just after ${n}?`,n+1,[`Start at ${n}.`,'Count forward one number.',`The number after ${n} is ${n+1}.`]);
+}
+for(let a=1;a<=5;a++)for(let b=1;b<=4;b++){
+add(1,`Joining berries ${a} and ${b}`,'Addition within 10',`You have ${a} berries and find ${b} more. How many berries now?`,a+b,[`Start with ${a} berries.`,`Count on ${b} more, one at a time.`,`${a} + ${b} = ${a+b} berries.`],`${dots(a)}  +  ${dots(b)}`);
+}
+let subtractionCount=0;
+for(let a=3;a<=10&&subtractionCount<20;a++)for(let b=1;b<=3&&subtractionCount<20;b++){
+add(2,`Shells left ${a} take ${b}`,'Subtraction within 10',`There are ${a} shells. You give away ${b}. How many shells are left?`,a-b,[`Start with ${a} shells.`,`Cover ${b} dots and count what is left.`,`${a} − ${b} = ${a-b} shells left.`],dots(a));subtractionCount++;
+}
+for(let n=1;n<=10;n++)add(3,`Bigger basket ${n}`,'Comparing numbers',`One basket has ${n} apples. Another has ${n+2}. Which number is bigger?`,n+2,[`Compare ${n} and ${n+2}.`,'The number farther along when you count is bigger.',`${n+2} is bigger than ${n}.`]);
+const shapes=[['triangle','△',3],['square','□',4],['rectangle','▭',4],['circle','○',0],['hexagon','⬡',6]];
+for(const [name,symbol,sides] of shapes){
+add(3,`${name} sides`,'Shapes',`How many straight sides does a ${name} have?`,sides,[`Look at the ${name}.`,'Count only the straight edges around it.',`A ${name} has ${sides} straight sides.`],symbol);
+add(3,`${name} corners`,'Shapes',`How many corners does a ${name} have?`,sides,[`Trace around the ${name}.`,'Count the points where two straight sides meet.',`A ${name} has ${sides} corners.`],symbol);
+}
+for(let n=0;n<10;n++){
+add(4,`Make ten ${n}`,'Number bonds to 10',`You have ${n} gems. How many more do you need to make 10?`,10-n,[`Start at ${n}.`,'Count up to 10. Count how many steps you take.',`${n} + ${10-n} = 10. You need ${10-n} more gems.`]);
+add(4,`Hop by two ${n}`,'Number patterns',`What number comes next: ${n}, ${n+2}, ${n+4}, □?`,n+6,[`Start at ${n}.`,'Each hop adds 2.',`${n+4} + 2 = ${n+6}. The next number is ${n+6}.`]);
+}
+}else{
+for(let i=0;i<10;i++){
+const n=23+i*7,tens=Math.floor(n/10),ones=n%10;
+add(0,`Tens in ${n}`,'Place value',`How many tens are in ${n}?`,tens,[`Split ${n} into tens and ones.`,`The first digit shows tens; the last shows ones.`,`${n} has ${tens} tens and ${ones} ones.`]);
+add(0,`Build a number ${i+1}`,'Place value',`What number has ${i+1} tens and ${9-i} ones?`,(i+1)*10+9-i,[`Each ten is a group of 10.`,`Calculate ${(i+1)} × 10, then add ${9-i}.`,`${i+1} tens and ${9-i} ones make ${(i+1)*10+9-i}.`]);
+const a=14+i*3,b=12+i*2,total=a+b;
+add(1,`Berry delivery ${i+1}`,'Addition within 100',`A boat brings ${a} berries and then ${b} more. How many berries arrive altogether?`,total,['Add the tens first, then the ones.',`${Math.floor(a/10)*10} + ${Math.floor(b/10)*10} = ${Math.floor(a/10)*10+Math.floor(b/10)*10}. Now add ${a%10} + ${b%10}.`,`${a} + ${b} = ${total} berries.`]);
+add(1,`Shell shop ${i+1}`,'Subtraction within 100',`The shop has ${total} shells and sells ${b}. How many shells remain?`,a,[`Start with ${total}.`,`Subtract ${Math.floor(b/10)*10}, then subtract ${b%10}.`,`${total} − ${b} = ${a} shells.`]);
+const factor=[2,5,10][i%3],count=i+1;
+add(2,`Equal baskets ${i+1}`,'Multiplication',`There are ${count} baskets with ${factor} apples in each. How many apples altogether?`,count*factor,[`There are ${count} equal groups of ${factor}.`,`Count in ${factor}s, once for each basket.`,`${count} × ${factor} = ${count*factor} apples.`]);
+add(2,`Share the gems ${i+1}`,'Equal sharing',`Share ${count*factor} gems equally among ${factor} explorers. How many gems does each explorer get?`,count,[`Make ${factor} equal groups.`,`Think: ${factor} times what number makes ${count*factor}?`,`${count*factor} ÷ ${factor} = ${count} gems each.`]);
+const hour=i+1,duration=i%2+1;
+add(3,`Ferry clock ${i+1}`,'Time',`The ferry leaves at ${hour} o’clock and sails for ${duration} ${duration===1?'hour':'hours'}. What hour does it arrive?`,hour+duration,[`Start at ${hour} o’clock.`,`Move forward ${duration} ${duration===1?'hour':'hours'} on the clock.`,`${hour} + ${duration} = ${hour+duration}. It arrives at ${hour+duration} o’clock.`]);
+const paid=50+i*5,cost=15+i*3;
+add(3,`Market change ${i+1}`,'Money',`A map costs ${cost} cents. You pay ${paid} cents. How many cents change do you get?`,paid-cost,[`Start with ${paid} cents.`,`Take away the price: ${cost} cents.`,`${paid} − ${cost} = ${paid-cost} cents change.`]);
+}
+for(let i=1;i<=5;i++){
+const pair=2+i*2,whole=i*4,a=i+1,b=i+2;
+add(4,`Half a collection ${i}`,'Halves',`Half of ${pair} shells go in a basket. How many shells go in the basket?`,pair/2,[`Half means one of two equal groups.`,`Share ${pair} shells equally into 2 groups.`,`${pair} ÷ 2 = ${pair/2}. Half is ${pair/2} shells.`]);
+add(4,`Quarter of the gems ${i}`,'Quarters',`What is one quarter of ${whole} gems?`,i,['A quarter is one of four equal groups.',`Share ${whole} gems equally into 4 groups.`,`${whole} ÷ 4 = ${i}. One quarter is ${i} gems.`]);
+add(4,`Garden fence ${i}`,'Perimeter',`A rectangular garden is ${a} metres long and ${b} metres wide. How many metres of fence go all the way around it?`,2*(a+b),['Perimeter is the distance all the way around.','A rectangle has two lengths and two widths.',`${a} + ${b} + ${a} + ${b} = ${2*(a+b)} metres.`]);
+add(4,`Bird survey ${i}`,'Reading data',`A bird chart shows ${i+2} gulls, ${i+3} ducks, and ${i+1} herons. How many birds were counted altogether?`,3*i+6,['Read all three bird counts.',`Add ${i+2} gulls and ${i+3} ducks, then ${i+1} herons.`,`${i+2} + ${i+3} + ${i+1} = ${3*i+6} birds.`],`Gulls: ${i+2}  |  Ducks: ${i+3}  |  Herons: ${i+1}`);
+}
+}
+const bank=[];
+locations.forEach((location,island)=>location.ids.forEach((id,index)=>{bank[id]=groups[island][index];}));
+return bank;
+}
+const questionsByAge={'5-6':buildEarlyQuestions('5-6'),'7-8':buildEarlyQuestions('7-8'),'9-10':youngerQuestions,'11-12':olderQuestions};
+
+let questions=questionsByAge[ageLevel];
 
 function switchAge(level){
-if(!['9-10','11-12'].includes(level)||level===ageLevel)return;
+if(!AGE_LEVELS.includes(level)||level===ageLevel)return;
 if(voyage){toast('Choose your math level after the ferry arrives.');$('#ageLevel').value=ageLevel;return;}if(boating||swimming)returnBoat();save();ageLevel=level;KEY=progressKey();currentProfile().age=level;
 try{localStorage.setItem('skyseed-age',level);}catch{storageOK=false;}
-cancelFlash();closeMapPanel();stopFishing();swimming=false;diveAnimation=null;shoreClimb=null;boatPosition={x:182,y:283};state=loadProgress();fishSet='classic';pendingCast=null;questions=level==='9-10'?youngerQuestions:olderQuestions;
+cancelFlash();closeMapPanel();stopFishing();clearLochDragon();swimming=false;diveAnimation=null;shoreClimb=null;boatPosition={x:182,y:283};state=loadProgress();fishSet='classic';pendingCast=null;questions=questionsByAge[level];
 player.x=Number.isFinite(state.x)?state.x:230;player.y=Number.isFinite(state.y)?state.y:176;
 keys.clear();active=0;answerComplete=false;document.querySelectorAll('dialog[open]').forEach(d=>d.close());
 update();toast(`Ages ${level.replace('-','–')} selected. Your adventure is ready!`);
@@ -339,10 +406,10 @@ $('#timesTableGrid').innerHTML='<caption>Multiplication reference · 1 × 1 thro
 $('#timesTables').showModal();
 }
 $('#timesTablesBtn').onclick=openTimesTables;
-let active=0,hintStep=0,work={},answerComplete=false;function openQuestion(i){closeMapPanel();answerComplete=false;active=i;hintStep=0;work={};const q=questions[i];$('#challengeCategory').textContent=`${locations.find(l=>l.ids.includes(i)).name} / ${q.skill}`;$('#challengeBody').innerHTML=`<h2>${q.title}</h2><p class="question">${q.q}</p><div class="tool"><div class="tool-title">Your explorer’s workbench · try it out</div><div id="workbench"></div></div><form class="answer-form" id="answerForm"><label class="sr-only" for="answer" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Your answer</label><input id="answer" autocomplete="off" placeholder="${Array.isArray(q.answer)?'Area, perimeter':q.kind==='compare'?'Select a value above':'Your answer (fractions welcome)'}" required><button class="primary" type="submit">Check answer ↗</button></form><div id="feedback" class="feedback" aria-live="polite"></div><button id="hintBtn" class="text-button">A little hint?</button><div id="hint"></div>`;renderTool(q);$('#answerForm').onsubmit=e=>{e.preventDefault();checkAnswer();};$('#hintBtn').onclick=()=>{$('#hint').innerHTML=`<div class="hint-box">${q.hint[0]}</div>`;$('#hintBtn').disabled=true;$('#hintBtn').textContent='Hint shown';};if(!$('#challenge').open)$('#challenge').showModal();}
+let active=0,hintStep=0,work={},answerComplete=false;function openQuestion(i){closeMapPanel();answerComplete=false;active=i;hintStep=0;work={};const q=questions[i];$('#challengeCategory').textContent=`${locations.find(l=>l.ids.includes(i)).name} / ${q.skill}`;$('#challengeBody').innerHTML=`<h2>${q.title}</h2><p class="question">${q.q}</p><div class="tool"><div class="tool-title">Your explorer’s workbench · try it out</div><div id="workbench"></div></div><form class="answer-form" id="answerForm"><label class="sr-only" for="answer" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Your answer</label><input id="answer" autocomplete="off" placeholder="${Array.isArray(q.answer)?'Area, perimeter':q.kind==='compare'?'Select a value above':['5-6','7-8'].includes(ageLevel)?'Your answer':'Your answer (fractions welcome)'}" required><button class="primary" type="submit">Check answer ↗</button></form><div id="feedback" class="feedback" aria-live="polite"></div><button id="hintBtn" class="text-button">A little hint?</button><div id="hint"></div>`;renderTool(q);$('#answerForm').onsubmit=e=>{e.preventDefault();checkAnswer();};$('#hintBtn').onclick=()=>{$('#hint').innerHTML=`<div class="hint-box">${q.hint[0]}</div>`;$('#hintBtn').disabled=true;$('#hintBtn').textContent='Hint shown';};if(!$('#challenge').open)$('#challenge').showModal();}
 function setAnswer(v){$('#answer').value=v;}
 function renderTool(q){const w=$('#workbench');const button=(label,fn)=>{const b=document.createElement('button');b.className='tile';b.textContent=label;b.onclick=fn;return b;};
-if(q.kind==='guided'){w.innerHTML='<div class="visual-result">Work through the problem, then enter your answer below. Use a hint if you need a starting point.</div>';}
+if(q.kind==='guided'){w.innerHTML=(q.visual?`<div class="math-picture">${escapeHTML(q.visual)}</div>`:'')+'<div class="visual-result">Work through the problem, then enter your answer below. Use a hint if you need a starting point.</div>';}
 else if(q.kind==='fraction'){let selected=new Set(Array.from({length:q.initial},(_,i)=>i));w.innerHTML='<div class="fraction-grid"></div><p class="visual-result"></p>';const draw=()=>{w.querySelector('.visual-result').textContent=`${selected.size} of ${q.den} equal parts selected`;};for(let i=0;i<q.den;i++){const b=button(' ',()=>{selected.has(i)?selected.delete(i):selected.add(i);b.classList.toggle('selected',selected.has(i));draw();setAnswer(selected.size+'/'+q.den);});b.classList.toggle('selected',selected.has(i));b.setAttribute('aria-label','Toggle fraction piece '+(i+1));w.querySelector('.fraction-grid').append(b);}draw();}
 else if(q.kind==='groups'){let n=0;w.innerHTML=`<p style="text-align:center;margin-top:0">${q.division?'Build equal shares until the total reaches 156.':`Build ${q.a} groups of ${q.b}.`}</p><div class="step-row" id="groupControls"></div><div class="visual-result" id="groupOutput"></div>`;const draw=()=>{$('#groupOutput').innerHTML=`${q.division?q.a+' creatures × '+n+' berries':n+' groups × '+q.b} = <strong>${+(n*(q.division?q.a:q.b)).toFixed(2)}</strong> ${q.unit}`;};$('#groupControls').append(button('−',()=>{n=Math.max(0,n-1);draw();}),button('+ '+(q.division?'berry per creature':'group'),()=>{n=Math.min(30,n+1);draw();}));draw();}
 else if(q.kind==='line'||q.kind==='angle'||q.kind==='rate'||q.kind==='sequence'){const min=q.min??(q.kind==='sequence'?1:0),max=q.max??(q.kind==='angle'?180:q.kind==='rate'?6:10);w.innerHTML=`<input aria-label="${q.kind==='sequence'?'Day':q.kind==='rate'?'Hours':'Number line'}" type="range" min="${min}" max="${max}" value="${q.start??min}"><div class="visual-result"></div>`;const draw=()=>{let v=+w.querySelector('input').value;w.querySelector('.visual-result').textContent=q.kind==='sequence'?`Day ${v}: ${4*v+1} crystals (+4 each day)`:q.kind==='rate'?`${v} hours × 28 km/hour = ${v*28} km`:q.kind==='angle'?`48° + 67° + ${v}° = ${115+v}° (target: 180°)`:`${v}°C · moved ${v-q.start} steps from ${q.start}°C`;};w.querySelector('input').oninput=draw;draw();}
@@ -371,7 +438,7 @@ function checkAnswer(){if(answerComplete)return;const q=questions[active],raw=$(
 function journal(){ $('#journalList').innerHTML=locations.map((l,i)=>`<button class="journal-row" data-location="${i}"><span style="font-size:24px">${l.icon}</span><span><strong>${l.name}</strong><small>${i===4&&!state.ferryTicket?'Ferry ticket needed · 50 crystals':l.ids.map(n=>questions[n].skill).slice(0,2).join(' · ')}</small></span><span class="badge">${l.ids.filter(n=>state.solved.includes(n)).length} / ${l.ids.length} ${i===4&&!state.ferryTicket?'⌑':'↗'}</span></button>`).join('');document.querySelectorAll('[data-location]').forEach(b=>b.onclick=()=>{closeMapPanel('journal');visit(+b.dataset.location);});openMapPanel('journal');}
 $('#profileSelect').onchange=e=>switchProfile(e.target.value);$('#saveProfile').onclick=editProfile;$('#createProfile').onclick=createProfile;$('#characterChoice').onchange=()=>renderCharacterPreview($('#characterChoice').value);
 $('#startFlash').onclick=startFlash;$('#tradeGive').onchange=updateTradeOptions;$('#tradeSubmit').onclick=tradeSquishy;$('#flash').addEventListener('close',cancelFlash);$('#flash').addEventListener('cancel',cancelFlash);
-$('#launchBoat').onclick=launchBoat;$('#boatBtn').onclick=()=>boating?returnBoat():openFerry();$('#boatFishBtn').onclick=openFishing;$('#settingsBtn').onclick=()=>toggleMapPanel('settingsPanel');$('#upgradesBtn').onclick=()=>toggleMapPanel('upgradesPanel');$('#companionBtn').onclick=()=>toggleMapPanel('companionPanel');$('#gearBtn').onclick=()=>toggleMapPanel('gearPanel');$('#railFishingBtn').onclick=()=>{closeMapPanel();openFishing();};$('#railFerryBtn').onclick=openFerry;$('#quickStashBtn').onclick=()=>$('#stashBtn').onclick();$('#mapBoatFish').onclick=openFishing;$('#mapBoatReturn').onclick=returnBoat;$('#mapBoatExit').onclick=exitBoat;$('#mapDive').onclick=diveFromIsland;$('#mapSharkExit').onclick=dismountShark;$('#mapBoatBoard').onclick=boardOwnBoat;$('#stopFishing').onclick=stopFishing;$('#fishingBtn').onclick=openFishing;$('#buyRod').onclick=buyRod;$('#buyLure').onclick=buyLure;$('#fishSet').onchange=e=>{if(e.target.value==='lure'&&!state.fishingLure)return;fishSet=e.target.value;pendingCast=null;updateFishing();};$('#ferryBtn').onclick=()=>openFerry();$('#buyTicket').onclick=buyFerryTicket;$('#boardFerry').onclick=boardFerry;$('#ageLevel').onchange=e=>{switchAge(e.target.value);openMapPanel('settingsPanel');};$('#stashBtn').onclick=()=>{updateSquishies();openMapPanel('stash');};$('#journalBtn').onclick=journal;$('#exploreBtn').onclick=()=>{const next=locations.findIndex((l,i)=>(i!==4||state.ferryTicket)&&l.ids.some(n=>!state.solved.includes(n)));if(next<0){journal();return;}visit(next);};$('#soundBtn').onclick=()=>{state.sound=!state.sound;update();chime();};$('#mapHelp').onclick=()=>openMapPanel('welcome');document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSurface(b.dataset.close));$('#resetBtn').onclick=()=>{keys.clear();$('#resetConfirm').showModal();$('#cancelReset').focus();};$('#cancelReset').onclick=()=>$('#resetConfirm').close();$('#confirmReset').onclick=()=>{if(!$('#resetConfirm').open)return;$('#resetConfirm').close();cancelFlash();stopFishing();state={...defaults,ferryTicket:currentProfile().ferryTicket===true,solved:[],upgrades:[],catches:{}};fishSet='classic';pendingCast=null;boating=false;swimming=false;diveAnimation=null;shoreClimb=null;boatPosition={x:182,y:283};player.x=230;player.y=176;update();closeMapPanel('journal');toast('A fresh island adventure awaits.');};document.querySelectorAll('dialog').forEach(d=>d.addEventListener('close',()=>{keys.clear();canvas.focus({preventScroll:true});}));
+$('#launchBoat').onclick=launchBoat;$('#boatBtn').onclick=()=>boating?returnBoat():openFerry();$('#boatFishBtn').onclick=openFishing;$('#settingsBtn').onclick=()=>toggleMapPanel('settingsPanel');$('#upgradesBtn').onclick=()=>toggleMapPanel('upgradesPanel');$('#companionBtn').onclick=()=>toggleMapPanel('companionPanel');$('#gearBtn').onclick=()=>toggleMapPanel('gearPanel');$('#railFishingBtn').onclick=()=>{closeMapPanel();openFishing();};$('#railFerryBtn').onclick=openFerry;$('#quickStashBtn').onclick=()=>$('#stashBtn').onclick();$('#mapBoatFish').onclick=openFishing;$('#mapBoatReturn').onclick=returnBoat;$('#mapBoatExit').onclick=exitBoat;$('#mapDive').onclick=diveFromIsland;$('#mapSharkExit').onclick=dismountShark;$('#mapBoatBoard').onclick=boardOwnBoat;$('#stopFishing').onclick=stopFishing;$('#fishingBtn').onclick=openFishing;$('#buyRod').onclick=buyRod;$('#buyLure').onclick=buyLure;$('#fishSet').onchange=e=>{if(e.target.value==='lure'&&!state.fishingLure)return;fishSet=e.target.value;pendingCast=null;updateFishing();};$('#ferryBtn').onclick=()=>openFerry();$('#buyTicket').onclick=buyFerryTicket;$('#boardFerry').onclick=boardFerry;$('#ageLevel').onchange=e=>{switchAge(e.target.value);openMapPanel('settingsPanel');};$('#stashBtn').onclick=()=>{updateSquishies();openMapPanel('stash');};$('#journalBtn').onclick=journal;$('#exploreBtn').onclick=()=>{const next=locations.findIndex((l,i)=>(i!==4||state.ferryTicket)&&l.ids.some(n=>!state.solved.includes(n)));if(next<0){journal();return;}visit(next);};$('#soundBtn').onclick=()=>{state.sound=!state.sound;update();chime();};$('#mapHelp').onclick=()=>openMapPanel('welcome');document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSurface(b.dataset.close));$('#resetBtn').onclick=()=>{keys.clear();$('#resetConfirm').showModal();$('#cancelReset').focus();};$('#cancelReset').onclick=()=>$('#resetConfirm').close();$('#confirmReset').onclick=()=>{if(!$('#resetConfirm').open)return;$('#resetConfirm').close();cancelFlash();stopFishing();clearLochDragon();state={...defaults,ferryTicket:currentProfile().ferryTicket===true,solved:[],upgrades:[],catches:{}};fishSet='classic';pendingCast=null;boating=false;swimming=false;diveAnimation=null;shoreClimb=null;boatPosition={x:182,y:283};player.x=230;player.y=176;update();closeMapPanel('journal');toast('A fresh island adventure awaits.');};document.querySelectorAll('dialog').forEach(d=>d.addEventListener('close',()=>{keys.clear();canvas.focus({preventScroll:true});}));
 // Tiny original pixel-art world. All art is drawn locally; no image assets required.
 const canvas=$('#world'),ctx=canvas.getContext('2d');ctx.scale(2,2);ctx.imageSmoothingEnabled=false;let frame=0,near=-1;const keys=new Set();
 function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h);}function ellipse(x,y,rx,ry,c){ctx.fillStyle=c;ctx.beginPath();ctx.ellipse(Math.round(x),Math.round(y),rx,ry,0,0,Math.PI*2);ctx.fill();}
@@ -383,7 +450,41 @@ function tree(x,y,s=1){ellipse(x,y+12*s,13*s,5*s,'#4b84524a');rect(x-2*s,y-5*s,5
 function pine(x,y){rect(x-2,y,4,13,'#87684b');for(let i=0;i<3;i++){let w=18-i*4;rect(x-w/2,y-i*8,w,7,'#396c50');rect(x-w/2+3,y-i*8-4,w-6,5,'#52845a');}}
 function crystal(x,y,c='#b8a2d8'){polygon([[x,y-10],[x+5,y-4],[x+4,y+4],[x,y+8],[x-4,y+3],[x-5,y-4]],c);rect(x-2,y-5,2,7,'#ece0f1');}
 function house(){let built=state.upgrades.includes('cottage');rect(188,126,56,32,'#7f925d44');rect(190,113,49,34,built?'#ecd7a5':'#b5a784');rect(194,119,41,26,built?'#f2e0b5':'#c1b392');polygon([[183,115],[214,88],[246,115]],built?'#b96e50':'#8d7861');for(let i=0;i<4;i++)rect(190+i*5,110-i*5,47-i*10,3,built?'#d18b5e':'#a08b6c');rect(209,127,11,20,'#685f43');rect(211,130,7,17,'#806846');rect(218,137,2,2,'#ebc581');rect(195,123,9,10,built?'#9fc7ba':'#786f56');rect(224,123,9,10,built?'#9fc7ba':'#786f56');if(built){rect(231,93,6,15,'#a45d48');rect(230,91,8,3,'#784d41');ellipse(236,83-Math.sin(frame/50)*3,4,3,'#fcf4db99');rect(195,134,9,3,'#729055');rect(224,134,9,3,'#729055');}else{rect(194,126,12,3,'#a18761');rect(225,123,3,14,'#9b8566');}}
-function character(x,y,pet=false){const step=Math.sin(frame/5)*(keys.size?1.5:0);ellipse(x,y+3,6,2,'#325c4144');if(pet){rect(x-5,y-5,10,7,'#a8c76b');rect(x-3,y-8,7,5,'#bbd880');rect(x-2,y-3,1,1,'#2f5141');rect(x+3,y-3,1,1,'#2f5141');rect(x,y-11,2,4,'#4b7951');rect(x+1,y-12,5,2,'#739e58');return;}const colors=characterColors();if(currentProfile().character==='girl')rect(x-8,y-18,4,12,colors.hair);rect(x-4,y-2+step,3,4,'#3e5555');rect(x+2,y-2-step,3,4,'#3e5555');rect(x-5,y-11,11,11,colors.shirt);rect(x-4,y-10,8,5,colors.accent);rect(x-7,y-10,2,7,'#e4bd88');rect(x+6,y-10,2,7,'#e4bd88');rect(x-4,y-20,9,9,'#f2c992');rect(x-5,y-21,11,4,colors.hair);rect(x-8,y-23,16,4,colors.hat);rect(x-5,y-28,10,6,colors.hat);rect(x-5,y-25,10,2,'#a87a49');rect(x+2,y-16,1,2,'#354744');rect(x-5,y-8,3,7,'#e6c991');}
+function faceMovement(dx,dy){
+if(!dx&&!dy)return;
+// Keep the current axis for equal diagonal input so the view stays steady.
+if(Math.abs(dx)===Math.abs(dy)){
+if(player.facing==='left'||player.facing==='right')player.facing=dx<0?'left':'right';
+else player.facing=dy<0?'up':'down';
+}else player.facing=Math.abs(dx)>Math.abs(dy)?(dx<0?'left':'right'):(dy<0?'up':'down');
+}
+function character(x,y,pet=false){
+const step=Math.sin(frame/5)*(keys.size?1.5:0);ellipse(x,y+3,6,2,'#325c4144');
+if(pet){rect(x-5,y-5,10,7,'#a8c76b');rect(x-3,y-8,7,5,'#bbd880');rect(x-2,y-3,1,1,'#2f5141');rect(x+3,y-3,1,1,'#2f5141');rect(x,y-11,2,4,'#4b7951');rect(x+1,y-12,5,2,'#739e58');return;}
+const colors=characterColors(),facing=player.facing||'down',girl=currentProfile().character==='girl';
+ctx.save();ctx.translate(x,y);
+if(facing==='left'||facing==='right'){
+ctx.scale(facing==='left'?-1:1,1);
+rect(-3-step,-2,3,5,'#3e5555');rect(1+step,-3,3,5,'#3e5555');
+rect(-4,-11,8,11,colors.shirt);rect(1,-10,3,5,colors.accent);
+if(girl)rect(-6,-19,4,13,colors.hair);
+rect(-3,-20,7,9,'#f2c992');rect(3,-16,3,3,'#f2c992');
+rect(-4,-21,8,4,colors.hair);rect(-4,-19,2,7,colors.hair);
+rect(-6,-23,14,3,colors.hat);rect(-4,-28,9,6,colors.hat);rect(-4,-25,9,2,'#a87a49');
+rect(2,-17,1,2,'#354744');rect(-1+step,-9,3,8,'#e4bd88');
+}else{
+rect(-4,-2+step,3,4,'#3e5555');rect(2,-2-step,3,4,'#3e5555');
+rect(-5,-11,11,11,colors.shirt);
+if(facing==='down')rect(-4,-10,8,5,colors.accent);
+else{rect(-4,-10,8,2,colors.accent);rect(0,-7,1,6,colors.accent);}
+rect(-7,-10+step,2,7,'#e4bd88');rect(6,-10-step,2,7,'#e4bd88');
+rect(-4,-20,9,9,facing==='up'?colors.hair:'#f2c992');rect(-5,-21,11,4,colors.hair);
+if(girl){if(facing==='up')rect(-5,-19,11,10,colors.hair);else rect(-8,-18,4,12,colors.hair);}
+rect(-8,-23,16,4,colors.hat);rect(-5,-28,10,6,colors.hat);rect(-5,-25,10,2,'#a87a49');
+if(facing==='down'){rect(-2,-16,1,2,'#354744');rect(2,-16,1,2,'#354744');}
+}
+ctx.restore();
+}
 // Fishing shares the main animation loop; only an open dock advances its clock.
 const fishingDock={x:106,y:222};
 const fishSpecies=[
@@ -411,6 +512,66 @@ let boating=false,swimming=false,diveAnimation=null,shoreClimb=null,boatPosition
 let sharkFins=[],nextSharkFin=800+Math.random()*1400;
 const SHARK_RIDE_SPEED=.095,SHARK_TURN_RATE=1.8,SHARK_LATCH_DISTANCE=22;
 let sharkRide=null,sharkWake=[],sharkLatchCooldown=0;
+// Rare sightings are timed in active play, never rerolled every frame.
+let lochDragon=null,nextLochDragon=90000+Math.random()*120000,dragonLatchCooldown=0;
+function clearLochDragon(){lochDragon=null;nextLochDragon=90000+Math.random()*120000;dragonLatchCooldown=0;}
+function advanceLochDragon(dt){
+if(dt<=0||document.querySelector('dialog[open]'))return;
+dragonLatchCooldown=Math.max(0,dragonLatchCooldown-dt);
+if(lochDragon){
+lochDragon.age+=dt;
+if(lochDragon.age>=lochDragon.duration){lochDragon=null;return;}
+const step=.018*dt,x=lochDragon.x+Math.cos(lochDragon.heading)*step,y=lochDragon.y+Math.sin(lochDragon.heading)*step;
+if(sharkWater(x,y)&&sharkWater(x+Math.cos(lochDragon.heading)*25,y+Math.sin(lochDragon.heading)*25)){
+lochDragon.x=x;lochDragon.y=y;
+}else lochDragon.heading+=Math.min(dt*.001,Math.PI/2);
+return;
+}
+if(sharkRide||voyage||diveAnimation||shoreClimb)return;
+nextLochDragon-=dt;if(nextLochDragon>0)return;
+nextLochDragon=90000+Math.random()*120000;
+if(Math.random()>.3)return;
+for(let attempt=0;attempt<24;attempt++){
+const angle=Math.random()*Math.PI*2,distance=70+Math.random()*65;
+const x=player.x+Math.cos(angle)*distance,y=player.y+Math.sin(angle)*distance,heading=angle+Math.PI/2;
+// The whole silhouette and its short route must fit in open water.
+if(![-30,0,30,55].every(d=>sharkWater(x+Math.cos(heading)*d,y+Math.sin(heading)*d)))continue;
+lochDragon={x,y,heading,age:0,duration:18000};break;
+}
+}
+function latchLochDragon(){
+if(!lochDragon||!swimming||boating||voyage||diveAnimation||shoreClimb||sharkRide||dragonLatchCooldown>0||document.querySelector('dialog[open]'))return;
+if(lochDragon.age<500||lochDragon.duration-lochDragon.age<700||Math.hypot(lochDragon.x-player.x,lochDragon.y-player.y)>22)return;
+sharkRide={kind:'dragon',x:player.x,y:player.y,heading:lochDragon.heading,distance:0,phase:0,diveElapsed:0,surfaceWake:[],surfaceDistance:0};
+lochDragon=null;sharkWake=[];closeMapPanel();keys.clear();updateWaterControls();
+toast('You caught the rare Loch Ness dragon! Arrows / WASD steer. X or Hop off returns you to swimming.');
+}
+function drawLochDragonBody(x,y,heading,phase=0,surface=1,ridden=false){
+ctx.save();ctx.translate(x,y);ctx.rotate(heading);ctx.globalAlpha=surface;
+const sway=Math.sin(phase)*2;
+// A quiet little wake, much smaller than the shark's foam trail.
+ctx.strokeStyle='#c7e5d6';ctx.lineWidth=.6;ctx.globalAlpha=surface*.35;
+ctx.beginPath();ctx.moveTo(-19,-3);ctx.quadraticCurveTo(-12,-5,-6,-2);ctx.moveTo(-19,3);ctx.quadraticCurveTo(-12,5,-6,2);ctx.stroke();
+ctx.globalAlpha=surface*(ridden?.9:.6);
+ellipse(-4,1,18,6,'#487d69');ellipse(-13,-1,7,4,'#63916e');ellipse(0,-2,8,5,'#669776');
+polygon([[-17,0],[-28,sway-3],[-33,sway],[-21,4]],'#487d69');
+if(ridden){polygon([[-4,-3],[-12,-10],[-2,-7],[4,-2]],'#3b6d60');polygon([[-3,4],[-10,11],[2,8],[6,3]],'#3b6d60');}
+// Long curved neck, a small snout, and two tiny horns.
+ctx.strokeStyle='#57896f';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(8,0);ctx.quadraticCurveTo(18,0,16,-10);ctx.quadraticCurveTo(14,-16,21,-16);ctx.stroke();
+rect(19,-19,9,5,'#6b9c7c');rect(25,-17,5,3,'#6b9c7c');rect(19,-22,2,3,'#c3c78c');rect(24,-22,2,3,'#c3c78c');rect(24,-18,1,1,'#1c4237');rect(27,-15,2,1,'#365b4a');
+ctx.restore();
+}
+function drawLochDragon(){
+if(!lochDragon)return;
+const surface=Math.max(0,Math.min(1,lochDragon.age/900,(lochDragon.duration-lochDragon.age)/1600));
+drawLochDragonBody(lochDragon.x,lochDragon.y,lochDragon.heading,lochDragon.age*.002,surface);
+}
+function drawLochDragonRide(){
+const landing=sharkRide.landing,depth=landing?Math.min(1,landing.elapsed/400):0;
+drawLochDragonBody(sharkRide.x,sharkRide.y,sharkRide.heading,sharkRide.phase,1-depth,true);
+if(landing){const roll=Math.min(1,landing.elapsed/landing.duration),tuck=Math.min(1,roll/.18,(1-roll)/.22);rollingCharacter(player.x,player.y-14+4*roll,roll*Math.PI*2*(Math.cos(sharkRide.heading)>=0?1:-1),tuck);}
+else{character(player.x,player.y-4);directionalSwimGear(player.x,player.y-19,false);}
+}
 function clearSharkRide(){sharkRide=null;sharkWake=[];sharkLatchCooldown=0;}
 function sharkWater(x,y){return x>15&&x<945&&y>15&&y<585&&!islandPolys.some(p=>inside(x,y,p));}
 function latchShark(){
@@ -418,14 +579,16 @@ if(!swimming||boating||voyage||diveAnimation||shoreClimb||sharkRide||sharkLatchC
 const fin=sharkFins.filter(f=>f.age>=150&&f.duration-f.age>300&&Math.hypot(f.x-player.x,f.y-player.y)<=SHARK_LATCH_DISTANCE).sort((a,b)=>Math.hypot(a.x-player.x,a.y-player.y)-Math.hypot(b.x-player.x,b.y-player.y))[0];
 if(!fin)return;
 // Stay at the swimmer's position rather than jumping across nearby land.
-sharkRide={x:player.x,y:player.y,heading:Math.atan2(fin.vy,fin.vx),distance:0,phase:0};sharkFins=sharkFins.filter(f=>f!==fin);sharkWake=[];
+sharkRide={x:player.x,y:player.y,heading:Math.atan2(fin.vy,fin.vx),distance:0,phase:0,diveElapsed:0,surfaceWake:[],surfaceDistance:0};sharkFins=sharkFins.filter(f=>f!==fin);sharkWake=[];
+faceMovement(Math.cos(sharkRide.heading),Math.sin(sharkRide.heading));
 closeMapPanel();keys.clear();updateWaterControls();toast('You latched onto a shark! Arrows / WASD guide your shark. X or Hop off returns you to swimming.');
 }
 function dismountShark(){
 if(!sharkRide||sharkRide.landing)return;
-const heading=sharkRide.heading;
-sharkFins.push({x:player.x,y:player.y,vx:Math.cos(heading)*.024,vy:Math.sin(heading)*.024,age:500,duration:4500});
-sharkRide=null;sharkWake=[];sharkLatchCooldown=1500;keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});toast('Back in the water! Swim to shore or catch another shark.');
+const heading=sharkRide.heading,isDragon=sharkRide.kind==='dragon';
+if(isDragon)dragonLatchCooldown=2500;
+if(!isDragon)sharkFins.push({x:player.x,y:player.y,vx:Math.cos(heading)*.024,vy:Math.sin(heading)*.024,age:500,duration:4500});
+sharkRide=null;sharkWake=[];sharkLatchCooldown=1500;keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});toast(isDragon?'The Loch Ness dragon slips beneath the water. What a lucky ride!':'Back in the water! Swim to shore or catch another shark.');
 }
 function sharkShoreLanding(heading){
 // Begin near the beach so the rider only travels a short distance to shore.
@@ -453,11 +616,13 @@ player.y=landing.from.y+(landing.to.y-landing.from.y)*ease;
 const glide=8*ease;
 sharkRide.x=landing.from.x+Math.cos(sharkRide.heading)*glide;
 sharkRide.y=landing.from.y+Math.sin(sharkRide.heading)*glide;
-if(t===1){swimming=false;clearSharkRide();keys.clear();save();updateWaterControls();toast('A rolling shore landing! Your shark dives back into the sea.');}
+if(t===1){const name=sharkRide.kind==='dragon'?'dragon':'shark';swimming=false;clearSharkRide();keys.clear();save();updateWaterControls();toast(`A rolling shore landing! Your ${name} dives back into the sea.`);}
 }
 function advanceSharkRide(dt){
 if(!sharkRide||dt<=0)return;
 if(sharkRide.landing){advanceSharkLanding(dt);return;}
+sharkRide.diveElapsed=(sharkRide.diveElapsed||0)+dt;
+sharkRide.surfaceWake=(sharkRide.surfaceWake||[]).filter(w=>{w.age+=dt;return w.age<1100;});
 sharkWake=sharkWake.filter(w=>{w.age+=dt;return w.age<900;});
 const dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0);
 // Integrate turns in small time steps so steering follows a gentle arc.
@@ -479,13 +644,43 @@ remaining-=elapsed;
 // Wait for the turn to clear the shoreline instead of snapping sideways.
 if(!sharkWater(x,y))continue;
 player.x=x;player.y=y;sharkRide.distance+=step;sharkRide.phase+=elapsed/1000*Math.PI*2*.85;
+sharkRide.surfaceDistance=(sharkRide.surfaceDistance||0)+step;
+if(sharkRide.surfaceDistance>=4){
+sharkRide.surfaceDistance%=4;const depth=sharkDiveDepth();
+if(depth>0&&depth<1)sharkRide.surfaceWake.push({kind:'body',x:player.x,y:player.y+1,heading:sharkRide.heading,age:0,strength:.35+.65*Math.sin(depth*Math.PI)});
+if(depth>.2)sharkRide.surfaceWake.push({kind:'snorkel',x:player.x+(player.facing==='left'?-7:7),y:player.y-17+depth*16,heading:sharkRide.heading,age:0,strength:depth});
+}
 if(sharkRide.distance>=7){sharkRide.distance-=7;sharkWake.push({x:player.x-Math.cos(sharkRide.heading)*29,y:player.y-Math.sin(sharkRide.heading)*29,heading:sharkRide.heading,age:0});}
 }
+faceMovement(Math.cos(sharkRide.heading),Math.sin(sharkRide.heading));
 sharkRide.x=player.x;sharkRide.y=player.y;sharkWake=sharkWake.slice(-32);
+sharkRide.surfaceWake=sharkRide.surfaceWake.slice(-64);
+}
+function sharkDiveDepth(ride=sharkRide){
+if(!ride||ride.kind==='dragon')return 0;
+const phase=(ride.diveElapsed||0)%10000;
+const smooth=t=>t*t*(3-2*t);
+if(phase<5000||phase>=8400)return 0;
+if(phase<5800)return smooth((phase-5000)/800);
+if(phase<7600)return 1;
+return 1-smooth((phase-7600)/800);
+}
+function drawSharkSurfaceWake(){
+for(const w of sharkRide.surfaceWake||[]){
+const t=w.age/1100,body=w.kind==='body',spread=(body?6:1.3)+t*(body?14:5),length=(body?7:2)+t*(body?19:9);
+ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.globalAlpha=(1-t)*(1-t)*w.strength*(body?.5:.7);
+ctx.strokeStyle='#e2f8ee';ctx.lineWidth=body?1:.65;
+// Paired spreading trails stay at their world positions as the rider moves on.
+ctx.beginPath();ctx.moveTo(-length,-spread);ctx.quadraticCurveTo(-length*.45,-spread*.8,1,-(body?3:.6));
+ctx.moveTo(-length,spread);ctx.quadraticCurveTo(-length*.45,spread*.8,1,body?3:.6);ctx.stroke();
+if(body){ctx.globalAlpha*=.5;ctx.beginPath();ctx.ellipse(-length*.25,0,spread,spread*.42,0,0,Math.PI*2);ctx.stroke();}
+ctx.restore();
+}
 }
 function drawSharkRide(){
-sharkWake.forEach(w=>{const fade=1-w.age/900,spread=3+w.age*.012;ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.globalAlpha=fade*.38;ctx.strokeStyle='#edfff6';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-spread,-spread);ctx.lineTo(2,-3);ctx.moveTo(-spread,spread);ctx.lineTo(2,3);ctx.stroke();ctx.restore();});
-const landing=sharkRide.landing,depth=landing?Math.min(1,landing.elapsed/400):0;
+if(sharkRide.kind==='dragon'){drawLochDragonRide();return;}
+const submerge=sharkDiveDepth(),landing=sharkRide.landing,depth=Math.max(submerge,landing?Math.min(1,landing.elapsed/400):0);
+sharkWake.forEach(w=>{const fade=(1-w.age/900)*(1-submerge),spread=3+w.age*.012;ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.globalAlpha=fade*.38;ctx.strokeStyle='#edfff6';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-spread,-spread);ctx.lineTo(2,-3);ctx.moveTo(-spread,spread);ctx.lineTo(2,3);ctx.stroke();ctx.restore();});
 ctx.save();ctx.translate(sharkRide.x,sharkRide.y);ctx.rotate(sharkRide.heading);
 // Keep the body and side fins beneath the surface, with the dorsal fin above it.
 ctx.globalAlpha=(1-depth)*.65;ctx.scale(1-depth*.25,.82*(1-depth*.6));
@@ -508,11 +703,18 @@ ctx.globalAlpha=(1-depth)*.4;ctx.strokeStyle='#c2eee0';ctx.lineWidth=1;
 for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(-14,side*5);ctx.quadraticCurveTo(0,side*9,14,side*5);ctx.stroke();}
 ctx.globalAlpha=1-depth;polygon([[-5,-1],[-1,-12],[4,-3],[7,0]],'#395d6b');
 ctx.restore();
+drawSharkSurfaceWake();
 if(landing){
 const roll=Math.max(0,Math.min(1,landing.elapsed/landing.duration));
 const tuck=Math.min(1,roll/.18,(1-roll)/.22);
 rollingCharacter(player.x,player.y-14+4*roll-Math.sin(roll*Math.PI)*4,roll*Math.PI*2*(Math.cos(sharkRide.heading)>=0?1:-1),tuck);
-}else{character(player.x,player.y-4);swimGoggles(player.x,player.y-19);}
+}else{
+const sink=submerge*16;
+if(submerge<1){ctx.save();ctx.globalAlpha=1-submerge;character(player.x,player.y-4+sink);directionalSwimGear(player.x,player.y-19+sink,false);ctx.restore();}
+// The breathing tube stays above the water even when shark and rider disappear.
+swimSnorkel(player.x,player.y-19+sink,player.facing==='left'?-1:1);
+if(submerge>0){const ripple=2.4+Math.sin((sharkRide.diveElapsed||0)*.012)*.4;ctx.save();ctx.globalAlpha=submerge*.65;ctx.strokeStyle='#e2f8ee';ctx.lineWidth=.7;ctx.beginPath();ctx.ellipse(player.x+(player.facing==='left'?-7:7),player.y-17+sink,ripple,ripple*.4,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+}
 }
 function advanceSharkFins(dt){
 if(!swimming){sharkFins=[];nextSharkFin=800+Math.random()*1400;return;}
@@ -557,6 +759,7 @@ if(openSea(x,y))return {x,y};
 return null;
 }
 function startDive(to){
+faceMovement(to.x-player.x,to.y-player.y);
 const style=['roll','backflip','dive'][Math.floor(Math.random()*3)];
 swimming=true;diveAnimation={elapsed:0,from:{x:player.x,y:player.y},to,style};keys.clear();sharkFins=[];nextSharkFin=800+Math.random()*1400;
 toast(sponsored()?'Splash! Swim with arrows or WASD. Swim to shore, or press E beside your boat to climb back in.':'Splash! Swim with arrows or WASD. Swim onto shore to walk again.');
@@ -568,6 +771,7 @@ const to=shoreDiveTarget();if(!to)return;closeMapPanel();startDive(to);
 }
 function moveExplorer(dx,dy){
 if(diveAnimation||shoreClimb||sharkRide)return;
+faceMovement(dx,dy);
 const x=player.x+dx,y=player.y+dy;
 if(swimming&&(dx||dy)&&islandPolys.some(p=>inside(x,y,p))&&canWalk(x,y)){
 const length=Math.hypot(dx,dy),inset={x:x+dx/length*8,y:y+dy/length*8};
@@ -604,14 +808,15 @@ else if(sharkRide&&swimming)advanceSharkRide(dt);
 else if(diveAnimation){diveAnimation.elapsed+=dt;const t=Math.min(1,diveAnimation.elapsed/700);player.x=diveAnimation.from.x+(diveAnimation.to.x-diveAnimation.from.x)*t;player.y=diveAnimation.from.y+(diveAnimation.to.y-diveAnimation.from.y)*t;if(t===1)diveAnimation=null;}
 else if(swimming){swimming=false;if(canWalk(player.x,player.y)){save();toast('Back on dry land. Keep exploring!');}else swimming=true;}
 if(boating)boatPosition={x:player.x,y:player.y};
-advanceSharkFins(dt);if(swimming&&!sharkRide)latchShark();updateWaterControls();
+advanceLochDragon(dt);advanceSharkFins(dt);if(swimming&&!sharkRide){latchLochDragon();latchShark();}updateWaterControls();
 }
 function updateWaterControls(){
 if(!swimming){sharkFins=[];clearSharkRide();}
 $('#mapSharkExit').hidden=!sharkRide||!!sharkRide.landing;
+$('#mapSharkExit').textContent=sharkRide?.kind==='dragon'?'Hop off dragon · X ↗':'Hop off shark · X ↗';
 $('#mapDive').hidden=!shoreDiveTarget();$('#mapBoatExit').hidden=!boating;$('#mapBoatBoard').hidden=!sponsored()||!swimming||!!diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>44;
 $('#mapBoatReturn').textContent=swimming&&!sponsored()?'Return to shore ↗':'Return to dock ↗';$('#mapBoatReturn').hidden=!boating&&!swimming;
-const hint=shoreClimb?'SHORE · Pulling yourself onto the beach…':sharkRide?.landing?'SHORE LANDING · Your shark dives as you roll onto the beach.':sharkRide?'SHARK RIDE · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':swimming?(sponsored()?'SWIMMING · Get close to a shark to ride · Arrows / WASD swim · E beside your boat to climb in · Swim onto shore to walk.':'SWIMMING · Get close to a shark to ride · Arrows / WASD swim · Swim onto shore to walk · Return to shore if you need a lift.'):boating?(fishingActive?'FISHING · Watch ripples · Cast ahead of a fish · Arrows aim; Enter/Space casts · Tap R to reel · Esc stops fishing · X exits: dock = walk, sea = dive.':'BOAT · Arrows / WASD steer · F to fish · X or Exit boat to get out: at dock = walk, offshore = dive & swim.'):'ISLAND · Walk off the shoreline to dive & swim · X or Dive near shore · Visit the fishing dock to fish.';
+const hint=shoreClimb?'SHORE · Pulling yourself onto the beach…':sharkRide?.landing?'SHORE LANDING · Your mount dives as you roll onto the beach.':sharkRide?.kind==='dragon'?'LOCH NESS DRAGON · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':sharkRide?'SHARK RIDE · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':swimming?(sponsored()?'SWIMMING · Get close to a shark to ride · Arrows / WASD swim · E beside your boat to climb in · Swim onto shore to walk.':'SWIMMING · Get close to a shark to ride · Arrows / WASD swim · Swim onto shore to walk · Return to shore if you need a lift.'):boating?(fishingActive?'FISHING · Watch ripples · Cast ahead of a fish · Arrows aim; Enter/Space casts · Tap R to reel · Esc stops fishing · X exits: dock = walk, sea = dive.':'BOAT · Arrows / WASD steer · F to fish · X or Exit boat to get out: at dock = walk, offshore = dive & swim.'):'ISLAND · Walk off the shoreline to dive & swim · X or Dive near shore · Visit the fishing dock to fish.';
 if($('#waterControls').textContent!==hint)$('#waterControls').textContent=hint;
 }
 function stopFishing(){fishingActive=false;pendingCast=null;hookedFish=null;$('#reelFish').hidden=true;fishingSplash=null;keys.clear();$('#fishing').hidden=true;$('#mapBoatFish').hidden=!boating;canvas.setAttribute('aria-label','Five-island map. Move with arrows or WASD. Press E to interact.');}
@@ -820,6 +1025,25 @@ const piers=[
 let voyage=null;
 const islandPolys=[mainPoly,...locations.slice(1).map(l=>[[-100,-55],[-72,-92],[-20,-103],[45,-92],[88,-58],[108,-5],[96,55],[54,88],[-18,96],[-80,66],[-109,10]].map(([x,y])=>[l.x+x,l.y+y]))];
 const crossings=[{x:320,y:155,w:88,h:14},{x:595,y:155,w:72,h:14},{x:224,y:245,w:16,h:112},{x:235,y:344,w:65,h:14}];
+// Fixed, island-specific planting plans keep each destination recognizable.
+// Coordinates are relative to its discovery marker, followed by tree scale.
+const islandTreeLayouts=[
+// Cottage: loose shade trees around the outer clearing.
+[[-110,-15,.85],[-125,46,.75],[-66,74,.7],[78,8,.8],[82,58,.7]],
+// Moonwater: a crescent around the pond's open eastern bank.
+[[-60,-24,.75],[-40,-48,.8],[-5,-51,.7],[32,-39,.8],[59,-11,.65],[63,27,.7],[40,65,.6]],
+// Sunseed: two orchard columns framing the garden beds.
+[[-56,-40,.7],[58,-40,.7],[-56,48,.7],[58,48,.7],[-44,66,.65],[44,66,.65]],
+// Whispering woods: uneven groves surrounding a central clearing.
+[[-62,-30,.85],[-36,-37,.75],[0,-43,.9],[45,-27,.8],[65,5,.7],[-70,10,.8],[-43,4,.7],[-64,45,.75],[-26,48,.85],[30,63,.8],[56,50,.7]],
+// Cavern: sparse, small trees along the lower rocky rim.
+[[-68,26,.55],[-48,65,.6],[67,43,.5]]
+];
+function drawIslandTrees(){
+islandTreeLayouts.forEach((layout,i)=>{const l=locations[i];
+[...layout].sort((a,b)=>a[1]-b[1]).forEach(([x,y,scale])=>tree(l.x+x,l.y+y,scale));
+});
+}
 function onFinalIsland(){return inside(player.x,player.y,islandPolys[4]);}
 function openFerry(){
 if(voyage)return;stopFishing();if(boating||swimming)returnBoat();
@@ -860,12 +1084,59 @@ function ferryArt(x,y){
 ellipse(x,y+12,37,9,'#3f8e9866');polygon([[x-35,y],[x+35,y],[x+26,y+15],[x-25,y+15]],'#315d66');rect(x-29,y-4,58,6,'#e7b965');rect(x-19,y-23,36,19,'#fff0c6');rect(x-23,y-25,44,5,'#bc7056');for(let i=0;i<3;i++)rect(x-13+i*10,y-18,6,8,'#7bb8bc');rect(x+7,y-33,5,9,'#535f59');rect(x-27,y-9,5,5,'#e8cf89');rect(x+23,y-9,5,5,'#e8cf89');cavernFlag(x-15,y-24,28);
 }
 function fishingBoatArt(x,y){ellipse(x,y+8,24,7,'#397e8866');polygon([[x-24,y-5],[x+24,y-5],[x+15,y+10],[x-15,y+10]],'#f1c67a');rect(x-18,y-7,36,4,'#436b67');rect(x-9,y-6,18,4,'#fff1cf');rect(x+12,y-14,2,11,'#71523b');rect(x+14,y-14,12,6,'#e9a384');if(boating&&!hookedFish)character(x,y-6);}
-function swimGoggles(x,y){
+function swimSnorkel(x,y,side=1){
+// Slim J-shaped tube follows the cheek, with a small angled air opening.
+ctx.save();ctx.translate(x,y);ctx.scale(side,1);x=0;y=0;ctx.lineCap='round';ctx.lineJoin='round';
+ctx.beginPath();ctx.moveTo(x+6,y-8);ctx.quadraticCurveTo(x+7,y-7,x+7,y-5);
+ctx.lineTo(x+7,y+1);ctx.quadraticCurveTo(x+7,y+3,x+5,y+3);ctx.lineTo(x+4,y+2);
+ctx.strokeStyle='#345362';ctx.lineWidth=2;ctx.stroke();
+ctx.strokeStyle='#d8b773';ctx.lineWidth=1;ctx.stroke();
+rect(x+6,y-1,1,2,'#63818a');
+ellipse(x+6,y-8,.8,.5,'#254450');ellipse(x+4,y+2,.8,.7,'#345362');
+ctx.restore();
+}
+function swimGoggles(x,y,withSnorkel=true){
 // Dark strap and twin aqua lenses stay legible at the map's pixel scale.
 rect(x-5,y-1,11,2,'#345362');
 rect(x-4,y-2,4,4,'#e9e5bd');rect(x+1,y-2,4,4,'#e9e5bd');
 rect(x-3,y-1,2,2,'#77d5df');rect(x+2,y-1,2,2,'#77d5df');
 rect(x,y-1,1,1,'#e9e5bd');rect(x-3,y-1,1,1,'#e6ffff');rect(x+2,y-1,1,1,'#e6ffff');
+if(withSnorkel)swimSnorkel(x,y);
+}
+function directionalSwimGear(x,y,withSnorkel=true){
+const facing=player.facing||'down';
+if(facing==='down'){swimGoggles(x,y,withSnorkel);return;}
+ctx.save();ctx.translate(x,y);
+if(facing==='up'){
+rect(-5,-1,11,2,'#345362');rect(-2,-1,3,2,'#63818a');
+}else{
+ctx.scale(facing==='left'?-1:1,1);
+rect(-4,-1,9,2,'#345362');rect(2,-2,4,4,'#e9e5bd');rect(3,-1,2,2,'#77d5df');
+}
+if(withSnorkel)swimSnorkel(0,0);
+ctx.restore();
+}
+function drawSwimmingCharacter(x,y){
+const colors=characterColors(),facing=player.facing||'down',stroke=Math.sin(frame/7),girl=currentProfile().character==='girl';
+ellipse(x,y+2,11,4,'#c2eee099');
+ctx.save();ctx.translate(x,y);
+if(facing==='left'||facing==='right'){
+ctx.scale(facing==='left'?-1:1,1);
+rect(-11,2+stroke,5,2,'#3e5555');rect(-10,5-stroke,5,2,'#3e5555');
+rect(-7,-1,10,5,colors.shirt);rect(-5,0,6,2,colors.accent);
+if(girl)rect(-2,-7,3,9,colors.hair);
+rect(0,-8,7,7,'#f2c992');rect(6,-5,2,2,'#f2c992');rect(-1,-10,8,3,colors.hair);
+rect(-2,-7,2,5,colors.hair);
+rect(-3,2+stroke*2,12,2,'#f2c992');rect(8,stroke*2,3,3,'#f2c992');
+}else{
+rect(-5,-1,10,4,colors.shirt);rect(-3,0,6,2,colors.accent);
+rect(-3,-8,7,7,facing==='up'?colors.hair:'#f2c992');rect(-4,-10,9,3,colors.hair);
+if(girl)rect(facing==='up'?-4:-7,-7,facing==='up'?9:4,8,colors.hair);
+const reach=facing==='up'?-4:0;
+rect(-12,reach+stroke*3,7,2,'#f2c992');rect(5,reach-stroke*3,7,2,'#f2c992');
+}
+ctx.restore();directionalSwimGear(x+(facing==='left'?-3:facing==='right'?3:0),y-5);
+ellipse(x-1,y+7,6,1,'#d5f4e6');
 }
 function rollingCharacter(x,y,angle,tuck){
 // Curl around the torso: knees against the chest, hands around the shins.
@@ -948,7 +1219,7 @@ const x=player.x,y=player.y;
 if(shoreClimb){drawShoreClimb();return;}
 if(sharkRide){drawSharkRide();return;}
 if(diveAnimation){drawWaterEntry();return;}
-const colors=characterColors();if(currentProfile().character==='girl')rect(x-7,y-7,4,9,colors.hair);const stroke=Math.sin(frame/7);ellipse(x,y+2,11,4,'#c2eee099');rect(x-5,y-1,10,4,colors.shirt);rect(x-3,y-8,7,7,'#f2c992');rect(x-4,y-10,9,3,colors.hair);swimGoggles(x,y-5);rect(x-12,y+stroke*3,7,2,'#f2c992');rect(x+5,y-stroke*3,7,2,'#f2c992');ellipse(x-1,y+7,6,1,'#d5f4e6');
+drawSwimmingCharacter(x,y);
 }
 function draw(){
 frame++;const focus=fishingActive?{x:(player.x+fishingZone.x+85)/2,y:(player.y+fishingZone.y+50)/2}:player;camera.x=Math.max(0,Math.min(WORLD.width-WORLD.viewWidth,focus.x-WORLD.viewWidth/2));camera.y=Math.max(0,Math.min(WORLD.height-WORLD.viewHeight,focus.y-WORLD.viewHeight/2));
@@ -958,11 +1229,11 @@ islandPolys.forEach((poly,i)=>{polygon(poly,'#4d9d9e',11);polygon(poly,'#e0ce95'
 crossings.forEach(b=>{rect(b.x,b.y,b.w,b.h,'#806b4d');for(let x=b.x+1;x<b.x+b.w;x+=5)rect(x,b.y+1,3,b.h-2,'#d1b580');});
 // Restored woodland bridge adds a second scenic crossing.
 if(state.upgrades.includes('bridge')){rect(290,229,14,120,'#ac8c5b');for(let y=230;y<349;y+=5)rect(291,y,12,3,'#d9bc83');}
-islandPolys.forEach((poly,i)=>{const l=locations[i];for(let j=0;j<65;j++){let x=l.x-90+(j*47)%180,y=l.y-65+(j*31)%150;if(inside(x,y,poly))rect(x,y,2,2,j%3?'#bdd18a':'#76975c');}if(i>0)for(let j=0;j<7;j++){let x=l.x-78+j*24,y=l.y-36+(j%2)*14;if(i===4)crystal(x,y,'#c9afe7');else tree(x,y,.7);}});
-rect(207,146,14,99,'#d2bc83');house();tree(100,105);tree(85,160);tree(300,113);
+islandPolys.forEach((poly,i)=>{const l=locations[i];for(let j=0;j<65;j++){let x=l.x-90+(j*47)%180,y=l.y-65+(j*31)%150;if(inside(x,y,poly))rect(x,y,2,2,j%3?'#bdd18a':'#76975c');}if(i===4)for(const [x,y] of [[-60,-28],[-39,-45],[38,-34],[62,-12],[-27,34],[32,49],[65,17]])crystal(l.x+x,l.y+y,'#c9afe7');});
+rect(207,146,14,99,'#d2bc83');house();
 ellipse(480,188,29,17,'#ddd6a2');ellipse(480,186,25,14,'#76b8bb');rect(462,183,18,1,'#b4ded0');
 for(let r=0;r<3;r++)for(let c=0;c<5;c++){let x=733+c*10,y=198+r*9;rect(x,y,8,6,'#8c7550');if(state.upgrades.includes('garden')){rect(x+3,y-4,2,7,'#608750');rect(x+1,y-6,5,3,['#f0c883','#d88d84','#e5e2ae'][(r+c)%3]);}}
-for(let i=0;i<7;i++)tree(250+i*17,460+(i%2)*26,.8);
+drawIslandTrees();
 polygon([[710,423],[716,392],[737,369],[755,383],[770,423]],'#778675');rect(731,405,19,27,'#374b46');
 piers.forEach(p=>{rect(p.x,p.y,p.w,p.h,'#987d54');for(let y=p.y+1;y<p.y+p.h-1;y+=4)rect(p.x+1,y,p.w-2,2,'#c0a471');});
 rect(95,211,2,12,'#6f6349');ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fillText('FISHING DOCK',106,265);
@@ -973,7 +1244,7 @@ if(!voyage&&onFinalIsland())ferryArt(farDock.x+43,farDock.y+2);
 locations.forEach((l,i)=>{const done=l.ids.every(n=>state.solved.includes(n)),locked=i===4&&!state.ferryTicket,bob=Math.floor(Math.sin(frame/22+i)*2);rect(l.x-8,l.y-27+bob,16,15,locked?'#72817a':done?'#577c54':'#fff3cc');ctx.fillStyle=locked?'#fff':done?'#eef5c6':'#927141';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText(locked?'×':done?'✓':'!',l.x,l.y-16+bob);ctx.font='7px monospace';ctx.fillStyle='#254f42';ctx.fillText(['MAIN ISLAND','MOONWATER ISLAND','SUNSEED ISLAND','WHISPERING ISLAND','CRYSTAL CAVERN'][i],l.x,l.y-65);});
 ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fillText('FERRY · TICKET 50 ◆',dock.x+30,dock.y+32);
 drawFishing();
-drawSharkFins();if(swimming)swimmerArt();
+drawLochDragon();drawSharkFins();if(swimming)swimmerArt();
 if(!voyage&&!boating&&!swimming){if(state.solved.length>=8)character(player.x-13,player.y+6,true);if(!hookedFish)character(player.x,player.y);}ctx.restore();
 drawMiniMap();
 }
@@ -1008,7 +1279,7 @@ return true;
 }
 function nearby(){if(swimming)return sponsored()&&!diveAnimation&&Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)<44?7:-1;if(boating)return -1;if(Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)<32)return 6;if(Math.hypot(player.x-dock.x,player.y-dock.y)<35||Math.hypot(player.x-farDock.x,player.y-farDock.y)<35)return 5;return locations.findIndex(l=>Math.hypot(l.x-player.x,l.y+20-player.y)<48);}
 function interact(){if(near===7)boardOwnBoat();else if(near===6)openFishing();else if(near===5)openFerry();else if(near>=0)visit(near);}
-let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(voyage)advanceVoyage(dt);else if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);moveExplorer(dx*speed,dy*speed);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0?`<button id="interactBtn">${near===7?'E · Climb into your boat ↗':near===6?'E · Go fishing ↗':near===5?'E · Board the ferry ↗':'E · '+locations[near].name+' ↗'}</button>`:'';if(near>=0)$('#interactBtn').onclick=interact;$('#region').textContent=sharkRide?'Riding a shark!':swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?'Your sponsored fishing boat':voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':locations[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
+let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(voyage)advanceVoyage(dt);else if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);moveExplorer(dx*speed,dy*speed);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0?`<button id="interactBtn">${near===7?'E · Climb into your boat ↗':near===6?'E · Go fishing ↗':near===5?'E · Board the ferry ↗':'E · '+locations[near].name+' ↗'}</button>`:'';if(near>=0)$('#interactBtn').onclick=interact;$('#region').textContent=sharkRide?(sharkRide.kind==='dragon'?'Riding the Loch Ness dragon!':'Riding a shark!'):swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?'Your sponsored fishing boat':voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':locations[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
 window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target?.tagName))return;const k=e.key.toLowerCase();if(k==='escape'&&(activeMapPanel||activeSubmenu)){e.preventDefault();closeMapPanel();return;}if(k==='x'&&sharkRide){e.preventDefault();if(!e.repeat)dismountShark();return;}if(k==='x'&&!swimming&&!voyage&&!fishingActive){e.preventDefault();if(!e.repeat){if(boating)exitBoat();else diveFromIsland();}return;}if(k==='f'&&!swimming&&(boating||fishingActive)){e.preventDefault();if(!e.repeat){if(fishingActive)stopFishing();else openFishing();}return;}if(fishingActive){if(k==='r'){e.preventDefault();if(!e.repeat)reelFishing();}return;}if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e'].includes(k)){e.preventDefault();keys.add(k);if(k==='e'&&near>=0&&!e.repeat)interact();}});window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());save();});window.addEventListener('blur',()=>{keys.clear();save();});document.addEventListener('visibilitychange',()=>{keys.clear();save();});document.querySelectorAll('[data-dir]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.dir);};b.onpointerup=b.onpointercancel=()=>{keys.delete(b.dataset.dir);save();};});canvas.onclick=e=>{if(voyage)return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*WORLD.viewWidth+camera.x,y=(e.clientY-r.top)/r.height*WORLD.viewHeight+camera.y;if(fishingActive){fishingAim={x,y};castFishing(x,y);return;}if(swimming){if(Math.hypot(x-boatPosition.x,y-boatPosition.y)<30)boardOwnBoat();return;}if(Math.hypot(x-fishingDock.x,y-fishingDock.y)<28){openFishing();return;}if([dock,farDock].some(d=>Math.hypot(d.x+30-x,d.y-y)<48)){openFerry();return;}const i=locations.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(i>=0)visit(i);else{canvas.focus({preventScroll:true});toast('Walk across the islands, use your field journal to visit, or board the ferry at the main dock.');}};
 
 function resizeMap(){

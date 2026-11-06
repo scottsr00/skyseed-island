@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-function game(saved,stored){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
+function game(saved,stored,renderTools=false){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);if(!renderTools)vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
 test('all 100 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<100;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),100);assert.equal(g.run('state.crystals'),500);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),505);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),445);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),445);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
 test('ferry ticket gates the fifth island and includes return journeys',()=>{
@@ -397,6 +397,63 @@ assert.ok(g.run('sharkWake.length')>0);assert.equal(g.run('sharkWake.every(w=>w.
 g.run('advanceSwimming(4500);draw()');assert.equal(g.run('sharkRide!==null'),true);assert.equal(g.run('sharkWater(player.x,player.y)'),true);
 assert.equal(g.run('sharkWake.every(w=>w.age<900)&&sharkWake.length<=32'),true);
 });
+test('shark dives ease underwater periodically and resurface with only the snorkel visible at depth',()=>{
+const g=game();
+assert.equal(g.run('sharkDiveDepth()'),0);
+for(const [elapsed,depth] of [[0,0],[5000,0],[5400,.5],[5800,1],[7000,1],[7600,1],[8000,.5],[8400,0],[10000,0],[15400,.5]]){
+assert.equal(g.run(`sharkDiveDepth({diveElapsed:${elapsed}})`),depth);
+}
+g.run(`swimming=true;player.x=600;player.y=310;sharkFins=[{x:605,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();
+const originalCharacter=character,originalSnorkel=swimSnorkel;let riderDraws=0,snorkelDraws=0;
+character=(...args)=>{riderDraws++;originalCharacter(...args)};swimSnorkel=(...args)=>{snorkelDraws++;originalSnorkel(...args)};
+sharkRide.diveElapsed=6500;drawSharkRide()`);
+assert.equal(g.run('riderDraws'),0);assert.equal(g.run('snorkelDraws'),1);
+const start=g.run('player.x');g.run('keys.add("down");advanceSwimming(100)');assert.ok(g.run('player.x')>start);assert.ok(g.run('sharkRide.heading')>0);assert.equal(g.run('sharkDiveDepth()'),1);
+g.run('sharkRide.diveElapsed=8300;advanceSwimming(100);drawSharkRide()');assert.equal(g.run('sharkDiveDepth()'),0);assert.equal(g.run('riderDraws'),1);assert.equal(g.run('snorkelDraws'),2);
+g.run('dismountShark()');assert.equal(g.run('sharkDiveDepth()'),0);
+});
+test('descending riders leave body wakes and submerged riders trail a smaller snorkel wake',()=>{
+const g=game();g.run(`swimming=true;player.x=600;player.y=310;sharkFins=[{x:605,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();sharkRide.diveElapsed=5300;advanceSwimming(100);draw()`);
+assert.ok(g.run('sharkRide.surfaceWake.some(w=>w.kind==="body")'));
+assert.ok(g.run('sharkRide.surfaceWake.some(w=>w.kind==="snorkel")'));
+const origin=g.run('({x:sharkRide.surfaceWake[0].x,y:sharkRide.surfaceWake[0].y})');
+g.run('sharkRide.diveElapsed=6400;advanceSwimming(100);draw()');
+assert.equal(g.run('sharkDiveDepth()'),1);
+assert.equal(g.run('sharkRide.surfaceWake[0].x'),origin.x);assert.equal(g.run('sharkRide.surfaceWake[0].y'),origin.y);
+assert.equal(g.run('sharkRide.surfaceWake.at(-1).kind'),'snorkel');assert.equal(g.run('sharkRide.surfaceWake.at(-1).y'),g.run('player.y-1'));
+g.run('sharkRide.diveElapsed=6400;advanceSwimming(1100);draw()');assert.equal(g.run('sharkRide.surfaceWake.some(w=>w.kind==="body")'),false);
+assert.ok(g.run('sharkRide.surfaceWake.length>0&&sharkRide.surfaceWake.length<=64&&sharkRide.surfaceWake.every(w=>w.age<1100)'));
+g.run('dismountShark();draw()');assert.equal(g.run('sharkRide'),null);
+});
+test('walking and swimming face all four directions and keep their view when stopped',()=>{
+const g=game();
+for(const swimming of [false,true])for(const [dx,dy,facing] of [[0,-2,'up'],[0,2,'down'],[-2,0,'left'],[2,0,'right']]){
+g.run(`swimming=${swimming};player.x=${swimming?430:230};player.y=${swimming?310:176};moveExplorer(${dx},${dy});draw()`);
+assert.equal(g.run('player.facing'),facing);g.run('moveExplorer(0,0)');assert.equal(g.run('player.facing'),facing);
+}
+g.run('faceMovement(-1,0);faceMovement(-1,-1)');assert.equal(g.run('player.facing'),'left');
+g.run('faceMovement(0,-1);faceMovement(1,-1)');assert.equal(g.run('player.facing'),'up');
+});
+test('front, back, and profile sprites have distinct faces for both characters',()=>{
+const g=game();g.run('const originalRect=rect;let pixels=[];rect=(...args)=>{pixels.push(args);originalRect(...args)}');
+for(const characterChoice of ['boy','girl'])for(const [facing,eyes] of [['up',0],['down',2],['left',1],['right',1]]){
+g.run(`currentProfile().character='${characterChoice}';player.facing='${facing}';pixels=[];character(0,0)`);
+assert.equal(g.run('pixels.filter(p=>p[4]==="#354744").length'),eyes,`${characterChoice} facing ${facing}`);
+g.run('swimming=true;swimmerArt()');
+}
+});
+test('boat riders follow movement and shark riders follow the shark heading',()=>{
+const g=game();g.run('state.catches={barracuda:5};launchBoat();moveExplorer(-2,0);draw()');assert.equal(g.run('player.facing'),'left');
+for(const [heading,facing] of [[0,'right'],[Math.PI/2,'down'],[Math.PI,'left'],[-Math.PI/2,'up']]){
+g.run(`boating=false;swimming=true;player.x=600;player.y=310;sharkRide={x:600,y:310,heading:${heading},distance:0,phase:0,diveElapsed:0};advanceSwimming(16);draw()`);
+assert.equal(g.run('player.facing'),facing);
+}
+});
+test('ordinary swimmers wear a snorkel with either character choice',()=>{
+const g=game();g.run('const originalSnorkel=swimSnorkel;let snorkelDraws=0;swimSnorkel=(...args)=>{snorkelDraws++;originalSnorkel(...args)};swimming=true;player.x=430;player.y=310;swimmerArt()');
+assert.equal(g.run('snorkelDraws'),1);
+g.node('#characterChoice').value='girl';g.run('editProfile();swimming=true;snorkelDraws=0;swimmerArt()');assert.equal(g.run('snorkelDraws'),1);
+});
 test('sharks can be steered, stay in water, and preserve the final-island gate',()=>{
 const g=game();g.run('swimming=true;player.x=600;player.y=310;sharkFins=[{x:605,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();keys.add("down");advanceSwimming(100)');assert.ok(g.run('player.y')>310);assert.ok(g.run('player.x')>600);assert.ok(g.run('sharkRide.heading')>0&&g.run('sharkRide.heading')<Math.PI/2);
 g.run('keys.clear();player.x=20;player.y=20;sharkRide.heading=Math.PI;advanceSwimming(100)');assert.equal(g.run('sharkWater(player.x,player.y)'),true);
@@ -503,4 +560,127 @@ test('existing ferry passes migrate from the other age level to permanent profil
 const g=game(null,{'skyseed-v1-9-10':JSON.stringify({solved:[],upgrades:[],ferryTicket:true})});
 assert.equal(g.run('state.ferryTicket'),true);assert.equal(g.run('currentProfile().ferryTicket'),true);
 g.run("switchAge('9-10')");assert.equal(g.run('state.ferryTicket'),true);
+});
+
+for(const level of ['5-6','7-8']){
+test(`ages ${level} has 100 distinct, correct problems and rewards every answer`,()=>{
+const g=game();g.run(`switchAge('${level}')`);
+const bank=JSON.parse(g.run('JSON.stringify(questions)'));
+assert.equal(bank.length,100);assert.equal(new Set(bank.map(q=>q.q)).size,100);
+const shapeSides={triangle:3,square:4,rectangle:4,circle:0,hexagon:6};
+for(const q of bank){
+assert.equal(q.kind,'guided');assert.equal(q.hint.length,3);assert.equal(q.steps.length,3);assert.ok(q.title&&q.explain);
+const ns=(q.q.match(/\d+/g)||[]).map(Number);let expected;
+switch(q.skill){
+case 'Counting':expected=(q.visual.match(/●/g)||[]).length;break;
+case 'Number order':expected=ns[0]+1;break;
+case 'Addition within 10':case 'Addition within 100':case 'Time':case 'Reading data':expected=ns.reduce((a,b)=>a+b,0);break;
+case 'Subtraction within 10':case 'Subtraction within 100':expected=ns[0]-ns[1];break;
+case 'Comparing numbers':expected=Math.max(...ns);break;
+case 'Shapes':expected=shapeSides[Object.keys(shapeSides).find(shape=>q.q.includes(shape))];break;
+case 'Number bonds to 10':expected=10-ns[0];break;
+case 'Number patterns':expected=ns[2]+(ns[1]-ns[0]);break;
+case 'Place value':expected=ns.length===1?Math.floor(ns[0]/10):10*ns[0]+ns[1];break;
+case 'Multiplication':expected=ns[0]*ns[1];break;
+case 'Equal sharing':expected=ns[0]/ns[1];break;
+case 'Money':expected=ns[1]-ns[0];break;
+case 'Halves':expected=ns[0]/2;break;
+case 'Quarters':expected=ns[0]/4;break;
+case 'Perimeter':expected=2*(ns[0]+ns[1]);break;
+default:assert.fail(`Unhandled skill ${q.skill}`);
+}
+assert.equal(q.answer,expected,q.q);assert.ok(Number.isInteger(q.answer)&&q.answer>=0);
+}
+assert.equal(g.run('new Set(locations.flatMap(l=>l.ids)).size'),100);
+for(let i=0;i<100;i++){
+g.run(`openQuestion(${i})`);g.node('#answer').value=String(bank[i].answer);g.run('checkAnswer();checkAnswer()');
+assert.equal(g.run('state.solved.length'),i+1);
+}
+assert.equal(g.run('state.crystals'),500);assert.match(g.node('#challengeBody').innerHTML,/All 100 discoveries/);
+});
+}
+
+test('four age brackets preserve independent progress and the selected bracket across profiles and reloads',()=>{
+const g=game({solved:[0],upgrades:['cottage'],crystals:15});
+for(const [index,level] of ['5-6','7-8','9-10'].entries()){
+g.node('#ageLevel').onchange({target:{value:level}});assert.equal(g.run('ageLevel'),level);
+assert.equal(g.run('state.solved.length'),0);g.run(`state.crystals=${25+index};state.solved=[${index+1}];save()`);
+}
+for(const [index,level] of ['5-6','7-8','9-10'].entries()){
+g.run(`switchAge('${level}')`);assert.equal(g.run('state.crystals'),25+index);assert.equal(g.run('state.solved[0]'),index+1);
+}
+g.run("switchAge('11-12')");assert.equal(g.run('state.crystals'),15);assert.equal(g.run('state.upgrades[0]'),'cottage');
+g.run("switchAge('5-6')");g.node('#profileName').value='Little explorer';g.run('createProfile()');
+assert.equal(g.run('ageLevel'),'5-6');assert.equal(g.run('state.crystals'),0);
+g.run("switchAge('7-8');state.crystals=45;save()");const restored=game(null,g.snapshot());
+assert.equal(restored.run('ageLevel'),'7-8');assert.equal(restored.run('state.crystals'),45);
+restored.run("switchProfile('legacy')");assert.equal(restored.run('ageLevel'),'5-6');assert.equal(restored.run('state.crystals'),25);
+restored.run("switchAge('7-8')");assert.equal(restored.run('state.crystals'),26);
+const html=fs.readFileSync('dist/index.html','utf8');
+for(const level of ['5-6','7-8','9-10','11-12'])assert.ok(html.includes(`<option value="${level}">`));
+});
+
+test('new age brackets use suitable flash arithmetic and keep permanent ferry access',()=>{
+const g=game();g.run('state.crystals=50;buyFerryTicket()');
+for(const level of ['5-6','7-8']){
+g.run(`switchAge('${level}')`);assert.equal(g.run('state.ferryTicket'),true);
+for(let i=0;i<100;i++){
+const q=JSON.parse(g.run('JSON.stringify(flashQuestion())'));const [left,op,right]=q.q.split(' '),a=Number(left),b=Number(right);
+const expected=op==='+'?a+b:op==='−'?a-b:op==='×'?a*b:a/b;
+assert.equal(q.answer,expected);assert.ok(q.answer>=0&&Number.isInteger(q.answer));
+if(level==='5-6'){assert.ok(['+','−'].includes(op));assert.ok(a<=10&&b<=10&&q.answer<=10);}
+else assert.ok(Math.max(a,b,q.answer)<=100);
+}
+}
+});
+
+test('early-age workbenches render counting pictures and shape references',()=>{
+const g=game(null,null,true);
+for(const level of ['5-6','7-8']){
+g.run(`switchAge('${level}')`);
+for(let i=0;i<100;i++){
+g.run(`openQuestion(${i})`);assert.match(g.node('#workbench').innerHTML,/visual-result/);
+if(g.run(`!!questions[${i}].visual`))assert.match(g.node('#workbench').innerHTML,/math-picture/);
+}
+}
+});
+
+test('Loch Ness sightings are rare timed checks, stay in water, and expire',()=>{
+const g=game();g.run('player.x=430;player.y=310;Math.random=()=>0;nextLochDragon=90000');
+g.run('advanceLochDragon(89999)');assert.equal(g.run('lochDragon'),null);
+g.run('advanceLochDragon(1);draw()');assert.equal(g.run('!!lochDragon'),true);
+assert.equal(g.run('sharkWater(lochDragon.x,lochDragon.y)'),true);
+for(let i=0;i<100;i++)g.run('advanceLochDragon(40)');
+assert.equal(g.run('sharkWater(lochDragon.x,lochDragon.y)'),true);
+g.run('advanceLochDragon(18000)');assert.equal(g.run('lochDragon'),null);
+g.run('Math.random=()=>.9;nextLochDragon=0;advanceLochDragon(1)');assert.equal(g.run('lochDragon'),null);
+assert.ok(g.run('nextLochDragon')>=90000);
+g.run('advanceLochDragon(0)');assert.equal(g.run('lochDragon'),null);
+});
+
+test('a lucky swimmer catches and rides the dragon, with dragon controls and no shark spawned on dismount',()=>{
+const g=game();const sighting='lochDragon={x:435,y:310,heading:0,age:1000,duration:18000}';
+g.run(`player.x=430;player.y=310;${sighting};latchLochDragon()`);assert.equal(g.run('sharkRide'),null);
+g.run('swimming=true;advanceSwimming(0)');assert.equal(g.run('sharkRide.kind'),'dragon');assert.equal(g.run('lochDragon'),null);
+assert.match(g.node('#waterControls').textContent,/LOCH NESS DRAGON/);assert.match(g.node('#mapSharkExit').textContent,/Hop off dragon/);
+const start=g.run('player.x');g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')>start);
+assert.equal(g.run('sharkDiveDepth()'),0);
+const fins=g.run('sharkFins.length');g.node('#mapSharkExit').onclick();assert.equal(g.run('sharkRide'),null);
+assert.equal(g.run('swimming'),true);assert.equal(g.run('sharkFins.length'),fins);
+g.run(`${sighting};latchLochDragon()`);assert.equal(g.run('sharkRide'),null);
+g.run('dragonLatchCooldown=0;lochDragon.age=17900;latchLochDragon()');assert.equal(g.run('sharkRide'),null);
+});
+
+test('dragon rides land safely, respect the cavern gate, and clear on player or age changes',()=>{
+const g=game();
+g.run(`swimming=true;player.y=176;
+const shoreX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));
+player.x=shoreX-25;lochDragon={x:player.x+2,y:176,heading:0,age:1000,duration:18000};latchLochDragon();advanceSwimming(16);draw()`);
+assert.equal(g.run('!!sharkRide.landing'),true);g.run('advanceSwimming(1500);draw()');
+assert.equal(g.run('sharkRide'),null);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('swimming=true;player.x=740;player.y=325');assert.equal(g.run('sharkShoreLanding(Math.PI/2)'),null);
+g.run("lochDragon={x:430,y:310,heading:0,age:1000,duration:18000};switchAge('7-8')");assert.equal(g.run('lochDragon'),null);
+g.run('swimming=true;player.x=430;player.y=310;lochDragon={x:435,y:310,heading:0,age:1000,duration:18000};latchLochDragon()');
+assert.equal(g.run('sharkRide.kind'),'dragon');g.node('#profileName').value='Dragon watcher';g.run('createProfile()');
+assert.equal(g.run('sharkRide'),null);assert.equal(g.run('lochDragon'),null);
 });
