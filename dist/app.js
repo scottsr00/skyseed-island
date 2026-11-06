@@ -470,7 +470,7 @@ rect(-4,-11,8,11,colors.shirt);rect(1,-10,3,5,colors.accent);
 if(girl)rect(-6,-19,4,13,colors.hair);
 rect(-3,-20,7,9,'#f2c992');rect(3,-16,3,3,'#f2c992');
 rect(-4,-21,8,4,colors.hair);rect(-4,-19,2,7,colors.hair);
-rect(-6,-23,14,3,colors.hat);rect(-4,-28,9,6,colors.hat);rect(-4,-25,9,2,'#a87a49');
+if(!swimming){rect(-6,-23,14,3,colors.hat);rect(-4,-28,9,6,colors.hat);rect(-4,-25,9,2,'#a87a49');}
 rect(2,-17,1,2,'#354744');rect(-1+step,-9,3,8,'#e4bd88');
 }else{
 rect(-4,-2+step,3,4,'#3e5555');rect(2,-2-step,3,4,'#3e5555');
@@ -480,7 +480,7 @@ else{rect(-4,-10,8,2,colors.accent);rect(0,-7,1,6,colors.accent);}
 rect(-7,-10+step,2,7,'#e4bd88');rect(6,-10-step,2,7,'#e4bd88');
 rect(-4,-20,9,9,facing==='up'?colors.hair:'#f2c992');rect(-5,-21,11,4,colors.hair);
 if(girl){if(facing==='up')rect(-5,-19,11,10,colors.hair);else rect(-8,-18,4,12,colors.hair);}
-rect(-8,-23,16,4,colors.hat);rect(-5,-28,10,6,colors.hat);rect(-5,-25,10,2,'#a87a49');
+if(!swimming){rect(-8,-23,16,4,colors.hat);rect(-5,-28,10,6,colors.hat);rect(-5,-25,10,2,'#a87a49');}
 if(facing==='down'){rect(-2,-16,1,2,'#354744');rect(2,-16,1,2,'#354744');}
 }
 ctx.restore();
@@ -513,8 +513,8 @@ let sharkFins=[],nextSharkFin=800+Math.random()*1400;
 const SHARK_RIDE_SPEED=.095,SHARK_TURN_RATE=1.8,SHARK_LATCH_DISTANCE=22;
 let sharkRide=null,sharkWake=[],sharkLatchCooldown=0;
 // Rare sightings are timed in active play, never rerolled every frame.
-let lochDragon=null,nextLochDragon=90000+Math.random()*120000,dragonLatchCooldown=0;
-function clearLochDragon(){lochDragon=null;nextLochDragon=90000+Math.random()*120000;dragonLatchCooldown=0;}
+let lochDragon=null,nextLochDragon=30000+Math.random()*30000,dragonLatchCooldown=0;
+function clearLochDragon(){lochDragon=null;nextLochDragon=30000+Math.random()*30000;dragonLatchCooldown=0;}
 function advanceLochDragon(dt){
 if(dt<=0||document.querySelector('dialog[open]'))return;
 dragonLatchCooldown=Math.max(0,dragonLatchCooldown-dt);
@@ -529,8 +529,8 @@ return;
 }
 if(sharkRide||voyage||diveAnimation||shoreClimb)return;
 nextLochDragon-=dt;if(nextLochDragon>0)return;
-nextLochDragon=90000+Math.random()*120000;
-if(Math.random()>.3)return;
+nextLochDragon=30000+Math.random()*30000;
+if(Math.random()>.7)return;
 for(let attempt=0;attempt<24;attempt++){
 const angle=Math.random()*Math.PI*2,distance=70+Math.random()*65;
 const x=player.x+Math.cos(angle)*distance,y=player.y+Math.sin(angle)*distance,heading=angle+Math.PI/2;
@@ -749,8 +749,8 @@ sharkFins.push({x,y,vx:Math.cos(heading)*speed,vy:Math.sin(heading)*speed,age:0,
 }
 function drawSharkFins(){
 if(!swimming)return;
-sharkFins.forEach(fin=>{const surface=Math.min(1,fin.age/500,(fin.duration-fin.age)/650),direction=fin.vx>=0?1:-1;
-ctx.save();ctx.translate(fin.x,fin.y);ctx.scale(direction,Math.max(0,surface));
+sharkFins.forEach(fin=>{const surface=Math.min(1,fin.age/500,(fin.duration-fin.age)/650),heading=Math.atan2(fin.vy,fin.vx);
+ctx.save();ctx.translate(fin.x,fin.y);ctx.rotate(heading);ctx.scale(1,Math.max(0,surface));
 ellipse(-4,2,13,3,'#d9f1e866');rect(-20,2,9,1,'#ddf7ed88');polygon([[-7,0],[0,-14],[5,-3],[9,0]],'#365768');polygon([[-2,-10],[0,-14],[3,-4]],'#638391');rect(-8,0,18,1,'#c1e6df');ctx.restore();
 });
 }
@@ -785,14 +785,30 @@ function diveFromIsland(){
 if(document.querySelector('dialog[open]'))return;
 const to=shoreDiveTarget();if(!to)return;closeMapPanel();startDive(to);
 }
+function swimShoreContact(dx,dy){
+const length=Math.hypot(dx,dy);if(!length)return null;
+const normal={x:dx/length,y:dy/length};
+// Reach for the beach before the swimmer's body crosses the shoreline.
+for(let distance=1;distance<=12;distance++){
+const edge={x:player.x+normal.x*distance,y:player.y+normal.y*distance};
+const island=islandPolys.findIndex(poly=>inside(edge.x,edge.y,poly));
+if(island<0)continue;
+if(!canWalk(edge.x,edge.y))return null;
+for(let inset=8;inset>=4;inset-=2){
+const to={x:edge.x+normal.x*inset,y:edge.y+normal.y*inset};
+if(inside(to.x,to.y,islandPolys[island])&&canWalk(to.x,to.y))return {edge,to,normal};
+}
+return null;
+}
+return null;
+}
 function moveExplorer(dx,dy){
 if(diveAnimation||shoreClimb||sharkRide)return;
 faceMovement(dx,dy);
 const x=player.x+dx,y=player.y+dy;
-if(swimming&&(dx||dy)&&islandPolys.some(p=>inside(x,y,p))&&canWalk(x,y)){
-const length=Math.hypot(dx,dy),inset={x:x+dx/length*8,y:y+dy/length*8};
-const to=canWalk(inset.x,inset.y)&&islandPolys.some(p=>inside(inset.x,inset.y,p))?inset:{x,y};
-shoreClimb={elapsed:0,from:{x:player.x,y:player.y},to};keys.clear();return;
+const contact=swimming?swimShoreContact(dx,dy):null;
+if(contact){
+shoreClimb={elapsed:0,from:{x:player.x,y:player.y},...contact};keys.clear();return;
 }
 if(!boating&&!swimming&&(dx||dy)&&canWalk(player.x,player.y)&&openSea(x,y)){
 const length=Math.hypot(dx,dy),landing={x:x+dx/length*24,y:y+dy/length*24};
@@ -819,7 +835,7 @@ stopFishing();swimming=false;boating=true;player.x=boatPosition.x;player.y=boatP
 function advanceSwimming(dt){
 advanceSwimMotion(dt);
 if(shoreClimb){
-shoreClimb.elapsed+=dt;const t=Math.min(1,shoreClimb.elapsed/650),ease=t*t*(3-2*t);
+shoreClimb.elapsed+=dt;const t=Math.min(1,shoreClimb.elapsed/650),pull=Math.max(0,(t-.25)/.75),ease=pull*pull*(3-2*pull);
 player.x=shoreClimb.from.x+(shoreClimb.to.x-shoreClimb.from.x)*ease;player.y=shoreClimb.from.y+(shoreClimb.to.y-shoreClimb.from.y)*ease;
 if(t===1){shoreClimb=null;swimming=false;keys.clear();save();toast('Back on dry land. Keep exploring!');}
 }
@@ -1225,7 +1241,7 @@ polygon([[-6,-3],[-3,-3],[4*bend,5-2*bend],[7*bend,4-2*bend],[7*bend,7-2*bend],[
 rect(4*bend,3-2*bend,4,3,'#f2c992');
 rect(headX-4,headY-5,9,8,'#f2c992');
 rect(headX-5,headY-7,10,3,colors.hair);
-rect(headX-7,headY-9,14,3,colors.hat);rect(headX-4,headY-13,8,4,colors.hat);
+if(!swimming){rect(headX-7,headY-9,14,3,colors.hat);rect(headX-4,headY-13,8,4,colors.hat);}
 swimGoggles(headX,headY-2);
 ctx.restore();
 }
@@ -1237,7 +1253,6 @@ rect(-4,3,3,10,'#3e5555');rect(1,3,3,10,'#3e5555');
 rect(-5,-6,10,11,colors.shirt);rect(-4,-5,8,4,colors.accent);
 if(currentProfile().character==='girl')rect(-7,-14,3,10,colors.hair);
 rect(-4,-15,9,8,'#f2c992');rect(-5,-17,10,3,colors.hair);
-rect(-7,-19,14,3,colors.hat);rect(-4,-23,8,4,colors.hat);
 polygon([[-7,-4],[-4,-5],[-5,-24],[-7,-26],[-9,-24]],'#e4bd88');
 polygon([[4,-5],[7,-4],[9,-24],[7,-26],[5,-24]],'#f2c992');
 swimGoggles(0,-12);ctx.restore();
@@ -1262,10 +1277,9 @@ for(let i=0;i<6;i++)ellipse(x+Math.cos(i)*r,y+Math.sin(i)*r*.5-4,1,2,'#e2f8ee');
 }
 }
 function drawShoreClimb(){
-const t=Math.min(1,shoreClimb.elapsed/650),lift=Math.max(0,Math.min(1,(t-.15)/.7)),colors=characterColors();
-const x=player.x,y=player.y,bodyY=y-3-lift*5;
-const reach=Math.min(1,t/.2),handX=shoreClimb.from.x+(shoreClimb.to.x-shoreClimb.from.x)*reach;
-const handY=shoreClimb.from.y+(shoreClimb.to.y-shoreClimb.from.y)*reach;
+const t=Math.min(1,shoreClimb.elapsed/650),lift=Math.max(0,Math.min(1,(t-.3)/.6)),colors=characterColors();
+const x=player.x,y=player.y,bodyY=y+1-lift*9;
+const reach=Math.min(1,t/.25),normal=shoreClimb.normal,tangent={x:-normal.y,y:normal.x};
 if(t<.7){ctx.strokeStyle='#e2f8ee99';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(x,y+3,10*(1-t)+3,3,0,0,Math.PI*2);ctx.stroke();}
 if(lift>.35){
 const knee=1-lift;
@@ -1274,18 +1288,22 @@ rect(x-5,y-3-knee*5,4,6,'#3e5555');rect(x+2,y-3-knee*3,4,6,'#3e5555');
 ellipse(x,bodyY+2,6,4+lift*2,colors.shirt);rect(x-4,bodyY-2,8,4,colors.accent);
 if(currentProfile().character==='girl')rect(x-7,bodyY-10,3,9,colors.hair);
 rect(x-4,bodyY-12,9,8,'#f2c992');rect(x-5,bodyY-14,10,3,colors.hair);
-rect(x-8,bodyY-16,16,3,colors.hat);rect(x-5,bodyY-21,10,5,colors.hat);
 swimGoggles(x,bodyY-9);
-// Hands plant on the beach; elbows bend as the chest rises over the edge.
+// Hands grip the actual shoreline first; the landing point lies farther inland.
 for(const side of [-1,1]){
-const release=Math.max(0,(t-.8)/.2),hx=handX+side*6,hy=handY-3;
+const release=Math.max(0,Math.min(1,(t-.7)/.3));
+const grip={x:shoreClimb.edge.x+tangent.x*side*3,y:shoreClimb.edge.y+tangent.y*side*3};
+const start={x:shoreClimb.from.x+normal.x*4+tangent.x*side*3,y:shoreClimb.from.y+normal.y*4+tangent.y*side*3};
+const hx=start.x+(grip.x-start.x)*reach,hy=start.y+(grip.y-start.y)*reach;
 const targetX=hx+(x+side*6-hx)*release,targetY=hy+(bodyY+5-hy)*release;
-const shoulderX=x+side*5,desiredElbowX=(shoulderX+targetX)/2+side*lift,desiredElbowY=(bodyY+targetY)/2-lift;
-const upperArmLength=Math.hypot(desiredElbowX-shoulderX,desiredElbowY-bodyY),upperReach=Math.min(1,4/Math.max(1,upperArmLength));
-const elbowX=shoulderX+(desiredElbowX-shoulderX)*upperReach,elbowY=bodyY+(desiredElbowY-bodyY)*upperReach;
+const shoulderX=x+(normal.x*4+tangent.x*side*3)*(1-release)+side*5*release;
+const shoulderY=(y+normal.y*4+tangent.y*side*3)*(1-release)+bodyY*release;
+const desiredElbowX=(shoulderX+targetX)/2+tangent.x*side*lift,desiredElbowY=(shoulderY+targetY)/2+tangent.y*side*lift;
+const upperArmLength=Math.hypot(desiredElbowX-shoulderX,desiredElbowY-shoulderY),upperReach=Math.min(1,4/Math.max(1,upperArmLength));
+const elbowX=shoulderX+(desiredElbowX-shoulderX)*upperReach,elbowY=shoulderY+(desiredElbowY-shoulderY)*upperReach;
 const forearmLength=Math.hypot(targetX-elbowX,targetY-elbowY),reachScale=Math.min(1,5/Math.max(1,forearmLength));
 const endX=elbowX+(targetX-elbowX)*reachScale,endY=elbowY+(targetY-elbowY)*reachScale;
-ctx.strokeStyle='#f2c992';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(shoulderX,bodyY);
+ctx.strokeStyle='#f2c992';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(shoulderX,shoulderY);
 ctx.lineTo(elbowX,elbowY);ctx.lineTo(endX,endY);ctx.stroke();rect(endX-2,endY-1,4,3,'#f2c992');
 }
 }
@@ -1296,21 +1314,51 @@ if(sharkRide){drawSharkRide();return;}
 if(diveAnimation){drawWaterEntry();return;}
 drawSwimmingCharacter(x,y);
 }
+function drawTimberShadow({x,y,w,h}){
+// Match the islands' down-screen cast shadow, with a darker contact edge.
+polygon([[x-2,y+5],[x+w+2,y+5],[x+w+5,y+h+11],[x+2,y+h+11]],'#4d9d9e');
+rect(x+2,y+h+5,w+2,3,'#438c9170');
+}
+function drawRaisedTimber({x,y,w,h},restored=false){
+const horizontal=w>h,length=horizontal?w:h,sections=Math.max(1,Math.ceil((length-8)/24)),posts=[];
+for(let i=0;i<=sections;i++){
+const along=4+(length-8)*i/sections;
+if(horizontal)posts.push({x:x+along,y:y},{x:x+along,y:y+h-1});
+else posts.push({x:x,y:y+along},{x:x+w-1,y:y+along});
+}
+// The dark fascia and exposed pile legs sit below the walking deck.
+rect(x,y+4,w,h,'#65533c');rect(x+1,y+h,w-2,4,'#554b38');
+for(const post of posts){
+const px=Math.round(post.x),py=Math.round(post.y);
+if(!islandPolys.some(poly=>inside(px,py+9,poly))){
+ellipse(px+1,py+10,5,1.8,'#397e8555');
+rect(px-4,py+10,3,1,'#b1d8cc88');rect(px+3,py+11,3,1,'#b1d8cc66');
+}
+rect(px-2,py,4,11,'#604c37');rect(px-1,py+1,1,8,'#a48657');rect(px-2,py+8,4,3,'#405d4e');
+}
+rect(x,y,w,h,restored?'#ac8c5b':'#89704e');
+if(horizontal){for(let px=x+1;px<x+w-1;px+=5){rect(px,y+1,3,h-2,restored?'#d9bc83':'#c9aa75');rect(px,y+2,1,Math.max(1,h-4),'#e2c48a');}}
+else{for(let py=y+1;py<y+h-1;py+=5){rect(x+1,py,w-2,3,restored?'#d9bc83':'#c0a471');rect(x+2,py,Math.max(1,w-4),1,'#dfbe83');}}
+// Squared pile caps rise above both edges, with a light end-grain centre.
+for(const post of posts){rect(post.x-2,post.y-2,5,4,'#5e4b35');rect(post.x-1,post.y-2,3,2,'#d6b477');rect(post.x,post.y-1,1,1,'#a17c4b');}
+}
 function draw(){
 frame++;const focus=fishingActive?{x:(player.x+fishingZone.x+85)/2,y:(player.y+fishingZone.y+50)/2}:player;camera.x=Math.max(0,Math.min(WORLD.width-WORLD.viewWidth,focus.x-WORLD.viewWidth/2));camera.y=Math.max(0,Math.min(WORLD.height-WORLD.viewHeight,focus.y-WORLD.viewHeight/2));
 rect(0,0,WORLD.viewWidth,WORLD.viewHeight,'#79bfc1');ctx.save();ctx.translate(-camera.x,-camera.y);
 for(let i=0;i<280;i++){let x=(i*73+12)%960,y=(i*43+8)%600;rect(x+Math.floor(Math.sin(frame/100+i)*2),y,7+i%5,1,i%2?'#a0d2cb':'#68b2b8');}
+crossings.forEach(drawTimberShadow);piers.forEach(drawTimberShadow);
+if(state.upgrades.includes('bridge'))drawTimberShadow({x:290,y:229,w:14,h:120});
 islandPolys.forEach((poly,i)=>{polygon(poly,'#4d9d9e',11);polygon(poly,'#e0ce95',5);polygon(poly,'#e7d7a2');const l=locations[i];polygon(poly.map(([x,y])=>[x+(x<l.x?7:-7),y+(y<l.y?7:-7)]),['#9bb96b','#93bda0','#adc77e','#7ca276','#9ba995'][i]);});
-crossings.forEach(b=>{rect(b.x,b.y,b.w,b.h,'#806b4d');for(let x=b.x+1;x<b.x+b.w;x+=5)rect(x,b.y+1,3,b.h-2,'#d1b580');});
+crossings.forEach(b=>drawRaisedTimber(b));
 // Restored woodland bridge adds a second scenic crossing.
-if(state.upgrades.includes('bridge')){rect(290,229,14,120,'#ac8c5b');for(let y=230;y<349;y+=5)rect(291,y,12,3,'#d9bc83');}
+if(state.upgrades.includes('bridge'))drawRaisedTimber({x:290,y:229,w:14,h:120},true);
 islandPolys.forEach((poly,i)=>{const l=locations[i];for(let j=0;j<65;j++){let x=l.x-90+(j*47)%180,y=l.y-65+(j*31)%150;if(inside(x,y,poly))rect(x,y,2,2,j%3?'#bdd18a':'#76975c');}if(i===4)for(const [x,y] of [[-60,-28],[-39,-45],[38,-34],[62,-12],[-27,34],[32,49],[65,17]])crystal(l.x+x,l.y+y,'#c9afe7');});
 rect(207,146,14,99,'#d2bc83');house();
 ellipse(480,188,29,17,'#ddd6a2');ellipse(480,186,25,14,'#76b8bb');rect(462,183,18,1,'#b4ded0');
 for(let r=0;r<3;r++)for(let c=0;c<5;c++){let x=733+c*10,y=198+r*9;rect(x,y,8,6,'#8c7550');if(state.upgrades.includes('garden')){rect(x+3,y-4,2,7,'#608750');rect(x+1,y-6,5,3,['#f0c883','#d88d84','#e5e2ae'][(r+c)%3]);}}
 drawIslandTrees();
 polygon([[710,423],[716,392],[737,369],[755,383],[770,423]],'#778675');rect(731,405,19,27,'#374b46');
-piers.forEach(p=>{rect(p.x,p.y,p.w,p.h,'#987d54');for(let y=p.y+1;y<p.y+p.h-1;y+=4)rect(p.x+1,y,p.w-2,2,'#c0a471');});
+piers.forEach(p=>drawRaisedTimber(p));
 rect(95,211,2,12,'#6f6349');ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fillText('FISHING DOCK',106,265);
 rect(farDock.x+10,farDock.y-8,9,3,'#78694e');cavernFlag(farDock.x+14,farDock.y-9,44);
 ferryArt(voyage?player.x:dock.x+43,voyage?player.y:dock.y+2);

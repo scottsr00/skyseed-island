@@ -463,6 +463,16 @@ g.run(`boating=false;swimming=true;player.x=600;player.y=310;sharkRide={x:600,y:
 assert.equal(g.run('player.facing'),facing);
 }
 });
+test('water activities use hair and swim gear without hats, then hats return on land',()=>{
+const g=game();g.run('const originalRect=rect;let pixels=[];rect=(...args)=>{pixels.push(args);originalRect(...args)}');
+for(const choice of ['boy','girl']){
+g.run(`currentProfile().character='${choice}';swimming=true`);
+for(const facing of ['up','down','left','right'])for(const drawing of ['character(0,0)','swimmerArt()','rollingCharacter(0,0,1,.8)','divingCharacter(0,0,1)']){
+g.run(`player.facing='${facing}';pixels=[];${drawing}`);assert.equal(g.run('pixels.some(p=>p[4]===characterColors().hat)'),false);
+}
+g.run('swimming=false;pixels=[];character(0,0)');assert.equal(g.run('pixels.some(p=>p[4]===characterColors().hat)'),true);
+}
+});
 test('ordinary swimmers wear a snorkel with either character choice',()=>{
 const g=game();g.run('const originalSnorkel=swimSnorkel;let snorkelDraws=0;swimSnorkel=(...args)=>{snorkelDraws++;originalSnorkel(...args)};swimming=true;player.x=430;player.y=310;swimmerArt()');
 assert.equal(g.run('snorkelDraws'),1);
@@ -533,6 +543,23 @@ assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('shark
 const restored=game(null,g.snapshot());assert.equal(restored.run('player.x'),g.run('player.x'));
 });
 
+test('swimmers reach for the shoreline from offshore before their body moves onto land',()=>{
+const g=game();
+g.run(`const xs=Array.from({length:400},(_,i)=>i).filter(x=>inside(x,176,mainPoly));
+const ys=Array.from({length:300},(_,i)=>i).filter(y=>inside(280,y,mainPoly));
+const approaches=[{x:xs[0]-11,y:176,dx:1,dy:0},{x:xs.at(-1)+11,y:176,dx:-1,dy:0},{x:280,y:ys[0]-11,dx:0,dy:1},{x:280,y:ys.at(-1)+11,dx:0,dy:-1}];`);
+for(let i=0;i<4;i++){
+g.run(`shoreClimb=null;swimming=true;player.x=approaches[${i}].x;player.y=approaches[${i}].y;moveExplorer(approaches[${i}].dx,approaches[${i}].dy)`);
+assert.equal(g.run('!!shoreClimb'),true);assert.equal(g.run('inside(player.x,player.y,mainPoly)'),false);
+assert.ok(g.run('Math.hypot(shoreClimb.edge.x-player.x,shoreClimb.edge.y-player.y)>=10'));
+const start=g.run('JSON.stringify([player.x,player.y])');
+g.run('advanceSwimming(150);draw()');assert.equal(g.run('JSON.stringify([player.x,player.y])'),start);
+assert.equal(g.run('inside(shoreClimb.edge.x,shoreClimb.edge.y,mainPoly)'),true);
+g.run('advanceSwimming(250);draw()');assert.notEqual(g.run('JSON.stringify([player.x,player.y])'),start);
+g.run('advanceSwimming(250);draw()');assert.equal(g.run('shoreClimb'),null);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+}
+g.run('swimming=true;player.x=740;player.y=325;moveExplorer(0,1)');assert.equal(g.run('shoreClimb'),null);
+});
 test('swimming onto shore pulls the explorer up before walking resumes',()=>{
 const g=game();g.run(`swimming=true;player.y=176;
 const beachX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));player.x=beachX-1;moveExplorer(2,0)`);
@@ -659,16 +686,16 @@ if(g.run(`!!questions[${i}].visual`))assert.match(g.node('#workbench').innerHTML
 }
 });
 
-test('Loch Ness sightings are rare timed checks, stay in water, and expire',()=>{
-const g=game();g.run('player.x=430;player.y=310;Math.random=()=>0;nextLochDragon=90000');
-g.run('advanceLochDragon(89999)');assert.equal(g.run('lochDragon'),null);
+test('Loch Ness sightings use timed checks, stay in water, and expire',()=>{
+const g=game();g.run('player.x=430;player.y=310;Math.random=()=>0;nextLochDragon=30000');
+g.run('advanceLochDragon(29999)');assert.equal(g.run('lochDragon'),null);
 g.run('advanceLochDragon(1);draw()');assert.equal(g.run('!!lochDragon'),true);
 assert.equal(g.run('sharkWater(lochDragon.x,lochDragon.y)'),true);
 for(let i=0;i<100;i++)g.run('advanceLochDragon(40)');
 assert.equal(g.run('sharkWater(lochDragon.x,lochDragon.y)'),true);
 g.run('advanceLochDragon(18000)');assert.equal(g.run('lochDragon'),null);
 g.run('Math.random=()=>.9;nextLochDragon=0;advanceLochDragon(1)');assert.equal(g.run('lochDragon'),null);
-assert.ok(g.run('nextLochDragon')>=90000);
+assert.ok(g.run('nextLochDragon')>=30000&&g.run('nextLochDragon')<=60000);
 g.run('advanceLochDragon(0)');assert.equal(g.run('lochDragon'),null);
 });
 
