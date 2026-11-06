@@ -369,13 +369,13 @@ g.run('advanceVoyage(3500);switchProfile("p1")');assert.equal(g.run('profileId')
 test('swimming close to a surfaced shark latches automatically, speeds up, and leaves a trailing wake',()=>{
 const g=game();g.run('swimming=true;player.x=430;player.y=310;sharkFins=[{x:442,y:310,vx:.02,vy:0,age:500,duration:4000}];advanceSwimming(0)');
 assert.equal(g.run('sharkRide!==null'),true);assert.equal(g.run('sharkFins.length'),0);assert.equal(g.node('#mapSharkExit').hidden,false);assert.match(g.node('#waterControls').textContent,/SHARK RIDE/);
-const start=g.run('player.x');g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')-start>3*.065*190);
+const start=g.run('player.x');g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')-start>.065*200);assert.ok(g.run('player.x')-start<.11*200);
 assert.ok(g.run('sharkWake.length')>0);assert.equal(g.run('sharkWake.every(w=>w.x<player.x&&Math.abs(w.y-player.y)<.001)'),true);
 g.run('advanceSwimming(4500);draw()');assert.equal(g.run('sharkRide!==null'),true);assert.equal(g.run('sharkWater(player.x,player.y)'),true);
 assert.equal(g.run('sharkWake.every(w=>w.age<900)&&sharkWake.length<=32'),true);
 });
 test('sharks can be steered, stay in water, and preserve the final-island gate',()=>{
-const g=game();g.run('swimming=true;player.x=600;player.y=310;sharkFins=[{x:605,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();keys.add("down");advanceSwimming(100)');assert.ok(g.run('player.y')>310);assert.ok(Math.abs(g.run('player.x')-600)<.001);
+const g=game();g.run('swimming=true;player.x=600;player.y=310;sharkFins=[{x:605,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();keys.add("down");advanceSwimming(100)');assert.ok(g.run('player.y')>310);assert.ok(g.run('player.x')>600);assert.ok(g.run('sharkRide.heading')>0&&g.run('sharkRide.heading')<Math.PI/2);
 g.run('keys.clear();player.x=20;player.y=20;sharkRide.heading=Math.PI;advanceSwimming(100)');assert.equal(g.run('sharkWater(player.x,player.y)'),true);
 g.run('player.x=740;player.y=325;keys.add("down")');
 for(let i=0;i<150;i++){g.run('advanceSwimming(40)');assert.equal(g.run('sharkWater(player.x,player.y)'),true);}
