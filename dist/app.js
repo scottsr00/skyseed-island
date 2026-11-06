@@ -1,8 +1,61 @@
 'use strict';
 const $=s=>document.querySelector(s), QUESTION_COUNT=100;
 const defaults={crystals:0,earnedCrystals:0,solved:[],upgrades:[],x:230,y:176,sound:false,ferryTicket:false,bait:0,fishingLure:false,sponsorshipAnnounced:false,catches:{},tradingTickets:0,squishyInventory:null,squishyClaims:0};
-let ageLevel='11-12',KEY='skyseed-v1',storageOK=true;
-try{if(localStorage.getItem('skyseed-age')==='9-10'){ageLevel='9-10';KEY='skyseed-v1-9-10';}}catch{storageOK=false;}
+const PROFILE_KEY='skyseed-profiles-v1';
+let ageLevel='11-12',storageOK=true,profiles=[],profileId='legacy';
+try{
+ageLevel=localStorage.getItem('skyseed-age')==='9-10'?'9-10':'11-12';
+const stored=JSON.parse(localStorage.getItem(PROFILE_KEY));
+if(stored&&Array.isArray(stored.profiles)){
+const ids=new Set();profiles=stored.profiles.filter(p=>p&&typeof p.id==='string'&&/^(legacy|p[0-9]+)$/.test(p.id)&&!ids.has(p.id)&&ids.add(p.id)&&typeof p.name==='string'&&p.name.trim()).map(p=>({id:p.id,name:p.name.trim().slice(0,24),character:p.character==='girl'?'girl':'boy',age:p.age==='9-10'?'9-10':'11-12'}));
+if(profiles.length){profileId=profiles.some(p=>p.id===stored.active)?stored.active:profiles[0].id;ageLevel=profiles.find(p=>p.id===profileId).age;}
+}
+}catch{storageOK=false;}
+if(!profiles.length)profiles=[{id:'legacy',name:'Explorer',character:'boy',age:ageLevel}];
+function currentProfile(){return profiles.find(p=>p.id===profileId);}
+function progressKey(id=profileId,age=ageLevel){return id==='legacy'?(age==='9-10'?'skyseed-v1-9-10':'skyseed-v1'):`skyseed-profile-${id}-${age}`;}
+let KEY=progressKey();
+function escapeHTML(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function characterColors(character=currentProfile().character){return character==='girl'?{shirt:'#698ca4',accent:'#91b7bd',hair:'#5c3d38',hat:'#b9a0ce'}:{shirt:'#ba704a',accent:'#d08b55',hair:'#654a37',hat:'#dfb568'};}
+function updateProfileUI(){
+const profile=currentProfile();
+$('#profileSelect').innerHTML=profiles.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('');$('#profileSelect').value=profileId;
+$('#profileName').value=profile.name;$('#characterChoice').value=profile.character;$('#profileBadge').textContent=profile.name;
+renderCharacterPreview(profile.character);
+}
+function renderCharacterPreview(character){
+const colors=characterColors(character);
+$('#characterPreview').innerHTML=`<svg viewBox="0 0 32 40" width="64" height="80" aria-label="${character==='girl'?'Girl':'Boy'} explorer preview" role="img" shape-rendering="crispEdges"><path fill="${colors.hair}" d="M10 8h12v16H10z${character==='girl'?' M6 15h5v14H6z':''}"/><path fill="#f2c992" d="M11 12h10v10H11zM6 24h4v9H6zM23 24h4v9h-4z"/><path fill="${colors.shirt}" d="M10 23h13v11H10z"/><path fill="#3e5555" d="M10 34h5v6h-5zM19 34h4v6h-4z"/><path fill="${colors.hat}" d="M9 4h15v7H9zM6 10h21v4H6z"/><path fill="#354744" d="M18 17h2v2h-2z"/></svg>`;
+}
+function validProfileName(name,exclude){
+const clean=String(name||'').trim().replace(/\s+/g,' ');
+if(!clean||clean.length>24){$('#profileFeedback').textContent='Choose a profile name with 1–24 characters.';return null;}
+if(profiles.some(p=>p.id!==exclude&&p.name.toLowerCase()===clean.toLowerCase())){$('#profileFeedback').textContent='That name already has a profile. Choose it above or use a different name.';return null;}
+return clean;
+}
+function editProfile(){
+const name=validProfileName($('#profileName').value,profileId);if(!name)return;
+currentProfile().name=name;currentProfile().character=$('#characterChoice').value==='girl'?'girl':'boy';save();updateProfileUI();draw();
+$('#profileFeedback').textContent=storageOK?'Profile saved.':'Profile updated for this session; browser storage is unavailable.';
+}
+function createProfile(){
+if(voyage){$('#profileFeedback').textContent='Create a profile after the ferry arrives.';return;}
+const name=validProfileName($('#profileName').value);if(!name)return;
+const next=Math.max(0,...profiles.map(p=>Number(p.id.slice(1))||0))+1;
+const profile={id:'p'+next,name,character:$('#characterChoice').value==='girl'?'girl':'boy',age:ageLevel};
+profiles.push(profile);switchProfile(profile.id);
+$('#profileFeedback').textContent=storageOK?'New profile created. Your own island is ready!':'Profile created for this session; browser storage is unavailable.';
+}
+function switchProfile(id){
+if(id===profileId||!profiles.some(p=>p.id===id))return;
+if(voyage){$('#profileFeedback').textContent='Switch profiles after the ferry arrives.';$('#profileSelect').value=profileId;return;}
+save();cancelFlash();for(const dialog of ['challenge','flash','sponsorship'])if($('#'+dialog).open)$('#'+dialog).close();
+closeMapPanel();stopFishing();boating=false;swimming=false;diveAnimation=null;sharkFins=[];boatPosition={x:182,y:283};pendingCast=null;fishSet='classic';keys.clear();
+profileId=id;ageLevel=currentProfile().age;KEY=progressKey();state=loadProgress();questions=ageLevel==='9-10'?youngerQuestions:olderQuestions;
+player.x=Number.isFinite(state.x)?state.x:230;player.y=Number.isFinite(state.y)?state.y:176;
+if(!canWalk(player.x,player.y)){player.x=230;player.y=176;}
+active=0;answerComplete=false;near=-1;update();checkSponsorship();openMapPanel('settingsPanel');$('#profileFeedback').textContent='';draw();toast(`${currentProfile().name}’s island is ready!`);
+}
 function loadProgress(){
 let loaded={...defaults,solved:[],upgrades:[]};
 try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.solved)&&Array.isArray(s.upgrades))loaded={...defaults,...s,solved:[...new Set(s.solved.filter(n=>Number.isInteger(n)&&n>=0&&n<QUESTION_COUNT))],upgrades:[...new Set(s.upgrades.filter(n=>['cottage','garden','bridge'].includes(n)))],crystals:Math.max(0,Number(s.crystals)||0)};}catch{storageOK=false;}
@@ -100,10 +153,10 @@ return op===0?{q:`${a} + ${b}`,answer:a+b}:op===1?{q:`${a+b} − ${b}`,answer:a}
 }
 function cancelFlash(){clearTimeout(flashTimer);flashRun=null;}
 function startFlash(){
-cancelFlash();keys.clear();flashRun={correct:0};$('#flash').showModal();nextFlashQuestion();
+closeMapPanel();cancelFlash();keys.clear();flashRun={correct:0};$('#flash').showModal();nextFlashQuestion();
 }
 function nextFlashQuestion(){
-flashRun.question=flashQuestion();flashRun.deadline=Date.now()+10000;
+flashRun.question=flashQuestion();flashRun.deadline=Date.now()+15000;
 $('#flashProgress').textContent=`${flashRun.correct} / 10 correct in a row`;
 $('#flashBody').innerHTML=`<p class="question flash-question">${flashRun.question.q} = ?</p><form id="flashForm" class="answer-form"><label class="sr-only" for="flashAnswer">Your answer</label><input id="flashAnswer" inputmode="decimal" autocomplete="off" required aria-label="Your answer"><button class="primary">Answer ↗</button></form>`;
 $('#flashForm').onsubmit=e=>{e.preventDefault();submitFlash();};$('#flashAnswer').focus();updateFlashClock();
@@ -111,7 +164,7 @@ $('#flashForm').onsubmit=e=>{e.preventDefault();submitFlash();};$('#flashAnswer'
 function updateFlashClock(){
 clearTimeout(flashTimer);if(!flashRun)return;
 const remaining=flashRun.deadline-Date.now();$('#flashClock').textContent=`${Math.max(0,Math.ceil(remaining/1000))} seconds left`;
-$('#flashTimeBar').style.width=Math.max(0,remaining/100)+'%';
+$('#flashTimeBar').style.width=Math.max(0,remaining/150)+'%';
 if(remaining<=0){finishFlash(false,'Time’s up!');return;}flashTimer=setTimeout(updateFlashClock,100);
 }
 function submitFlash(){
@@ -123,7 +176,7 @@ function finishFlash(won,message=''){
 const correct=flashRun.correct;cancelFlash();
 if(won){state.tradingTickets++;update();chime();}
 $('#flashClock').textContent=won?'Ticket earned!':'Try a fresh streak';$('#flashProgress').textContent=`${correct} / 10 correct in a row`;
-$('#flashBody').innerHTML=`<div class="celebration"><h2>${won?'🎟 You earned a trading ticket!':message}</h2><p>${won?'Swap one of your squishees for another in the same tier at the trading counter.':'A wrong answer or 10-second timeout ends the streak. You can try again as often as you like.'}</p><button class="primary" id="flashRetry">${won?'Earn another ticket':'Try again'}</button><button class="text-button" data-flash-back>Back to the trading counter ↗</button></div>`;
+$('#flashBody').innerHTML=`<div class="celebration"><h2>${won?'🎟 You earned a trading ticket!':message}</h2><p>${won?'Swap one of your squishees for another in the same tier at the trading counter.':'A wrong answer or 15-second timeout ends the streak. You can try again as often as you like.'}</p><button class="primary" id="flashRetry">${won?'Earn another ticket':'Try again'}</button><button class="text-button" data-flash-back>Back to the trading counter ↗</button></div>`;
 $('#flashRetry').onclick=startFlash;$('[data-flash-back]').onclick=()=>$('#flash').close();
 }
 const player={x:230,y:176};if(Number.isFinite(state.x)&&Number.isFinite(state.y)){player.x=state.x;player.y=state.y;}
@@ -245,17 +298,17 @@ let questions=ageLevel==='9-10'?youngerQuestions:olderQuestions;
 
 function switchAge(level){
 if(!['9-10','11-12'].includes(level)||level===ageLevel)return;
-if(voyage){toast('Choose your math level after the ferry arrives.');$('#ageLevel').value=ageLevel;return;}if(boating||swimming)returnBoat();save();ageLevel=level;KEY=level==='9-10'?'skyseed-v1-9-10':'skyseed-v1';
+if(voyage){toast('Choose your math level after the ferry arrives.');$('#ageLevel').value=ageLevel;return;}if(boating||swimming)returnBoat();save();ageLevel=level;KEY=progressKey();currentProfile().age=level;
 try{localStorage.setItem('skyseed-age',level);}catch{storageOK=false;}
-cancelFlash();stopFishing();swimming=false;diveAnimation=null;boatPosition={x:182,y:283};state=loadProgress();fishSet='classic';pendingCast=null;questions=level==='9-10'?youngerQuestions:olderQuestions;
+cancelFlash();closeMapPanel();stopFishing();swimming=false;diveAnimation=null;boatPosition={x:182,y:283};state=loadProgress();fishSet='classic';pendingCast=null;questions=level==='9-10'?youngerQuestions:olderQuestions;
 player.x=Number.isFinite(state.x)?state.x:230;player.y=Number.isFinite(state.y)?state.y:176;
 keys.clear();active=0;answerComplete=false;document.querySelectorAll('dialog[open]').forEach(d=>d.close());
 update();toast(`Ages ${level.replace('-','–')} selected. Your adventure is ready!`);
 }
-function save(){state.x=typeof boating!=='undefined'&&(boating||swimming)?217:typeof voyage!=='undefined'&&voyage?voyage.from.x:player.x;state.y=typeof boating!=='undefined'&&(boating||swimming)?247:typeof voyage!=='undefined'&&voyage?voyage.from.y-18:player.y;try{localStorage.setItem(KEY,JSON.stringify(state));storageOK=true;}catch{storageOK=false;}$('#saveState').textContent=storageOK?'✓ Saved':'Session only';}
+function save(){state.x=typeof boating!=='undefined'&&(boating||swimming)?217:typeof voyage!=='undefined'&&voyage?voyage.from.x:player.x;state.y=typeof boating!=='undefined'&&(boating||swimming)?247:typeof voyage!=='undefined'&&voyage?voyage.from.y-18:player.y;try{localStorage.setItem(KEY,JSON.stringify(state));currentProfile().age=ageLevel;localStorage.setItem(PROFILE_KEY,JSON.stringify({active:profileId,profiles}));storageOK=true;}catch{storageOK=false;}$('#saveState').textContent=storageOK?'✓ Saved':'Session only';}
 let toastTimer;function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),3500);}
 let audio;function chime(){if(!state.sound)return;try{audio??=new(window.AudioContext||window.webkitAudioContext)();audio.resume();[523,659,784].forEach((f,i)=>{let o=audio.createOscillator(),g=audio.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.035,audio.currentTime+i*.1);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+i*.1+.4);o.connect(g).connect(audio.destination);o.start(audio.currentTime+i*.1);o.stop(audio.currentTime+i*.1+.4);});}catch{}}
-function update(){syncSquishies();updateFishing();$('#ferryStatus').textContent=state.ferryTicket?'Ticket ready · unlimited return trips':'Ferry waiting · ticket 50 ◆';$('#ageLevel').value=ageLevel;save();updateSquishies();$('#crystals').innerHTML=state.crystals+' <span>crystals</span>';$('#solvedCount').textContent=`${state.solved.length} of ${questions.length} discoveries made`;$('#restoreCount').textContent=state.upgrades.length+' / 3';$('#restoreBar').style.width=state.upgrades.length/3*100+'%';$('#upgrades').innerHTML=upgrades.map(u=>`<div class="upgrade"><span class="upgrade-icon">${u.icon}</span><div><h3>${u.name}</h3><small>${state.upgrades.includes(u.id)?'Restored. Looking lovely!':u.sub}</small></div><button data-upgrade="${u.id}" ${state.upgrades.includes(u.id)?'disabled':''}>${state.upgrades.includes(u.id)?'✓':u.cost+' ◆'}</button></div>`).join('');document.querySelectorAll('[data-upgrade]').forEach(b=>b.onclick=()=>buy(b.dataset.upgrade));$('#petBar').style.width=Math.min(100,state.solved.length/8*100)+'%';if(state.solved.length>=8){$('#eggArt').textContent='✿';$('#eggArt').classList.add('hatched');$('#petTitle').textContent='Meet Sprout!';$('#petText').textContent='Your little leaf friend follows you everywhere.';}else{$('#eggArt').textContent='◈';$('#eggArt').classList.remove('hatched');$('#petTitle').textContent='Someone’s in there…';$('#petText').textContent=`${state.solved.length} / 8 discoveries until your friend hatches.`;}$('#soundBtn').innerHTML='♫ <span>Sound '+(state.sound?'on':'off')+'</span>';$('#soundBtn').setAttribute('aria-label',state.sound?'Disable sound':'Enable sound');}
+function update(){updateProfileUI();syncSquishies();updateFishing();$('#ferryStatus').textContent=state.ferryTicket?'Ticket ready · unlimited return trips':'Ferry waiting · ticket 50 ◆';$('#ageLevel').value=ageLevel;save();updateSquishies();$('#crystals').innerHTML=state.crystals+' <span>crystals</span>';$('#solvedCount').textContent=`${state.solved.length} of ${questions.length} discoveries made`;$('#restoreCount').textContent=state.upgrades.length+' / 3';$('#restoreBar').style.width=state.upgrades.length/3*100+'%';$('#upgrades').innerHTML=upgrades.map(u=>`<div class="upgrade"><span class="upgrade-icon">${u.icon}</span><div><h3>${u.name}</h3><small>${state.upgrades.includes(u.id)?'Restored. Looking lovely!':u.sub}</small></div><button data-upgrade="${u.id}" ${state.upgrades.includes(u.id)?'disabled':''}>${state.upgrades.includes(u.id)?'✓':u.cost+' ◆'}</button></div>`).join('');document.querySelectorAll('[data-upgrade]').forEach(b=>b.onclick=()=>buy(b.dataset.upgrade));$('#petBar').style.width=Math.min(100,state.solved.length/8*100)+'%';if(state.solved.length>=8){$('#eggArt').textContent='✿';$('#eggArt').classList.add('hatched');$('#petTitle').textContent='Meet Sprout!';$('#petText').textContent='Your little leaf friend follows you everywhere.';}else{$('#eggArt').textContent='◈';$('#eggArt').classList.remove('hatched');$('#petTitle').textContent='Someone’s in there…';$('#petText').textContent=`${state.solved.length} / 8 discoveries until your friend hatches.`;}$('#soundBtn').innerHTML=RAIL_SOUND_ICON+'<span>Sound '+(state.sound?'on':'off')+'</span><span class="submenu-arrow" aria-hidden="true">›</span>';$('#soundBtn').setAttribute('aria-label',state.sound?'Disable sound':'Enable sound');}
 function buy(id){const u=upgrades.find(u=>u.id===id);if(state.upgrades.includes(id))return;if(state.crystals<u.cost){toast(`You need ${u.cost-state.crystals} more crystals. Visit a glowing marker to earn them!`);return;}state.crystals-=u.cost;state.upgrades.push(id);update();chime();toast(`${u.name} restored! ${id==='bridge'?'Crystal cavern is now open.':'Your island feels more like home.'}`);}
 function visit(index){
 if(voyage)return;stopFishing();if(boating||swimming)returnBoat();
@@ -264,7 +317,18 @@ if(index===4&&(!state.ferryTicket||!onFinalIsland())){openFerry();return;}
 player.x=loc.x;player.y=loc.y+48;save();const next=loc.ids.find(i=>!state.solved.includes(i));openQuestion(next??loc.ids[0]);
 }
 
-let active=0,hintStep=0,work={},answerComplete=false;function openQuestion(i){answerComplete=false;active=i;hintStep=0;work={};const q=questions[i];$('#challengeCategory').textContent=`${locations.find(l=>l.ids.includes(i)).name} / ${q.skill}`;$('#challengeBody').innerHTML=`<h2>${q.title}</h2><p class="question">${q.q}</p><div class="tool"><div class="tool-title">Your explorer’s workbench · try it out</div><div id="workbench"></div></div><form class="answer-form" id="answerForm"><label class="sr-only" for="answer" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Your answer</label><input id="answer" autocomplete="off" placeholder="${Array.isArray(q.answer)?'Area, perimeter':q.kind==='compare'?'Select a value above':'Your answer (fractions welcome)'}" required><button class="primary" type="submit">Check answer ↗</button></form><div id="feedback" class="feedback" aria-live="polite"></div><button id="hintBtn" class="text-button">A little hint?</button><div id="hint"></div>`;renderTool(q);$('#answerForm').onsubmit=e=>{e.preventDefault();checkAnswer();};$('#hintBtn').onclick=()=>{$('#hint').innerHTML=`<div class="hint-box">${q.hint[0]}</div>`;$('#hintBtn').disabled=true;$('#hintBtn').textContent='Hint shown';};if(!$('#challenge').open)$('#challenge').showModal();}
+const RAIL_SOUND_ICON="<svg class=\"pixel-icon\" viewBox=\"0 0 24 24\" width=\"28\" height=\"28\" aria-hidden=\"true\" focusable=\"false\" shape-rendering=\"crispEdges\"><path fill=\"#608376\" d=\"M3 9h5V6h3V3h3v18h-3v-3H8v-3H3z\"/><path fill=\"#b08c54\" d=\"M17 7h2v10h-2zM21 4h2v16h-2z\"/></svg>";
+const RAIL_GROUPS=['explore','treasures','island','water','settings'];
+let activeSubmenu=null;
+function closeSubmenu(){for(const group of RAIL_GROUPS){$('#'+group+'Submenu').hidden=true;$('#'+group+'MenuBtn').setAttribute('aria-expanded','false');}activeSubmenu=null;}
+function toggleSubmenu(group){if(!RAIL_GROUPS.includes(group))return;const wasOpen=activeSubmenu===group;closeMapPanel();keys.clear();if(wasOpen)return;activeSubmenu=group;$('#'+group+'Submenu').hidden=false;$('#'+group+'MenuBtn').setAttribute('aria-expanded','true');}
+const MAP_PANELS=['settingsPanel','upgradesPanel','companionPanel','gearPanel','journal','stash','ferry','welcome'];
+let activeMapPanel=null;
+function closeMapPanel(id=activeMapPanel){closeSubmenu();if(!id)return;$('#'+id).hidden=true;if(activeMapPanel===id)activeMapPanel=null;for(const buttonId of ['settingsBtn','upgradesBtn','companionBtn','gearBtn','journalBtn','quickStashBtn','mapHelp','railFerryBtn'])$('#'+buttonId).setAttribute('aria-expanded','false');}
+function openMapPanel(id){if(!MAP_PANELS.includes(id))return;closeMapPanel();keys.clear();activeMapPanel=id;$('#'+id).hidden=false;const trigger={settingsPanel:'settingsBtn',upgradesPanel:'upgradesBtn',companionPanel:'companionBtn',gearPanel:'gearBtn',journal:'journalBtn',stash:'quickStashBtn',welcome:'mapHelp',ferry:'railFerryBtn'}[id];if(trigger)$('#'+trigger).setAttribute('aria-expanded','true');}
+function toggleMapPanel(id){if(activeMapPanel===id)closeMapPanel();else openMapPanel(id);}
+function closeSurface(id){if(MAP_PANELS.includes(id))closeMapPanel(id);else $('#'+id).close();}
+let active=0,hintStep=0,work={},answerComplete=false;function openQuestion(i){closeMapPanel();answerComplete=false;active=i;hintStep=0;work={};const q=questions[i];$('#challengeCategory').textContent=`${locations.find(l=>l.ids.includes(i)).name} / ${q.skill}`;$('#challengeBody').innerHTML=`<h2>${q.title}</h2><p class="question">${q.q}</p><div class="tool"><div class="tool-title">Your explorer’s workbench · try it out</div><div id="workbench"></div></div><form class="answer-form" id="answerForm"><label class="sr-only" for="answer" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Your answer</label><input id="answer" autocomplete="off" placeholder="${Array.isArray(q.answer)?'Area, perimeter':q.kind==='compare'?'Select a value above':'Your answer (fractions welcome)'}" required><button class="primary" type="submit">Check answer ↗</button></form><div id="feedback" class="feedback" aria-live="polite"></div><button id="hintBtn" class="text-button">A little hint?</button><div id="hint"></div>`;renderTool(q);$('#answerForm').onsubmit=e=>{e.preventDefault();checkAnswer();};$('#hintBtn').onclick=()=>{$('#hint').innerHTML=`<div class="hint-box">${q.hint[0]}</div>`;$('#hintBtn').disabled=true;$('#hintBtn').textContent='Hint shown';};if(!$('#challenge').open)$('#challenge').showModal();}
 function setAnswer(v){$('#answer').value=v;}
 function renderTool(q){const w=$('#workbench');const button=(label,fn)=>{const b=document.createElement('button');b.className='tile';b.textContent=label;b.onclick=fn;return b;};
 if(q.kind==='guided'){w.innerHTML='<div class="visual-result">Work through the problem, then enter your answer below. Use a hint if you need a starting point.</div>';}
@@ -293,9 +357,10 @@ counter.textContent=total-5+i;
 },400+(i-1)*180);
 }
 function checkAnswer(){if(answerComplete)return;const q=questions[active],raw=$('#answer').value;let correct;if(Array.isArray(q.answer)){const a=raw.split(/[,;]/).map(parseNumber);correct=a.length===2&&a.every((n,i)=>Math.abs(n-q.answer[i])<.00001);}else correct=Math.abs(parseNumber(raw)-q.answer)<.00001;if(!correct){$('#feedback').className='feedback error';$('#feedback').textContent='Keep exploring! Adjust your workbench or ask for a hint, then try again.';return;}answerComplete=true;const first=!state.solved.includes(active),rewarded=first||state.solved.length===questions.length,previousSquishies=earnedSquishies();if(first)state.solved.push(active);if(rewarded){state.crystals+=5;state.earnedCrystals+=5;}const unlocked=earnedSquishies()>previousSquishies?squishies[previousSquishies]:null;update();chime();const loc=locations.find(l=>l.ids.includes(active)),next=loc.ids.find(i=>!state.solved.includes(i));$('#challengeBody').innerHTML=`<div class="celebration">${rewarded?`<div class="crystal-reward" role="status" aria-label="5 crystals collected. Your total is ${state.crystals} crystals."><div class="crystal-shower" aria-hidden="true">${Array.from({length:5},(_,i)=>`<span class="reward-crystal" style="--i:${i}">◆</span>`).join('')}</div><div class="reward-balance" aria-hidden="true"><span class="gem">◆</span> <strong id="rewardTotal">${state.crystals-5}</strong><span> crystals</span><b class="reward-gain">+5</b></div></div>`:'<div class="big-gem">◆</div>'}<div class="eyebrow">${first?'DISCOVERY MADE · +5 CRYSTALS':rewarded?'PRACTICE COMPLETE · +5 CRYSTALS':'PRACTICE COMPLETE'}</div><h2>You’ve got it, explorer.</h2>${unlocked?`<div class="squishy-unlock" role="status">${squishyArt(unlocked)}<div class="eyebrow">NEW SQUISHY · ${earnedSquishies()*50} CRYSTALS EARNED</div><h3>${unlocked.name}</h3>${unlocked.detail?`<p>${unlocked.detail}</p>`:""}<p>Tucked safely into your secret stash!</p></div>`:""}<p>${q.explain}</p>${state.solved.length===8&&first?'<div class="completion">Your egg hatched! Sprout will now follow you around the island.</div>':''}${state.solved.length===questions.length?`<div class="completion">All ${questions.length} discoveries made! Your journal is full of new ideas. Revisit any challenge to earn 5 more crystals!</div>`:''}<button class="primary" id="nextQuestion">${next!==undefined?'Next discovery ↗':'Back to the island ↗'}</button><br><button class="text-button" id="backIsland">Take a little exploring break</button></div>`;if(rewarded)animateCrystalReward(state.crystals);$('#nextQuestion').onclick=()=>next!==undefined?openQuestion(next):$('#challenge').close();$('#backIsland').onclick=()=>$('#challenge').close();}
-function journal(){ $('#journalList').innerHTML=locations.map((l,i)=>`<button class="journal-row" data-location="${i}"><span style="font-size:24px">${l.icon}</span><span><strong>${l.name}</strong><small>${i===4&&!state.ferryTicket?'Ferry ticket needed · 50 crystals':l.ids.map(n=>questions[n].skill).slice(0,2).join(' · ')}</small></span><span class="badge">${l.ids.filter(n=>state.solved.includes(n)).length} / ${l.ids.length} ${i===4&&!state.ferryTicket?'⌑':'↗'}</span></button>`).join('');document.querySelectorAll('[data-location]').forEach(b=>b.onclick=()=>{$('#journal').close();visit(+b.dataset.location);});$('#journal').showModal();}
+function journal(){ $('#journalList').innerHTML=locations.map((l,i)=>`<button class="journal-row" data-location="${i}"><span style="font-size:24px">${l.icon}</span><span><strong>${l.name}</strong><small>${i===4&&!state.ferryTicket?'Ferry ticket needed · 50 crystals':l.ids.map(n=>questions[n].skill).slice(0,2).join(' · ')}</small></span><span class="badge">${l.ids.filter(n=>state.solved.includes(n)).length} / ${l.ids.length} ${i===4&&!state.ferryTicket?'⌑':'↗'}</span></button>`).join('');document.querySelectorAll('[data-location]').forEach(b=>b.onclick=()=>{closeMapPanel('journal');visit(+b.dataset.location);});openMapPanel('journal');}
+$('#profileSelect').onchange=e=>switchProfile(e.target.value);$('#saveProfile').onclick=editProfile;$('#createProfile').onclick=createProfile;$('#characterChoice').onchange=()=>renderCharacterPreview($('#characterChoice').value);
 $('#startFlash').onclick=startFlash;$('#tradeGive').onchange=updateTradeOptions;$('#tradeSubmit').onclick=tradeSquishy;$('#flash').addEventListener('close',cancelFlash);$('#flash').addEventListener('cancel',cancelFlash);
-$('#launchBoat').onclick=launchBoat;$('#boatBtn').onclick=()=>boating?returnBoat():openFerry();$('#boatFishBtn').onclick=openFishing;$('#menuBtn').onclick=()=>{keys.clear();$('#islandMenu').showModal();};$('#quickStashBtn').onclick=()=>$('#stashBtn').onclick();$('#mapBoatFish').onclick=openFishing;$('#mapBoatReturn').onclick=returnBoat;$('#mapBoatExit').onclick=exitBoat;$('#mapBoatBoard').onclick=boardOwnBoat;$('#stopFishing').onclick=stopFishing;$('#fishingBtn').onclick=openFishing;$('#buyRod').onclick=buyRod;$('#buyLure').onclick=buyLure;$('#fishSet').onchange=e=>{if(e.target.value==='lure'&&!state.fishingLure)return;fishSet=e.target.value;pendingCast=null;updateFishing();};$('#ferryBtn').onclick=()=>openFerry();$('#buyTicket').onclick=buyFerryTicket;$('#boardFerry').onclick=boardFerry;$('#ageLevel').onchange=e=>switchAge(e.target.value);$('#stashBtn').onclick=()=>{updateSquishies();$('#stash').showModal();};$('#journalBtn').onclick=journal;$('#exploreBtn').onclick=()=>{const next=locations.findIndex((l,i)=>(i!==4||state.ferryTicket)&&l.ids.some(n=>!state.solved.includes(n)));if(next<0){journal();return;}visit(next);};$('#soundBtn').onclick=()=>{state.sound=!state.sound;update();chime();};$('#mapHelp').onclick=()=>$('#welcome').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());$('#resetBtn').onclick=()=>{if(!confirm('Start again? This clears the current age level’s crystals, discoveries, squishies, and island upgrades.'))return;cancelFlash();stopFishing();state={...defaults,solved:[],upgrades:[],catches:{}};fishSet='classic';pendingCast=null;boating=false;swimming=false;diveAnimation=null;boatPosition={x:182,y:283};player.x=230;player.y=176;update();$('#journal').close();toast('A fresh island adventure awaits.');};document.querySelectorAll('dialog').forEach(d=>d.addEventListener('close',()=>{keys.clear();canvas.focus({preventScroll:true});}));
+$('#launchBoat').onclick=launchBoat;$('#boatBtn').onclick=()=>boating?returnBoat():openFerry();$('#boatFishBtn').onclick=openFishing;$('#settingsBtn').onclick=()=>toggleMapPanel('settingsPanel');$('#upgradesBtn').onclick=()=>toggleMapPanel('upgradesPanel');$('#companionBtn').onclick=()=>toggleMapPanel('companionPanel');$('#gearBtn').onclick=()=>toggleMapPanel('gearPanel');$('#railFishingBtn').onclick=()=>{closeMapPanel();openFishing();};$('#railFerryBtn').onclick=openFerry;$('#quickStashBtn').onclick=()=>$('#stashBtn').onclick();$('#mapBoatFish').onclick=openFishing;$('#mapBoatReturn').onclick=returnBoat;$('#mapBoatExit').onclick=exitBoat;$('#mapDive').onclick=diveFromIsland;$('#mapSharkExit').onclick=dismountShark;$('#mapBoatBoard').onclick=boardOwnBoat;$('#stopFishing').onclick=stopFishing;$('#fishingBtn').onclick=openFishing;$('#buyRod').onclick=buyRod;$('#buyLure').onclick=buyLure;$('#fishSet').onchange=e=>{if(e.target.value==='lure'&&!state.fishingLure)return;fishSet=e.target.value;pendingCast=null;updateFishing();};$('#ferryBtn').onclick=()=>openFerry();$('#buyTicket').onclick=buyFerryTicket;$('#boardFerry').onclick=boardFerry;$('#ageLevel').onchange=e=>{switchAge(e.target.value);openMapPanel('settingsPanel');};$('#stashBtn').onclick=()=>{updateSquishies();openMapPanel('stash');};$('#journalBtn').onclick=journal;$('#exploreBtn').onclick=()=>{const next=locations.findIndex((l,i)=>(i!==4||state.ferryTicket)&&l.ids.some(n=>!state.solved.includes(n)));if(next<0){journal();return;}visit(next);};$('#soundBtn').onclick=()=>{state.sound=!state.sound;update();chime();};$('#mapHelp').onclick=()=>openMapPanel('welcome');document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSurface(b.dataset.close));$('#resetBtn').onclick=()=>{if(!confirm('Start again? This clears this profile’s current age level’s crystals, discoveries, squishies, and island upgrades.'))return;cancelFlash();stopFishing();state={...defaults,solved:[],upgrades:[],catches:{}};fishSet='classic';pendingCast=null;boating=false;swimming=false;diveAnimation=null;boatPosition={x:182,y:283};player.x=230;player.y=176;update();closeMapPanel('journal');toast('A fresh island adventure awaits.');};document.querySelectorAll('dialog').forEach(d=>d.addEventListener('close',()=>{keys.clear();canvas.focus({preventScroll:true});}));
 // Tiny original pixel-art world. All art is drawn locally; no image assets required.
 const canvas=$('#world'),ctx=canvas.getContext('2d');ctx.scale(2,2);ctx.imageSmoothingEnabled=false;let frame=0,near=-1;const keys=new Set();
 function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h);}function ellipse(x,y,rx,ry,c){ctx.fillStyle=c;ctx.beginPath();ctx.ellipse(Math.round(x),Math.round(y),rx,ry,0,0,Math.PI*2);ctx.fill();}
@@ -307,7 +372,7 @@ function tree(x,y,s=1){ellipse(x,y+12*s,13*s,5*s,'#4b84524a');rect(x-2*s,y-5*s,5
 function pine(x,y){rect(x-2,y,4,13,'#87684b');for(let i=0;i<3;i++){let w=18-i*4;rect(x-w/2,y-i*8,w,7,'#396c50');rect(x-w/2+3,y-i*8-4,w-6,5,'#52845a');}}
 function crystal(x,y,c='#b8a2d8'){polygon([[x,y-10],[x+5,y-4],[x+4,y+4],[x,y+8],[x-4,y+3],[x-5,y-4]],c);rect(x-2,y-5,2,7,'#ece0f1');}
 function house(){let built=state.upgrades.includes('cottage');rect(188,126,56,32,'#7f925d44');rect(190,113,49,34,built?'#ecd7a5':'#b5a784');rect(194,119,41,26,built?'#f2e0b5':'#c1b392');polygon([[183,115],[214,88],[246,115]],built?'#b96e50':'#8d7861');for(let i=0;i<4;i++)rect(190+i*5,110-i*5,47-i*10,3,built?'#d18b5e':'#a08b6c');rect(209,127,11,20,'#685f43');rect(211,130,7,17,'#806846');rect(218,137,2,2,'#ebc581');rect(195,123,9,10,built?'#9fc7ba':'#786f56');rect(224,123,9,10,built?'#9fc7ba':'#786f56');if(built){rect(231,93,6,15,'#a45d48');rect(230,91,8,3,'#784d41');ellipse(236,83-Math.sin(frame/50)*3,4,3,'#fcf4db99');rect(195,134,9,3,'#729055');rect(224,134,9,3,'#729055');}else{rect(194,126,12,3,'#a18761');rect(225,123,3,14,'#9b8566');}}
-function character(x,y,pet=false){const step=Math.sin(frame/5)*(keys.size?1.5:0);ellipse(x,y+3,6,2,'#325c4144');if(pet){rect(x-5,y-5,10,7,'#a8c76b');rect(x-3,y-8,7,5,'#bbd880');rect(x-2,y-3,1,1,'#2f5141');rect(x+3,y-3,1,1,'#2f5141');rect(x,y-11,2,4,'#4b7951');rect(x+1,y-12,5,2,'#739e58');return;}rect(x-4,y-2+step,3,4,'#3e5555');rect(x+2,y-2-step,3,4,'#3e5555');rect(x-5,y-11,11,11,'#ba704a');rect(x-4,y-10,8,5,'#d08b55');rect(x-7,y-10,2,7,'#e4bd88');rect(x+6,y-10,2,7,'#e4bd88');rect(x-4,y-20,9,9,'#f2c992');rect(x-5,y-21,11,4,'#654a37');rect(x-8,y-23,16,4,'#e9c273');rect(x-5,y-28,10,6,'#dfb568');rect(x-5,y-25,10,2,'#a87a49');rect(x+2,y-16,1,2,'#354744');rect(x-5,y-8,3,7,'#e6c991');}
+function character(x,y,pet=false){const step=Math.sin(frame/5)*(keys.size?1.5:0);ellipse(x,y+3,6,2,'#325c4144');if(pet){rect(x-5,y-5,10,7,'#a8c76b');rect(x-3,y-8,7,5,'#bbd880');rect(x-2,y-3,1,1,'#2f5141');rect(x+3,y-3,1,1,'#2f5141');rect(x,y-11,2,4,'#4b7951');rect(x+1,y-12,5,2,'#739e58');return;}const colors=characterColors();if(currentProfile().character==='girl')rect(x-8,y-18,4,12,colors.hair);rect(x-4,y-2+step,3,4,'#3e5555');rect(x+2,y-2-step,3,4,'#3e5555');rect(x-5,y-11,11,11,colors.shirt);rect(x-4,y-10,8,5,colors.accent);rect(x-7,y-10,2,7,'#e4bd88');rect(x+6,y-10,2,7,'#e4bd88');rect(x-4,y-20,9,9,'#f2c992');rect(x-5,y-21,11,4,colors.hair);rect(x-8,y-23,16,4,colors.hat);rect(x-5,y-28,10,6,colors.hat);rect(x-5,y-25,10,2,'#a87a49');rect(x+2,y-16,1,2,'#354744');rect(x-5,y-8,3,7,'#e6c991');}
 // Fishing shares the main animation loop; only an open dock advances its clock.
 const fishingDock={x:106,y:222};
 const fishSpecies=[
@@ -318,20 +383,68 @@ const fishSpecies=[
 {id:'octopus',name:'Blue-ring octopus',icon:'🐙',color:'#e7bc79'},
 {id:'marlin',name:'Blue marlin',icon:'🐟',color:'#82bbef'}
 ];
+const FISH_CAST_DURATION=900;
+let fishingSplash=null;
 let fishingActive=false,fishingZone={x:30,y:270},fishSet='classic',fishingTime=0,pendingCast=null,fishingAim={x:320,y:260},lastCatch=null;
 function fishingTargets(time=fishingTime){
-return [0,1,2].map((lane)=>{const phase=(time*(.075+lane*.018)+lane*160)%1080,x=fishingZone.x+15+(phase<=540?phase:1080-phase)*.23;return {...fishSpecies[(fishSet==='lure'?3:0)+lane],x,y:fishingZone.y+[12,48,84][lane],radius:[14,12,11][lane],direction:phase<=540?1:-1};});
+return [0,1,2].map(lane=>{
+const phase=time*(.0003+lane*.000025)+lane*2,period=6800+lane*1100,cycle=(time+lane*2100)%period;
+const surface=cycle<1700?Math.sin(cycle/1700*Math.PI):0,nearSurface=cycle<2500;
+return {...fishSpecies[(fishSet==='lure'?3:0)+lane],x:fishingZone.x+80+62*Math.sin(phase),y:fishingZone.y+[12,48,84][lane]+Math.sin(phase*1.7)*3,radius:[14,12,11][lane],direction:Math.cos(phase)>=0?1:-1,tail:Math.sin(time*.009+lane*2),surface,nearSurface};
+});
 }
+
 const FISHING_SPONSOR='Skyseed Angling Co.';
 let boating=false,swimming=false,diveAnimation=null,boatPosition={x:182,y:283};
 let sharkFins=[],nextSharkFin=800+Math.random()*1400;
+const SHARK_RIDE_SPEED=.19,SHARK_LATCH_DISTANCE=22;
+let sharkRide=null,sharkWake=[],sharkLatchCooldown=0;
+function clearSharkRide(){sharkRide=null;sharkWake=[];sharkLatchCooldown=0;}
+function sharkWater(x,y){return x>15&&x<945&&y>15&&y<585&&!islandPolys.some(p=>inside(x,y,p));}
+function latchShark(){
+if(!swimming||boating||voyage||diveAnimation||sharkRide||sharkLatchCooldown>0||document.querySelector('dialog[open]'))return;
+const fin=sharkFins.filter(f=>f.age>=150&&f.duration-f.age>300&&Math.hypot(f.x-player.x,f.y-player.y)<=SHARK_LATCH_DISTANCE).sort((a,b)=>Math.hypot(a.x-player.x,a.y-player.y)-Math.hypot(b.x-player.x,b.y-player.y))[0];
+if(!fin)return;
+// Stay at the swimmer's position rather than jumping across nearby land.
+sharkRide={x:player.x,y:player.y,heading:Math.atan2(fin.vy,fin.vx),distance:0};sharkFins=sharkFins.filter(f=>f!==fin);sharkWake=[];
+closeMapPanel();keys.clear();updateWaterControls();toast('You latched onto a shark! Arrows / WASD steer your speedy ride. X or Hop off returns you to swimming.');
+}
+function dismountShark(){
+if(!sharkRide)return;
+const heading=sharkRide.heading;
+sharkFins.push({x:player.x,y:player.y,vx:Math.cos(heading)*.024,vy:Math.sin(heading)*.024,age:500,duration:4500});
+sharkRide=null;sharkWake=[];sharkLatchCooldown=1500;keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});toast('Back in the water! Swim to shore or catch another shark.');
+}
+function advanceSharkRide(dt){
+if(!sharkRide||dt<=0)return;
+sharkWake=sharkWake.filter(w=>{w.age+=dt;return w.age<900;});
+const dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0);
+if(dx||dy)sharkRide.heading=Math.atan2(dy,dx);
+let remaining=SHARK_RIDE_SPEED*dt;
+while(remaining>0){
+const step=Math.min(4,remaining),heading=sharkRide.heading;
+const turn=[0,Math.PI/4,-Math.PI/4,Math.PI/2,-Math.PI/2,Math.PI].find(angle=>sharkWater(player.x+Math.cos(heading+angle)*step,player.y+Math.sin(heading+angle)*step));
+if(turn===undefined)break;
+sharkRide.heading+=turn;player.x+=Math.cos(sharkRide.heading)*step;player.y+=Math.sin(sharkRide.heading)*step;sharkRide.distance+=step;remaining-=step;
+if(sharkRide.distance>=7){sharkRide.distance=0;sharkWake.push({x:player.x-Math.cos(sharkRide.heading)*17,y:player.y-Math.sin(sharkRide.heading)*17,heading:sharkRide.heading,age:0});}
+}
+sharkRide.x=player.x;sharkRide.y=player.y;sharkWake=sharkWake.slice(-32);
+}
+function drawSharkRide(){
+sharkWake.forEach(w=>{const fade=1-w.age/900,spread=3+w.age*.012;ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.globalAlpha=fade*.75;ctx.strokeStyle='#edfff6';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-spread,-spread);ctx.lineTo(2,-3);ctx.moveTo(-spread,spread);ctx.lineTo(2,3);ctx.stroke();ctx.restore();});
+ctx.save();ctx.translate(player.x,player.y);ctx.rotate(sharkRide.heading);
+ellipse(0,1,27,10,'#c4eee866');ellipse(1,0,24,8,'#527c8c');ellipse(4,2,17,4,'#9dbdc4');
+polygon([[-19,0],[-33,-10],[-28,0],[-33,10]],'#3a6075');polygon([[-4,-3],[1,-18],[7,-3]],'#365768');polygon([[1,4],[-6,15],[12,5]],'#41697b');ellipse(17,-3,1.5,1.5,'#183e48');
+ctx.restore();character(player.x,player.y-4);
+}
 function advanceSharkFins(dt){
 if(!swimming){sharkFins=[];nextSharkFin=800+Math.random()*1400;return;}
 if(diveAnimation||dt<=0)return;
+sharkLatchCooldown=Math.max(0,sharkLatchCooldown-dt);
 sharkFins=sharkFins.filter(fin=>{fin.age+=dt;fin.x+=fin.vx*dt;fin.y+=fin.vy*dt;return fin.age<fin.duration&&Math.hypot(fin.x-player.x,fin.y-player.y)<190&&fin.x>10&&fin.x<950&&fin.y>10&&fin.y<590&&!islandPolys.some(p=>inside(fin.x,fin.y,p));});
 nextSharkFin-=dt;if(nextSharkFin>0)return;
 nextSharkFin=1800+Math.random()*3000;
-if(sharkFins.length>=3)return;
+if(sharkFins.length+(sharkRide?1:0)>=3)return;
 for(let attempt=0;attempt<16;attempt++){
 const angle=Math.random()*Math.PI*2,distance=45+Math.random()*70,x=player.x+Math.cos(angle)*distance,y=player.y+Math.sin(angle)*distance;
 if(x<15||x>945||y<15||y>585||islandPolys.some(p=>inside(x,y,p)))continue;
@@ -354,35 +467,66 @@ state.sponsorshipAnnounced=true;save();$('#sponsorName').textContent=FISHING_SPO
 }
 function launchBoat(){
 if(!sponsored()||voyage||boating)return;stopFishing();
-$('#ferry').close();swimming=false;diveAnimation=null;boating=true;player.x=dock.x+43;player.y=dock.y+15;boatPosition={x:player.x,y:player.y};keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast('Your boat is launched! Steer with arrows or WASD, fish from your boat, or return to the dock.');
+closeMapPanel('ferry');swimming=false;diveAnimation=null;boating=true;player.x=dock.x+43;player.y=dock.y+15;boatPosition={x:player.x,y:player.y};keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast('Your boat is launched! Steer with arrows or WASD, fish from your boat, or return to the dock.');
 }
-function returnBoat(){if(!boating&&!swimming)return;stopFishing();boating=false;swimming=false;diveAnimation=null;boatPosition={x:182,y:283};player.x=dock.x;player.y=dock.y-18;keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast('Boat safely moored at the main ferry dock.');}
+function returnBoat(){if(!boating&&!swimming)return;stopFishing();boating=false;swimming=false;diveAnimation=null;boatPosition={x:182,y:283};player.x=dock.x;player.y=dock.y-18;keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast(sponsored()?'Boat safely moored at the main ferry dock.':'Back on shore at the main ferry dock.');}
+function openSea(x,y){return x>10&&x<950&&y>10&&y<590&&!islandPolys.some(p=>inside(x,y,p))&&!canWalk(x,y);}
+function shoreDiveTarget(){
+if(boating||swimming||voyage||fishingActive||diveAnimation||!canWalk(player.x,player.y))return null;
+for(let distance=8;distance<=32;distance+=8)for(let i=0;i<32;i++){
+const angle=i*Math.PI/16,x=player.x+Math.cos(angle)*distance,y=player.y+Math.sin(angle)*distance;
+if(openSea(x,y))return {x,y};
+}
+return null;
+}
+function startDive(to){
+swimming=true;diveAnimation={elapsed:0,from:{x:player.x,y:player.y},to};keys.clear();sharkFins=[];nextSharkFin=800+Math.random()*1400;
+toast(sponsored()?'Splash! Swim with arrows or WASD. Swim to shore, or press E beside your boat to climb back in.':'Splash! Swim with arrows or WASD. Swim onto shore to walk again.');
+save();updateFishing();canvas.focus({preventScroll:true});
+}
+function diveFromIsland(){
+if(document.querySelector('dialog[open]'))return;
+const to=shoreDiveTarget();if(!to)return;closeMapPanel();startDive(to);
+}
+function moveExplorer(dx,dy){
+if(diveAnimation||sharkRide)return;
+const x=player.x+dx,y=player.y+dy;
+if(!boating&&!swimming&&(dx||dy)&&canWalk(player.x,player.y)&&openSea(x,y)){
+const length=Math.hypot(dx,dy),landing={x:x+dx/length*24,y:y+dy/length*24};
+closeMapPanel();startDive(openSea(landing.x,landing.y)?landing:{x,y});return;
+}
+if(canWalk(x,player.y))player.x=x;
+if(canWalk(player.x,y))player.y=y;
+advanceSwimming(0);
+}
 function exitBoat(){
 if(!boating||voyage)return;sharkFins=[];nextSharkFin=800+Math.random()*1400;
 stopFishing();boatPosition={x:player.x,y:player.y};boating=false;keys.clear();
 const landing=[dock,...(state.ferryTicket?[farDock]:[]),fishingDock].find(d=>Math.hypot(player.x-d.x,player.y-d.y)<(d===fishingDock?45:70));
 if(landing){swimming=false;diveAnimation=null;player.x=landing.x;player.y=landing.y-(landing===fishingDock?8:18);toast('You stepped off the boat onto the dock. Walk with arrows or WASD.');}
-else{swimming=true;const offset=[[24,10],[-24,10],[0,25],[0,-25]].find(([x,y])=>player.x+x>10&&player.x+x<950&&player.y+y>10&&player.y+y<590&&!islandPolys.some(p=>inside(player.x+x,player.y+y,p)))||[0,0];diveAnimation={elapsed:0,from:{x:player.x,y:player.y},to:{x:player.x+offset[0],y:player.y+offset[1]}};toast('Splash! Swim with arrows or WASD. Swim to shore, or press E beside your boat to climb back in.');}
+else{const offset=[[24,10],[-24,10],[0,25],[0,-25]].find(([x,y])=>openSea(player.x+x,player.y+y))||[0,0];startDive({x:player.x+offset[0],y:player.y+offset[1]});return;}
 save();updateFishing();canvas.focus({preventScroll:true});
 }
 function boardOwnBoat(){
-if(!swimming||diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>44)return;
+if(!sponsored()||!swimming||diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>44)return;
 stopFishing();swimming=false;boating=true;player.x=boatPosition.x;player.y=boatPosition.y;keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast('Back aboard! X exits your boat; F starts fishing.');
 }
 function advanceSwimming(dt){
-if(diveAnimation){diveAnimation.elapsed+=dt;const t=Math.min(1,diveAnimation.elapsed/700);player.x=diveAnimation.from.x+(diveAnimation.to.x-diveAnimation.from.x)*t;player.y=diveAnimation.from.y+(diveAnimation.to.y-diveAnimation.from.y)*t;if(t===1)diveAnimation=null;}
+if(sharkRide&&swimming)advanceSharkRide(dt);
+else if(diveAnimation){diveAnimation.elapsed+=dt;const t=Math.min(1,diveAnimation.elapsed/700);player.x=diveAnimation.from.x+(diveAnimation.to.x-diveAnimation.from.x)*t;player.y=diveAnimation.from.y+(diveAnimation.to.y-diveAnimation.from.y)*t;if(t===1)diveAnimation=null;}
 else if(swimming){swimming=false;if(canWalk(player.x,player.y)){save();toast('Back on dry land. Keep exploring!');}else swimming=true;}
 if(boating)boatPosition={x:player.x,y:player.y};
-advanceSharkFins(dt);updateWaterControls();
+advanceSharkFins(dt);if(swimming&&!sharkRide)latchShark();updateWaterControls();
 }
 function updateWaterControls(){
-if(!swimming)sharkFins=[];
-$('#mapBoatExit').hidden=!boating;$('#mapBoatBoard').hidden=!swimming||!!diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>44;
-$('#mapBoatReturn').hidden=!boating&&!swimming;
-const hint=swimming?'SWIMMING · Arrows / WASD to swim · E beside your boat to climb in · Swim onto shore to walk.':boating?(fishingActive?'FISHING · Click/tap ahead of a fish · Arrows aim; Enter/Space casts · Esc stops fishing · X exits: dock = walk, sea = dive.':'BOAT · Arrows / WASD steer · F to fish · X or Exit boat to get out: at dock = walk, offshore = dive & swim.'):'FISHING · Visit the fishing dock · Click/tap ahead of fish · Arrows aim; Enter/Space casts · Esc stops fishing.';
+if(!swimming){sharkFins=[];clearSharkRide();}
+$('#mapSharkExit').hidden=!sharkRide;
+$('#mapDive').hidden=!shoreDiveTarget();$('#mapBoatExit').hidden=!boating;$('#mapBoatBoard').hidden=!sponsored()||!swimming||!!diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>44;
+$('#mapBoatReturn').textContent=swimming&&!sponsored()?'Return to shore ↗':'Return to dock ↗';$('#mapBoatReturn').hidden=!boating&&!swimming;
+const hint=sharkRide?'SHARK RIDE · Arrows / WASD steer · X or Hop off to swim · Return to shore for a lift.':swimming?(sponsored()?'SWIMMING · Get close to a shark to ride · Arrows / WASD swim · E beside your boat to climb in · Swim onto shore to walk.':'SWIMMING · Get close to a shark to ride · Arrows / WASD swim · Swim onto shore to walk · Return to shore if you need a lift.'):boating?(fishingActive?'FISHING · Watch ripples · Cast ahead of a fish · Arrows aim; Enter/Space casts · Esc stops fishing · X exits: dock = walk, sea = dive.':'BOAT · Arrows / WASD steer · F to fish · X or Exit boat to get out: at dock = walk, offshore = dive & swim.'):'ISLAND · Walk off the shoreline to dive & swim · X or Dive near shore · Visit the fishing dock to fish.';
 if($('#waterControls').textContent!==hint)$('#waterControls').textContent=hint;
 }
-function stopFishing(){fishingActive=false;pendingCast=null;keys.clear();$('#fishing').hidden=true;$('#mapBoatFish').hidden=!boating;canvas.setAttribute('aria-label','Five-island map. Move with arrows or WASD. Press E to interact.');}
+function stopFishing(){fishingActive=false;pendingCast=null;fishingSplash=null;keys.clear();$('#fishing').hidden=true;$('#mapBoatFish').hidden=!boating;canvas.setAttribute('aria-label','Five-island map. Move with arrows or WASD. Press E to interact.');}
 function updateFishing(){updateWaterControls();
 $('#fishingStatus').textContent=sponsored()?`${FISHING_SPONSOR} · Unlimited bait · ${totalCatches()} fish caught`:`${state.bait} / 5 casts ready · ${totalCatches()} fish caught · ${5-totalCatches()} to sponsorship`;
 $('#mapBoatFish').hidden=!boating||fishingActive;$('#mapBoatReturn').hidden=!boating&&!swimming;$('#boatBtn').hidden=!sponsored();$('#boatFishBtn').hidden=!boating;$('#boatBtn').textContent=boating?'Return boat to ferry dock ↗':'Visit your sponsored boat ↗';
@@ -396,7 +540,7 @@ if(!state.fishingLure)fishSet='classic';$('#fishSet').value=fishSet;
 $('#fishBadges').innerHTML=fishSpecies.map(f=>{const count=state.catches[f.id]||0;return `<li class="fish-badge ${count?'caught':'uncaught'}"><span aria-hidden="true">${count?f.icon:'?'}</span><strong>${f.name}</strong><small>${count?'Caught × '+count:'Not caught yet'}</small></li>`;}).join('');
 }
 function openFishing(){
-if(voyage||swimming)return;if(!boating){player.x=fishingDock.x;player.y=fishingDock.y-8;}keys.clear();save();pendingCast=null;lastCatch=null;updateFishing();$('#fishingFeedback').textContent=sponsored()?'Your sponsor supplies unlimited bait. Cast as often as you like!':state.bait?'All three fish are swimming. Aim ahead and click or tap where your cast should land!':'Buy a rod for 5 crystals to get five casts. Each cast uses one bait, hit or miss.';fishingActive=true;$('#fishing').hidden=false;chooseFishingZone();fishingAim={x:fishingZone.x+80,y:fishingZone.y+48};canvas.setAttribute('aria-label','Fishing on the island map. Click water to cast. Arrows aim; Enter or Space casts; Escape stops fishing.');$('#mapBoatFish').hidden=true;canvas.focus({preventScroll:true});draw();
+if(voyage||swimming)return;closeMapPanel();if(!boating){player.x=fishingDock.x;player.y=fishingDock.y-8;}keys.clear();save();pendingCast=null;fishingSplash=null;lastCatch=null;updateFishing();$('#fishingFeedback').textContent=sponsored()?'Your sponsor supplies unlimited bait. Cast as often as you like!':state.bait?'Watch for underwater shadows and brief surface ripples. Lead a fish and cast into its path!':'Buy a rod for 5 crystals to get five casts. Each cast uses one bait, hit or miss.';fishingActive=true;$('#fishing').hidden=false;chooseFishingZone();fishingAim={x:fishingZone.x+80,y:fishingZone.y+48};canvas.setAttribute('aria-label','Fishing on the island map. Click water to cast. Arrows aim; Enter or Space casts; Escape stops fishing.');$('#mapBoatFish').hidden=true;canvas.focus({preventScroll:true});draw();
 }
 function buyRod(){if(sponsored()||state.bait>0||state.crystals<5)return;state.crystals-=5;state.bait=5;update();$('#fishingFeedback').textContent='Five fresh baits! Aim ahead of a swimming fish and cast.';}
 function buyLure(){if(state.fishingLure||state.crystals<20)return;state.crystals-=20;state.fishingLure=true;update();$('#fishingFeedback').textContent='Lure unlocked forever! Switch fish panels to find snook, blue-ring octopus, and blue marlin.';}
@@ -410,29 +554,114 @@ if(!fishingActive||pendingCast)return;
 if(!sponsored()&&!state.bait){$('#fishingFeedback').textContent='Out of bait! Buy another rod with five bait for 5 crystals.';return;}
 if(islandPolys.some(p=>inside(x,y,p))){$('#fishingFeedback').textContent='Aim for the open water.';return;}
 if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>960||y<0||y>600)return;
-if(!sponsored())state.bait--;pendingCast={x,y,elapsed:0};lastCatch=null;update();$('#fishingFeedback').textContent='Casting… lead the swimming fish!';
+if(!sponsored())state.bait--;pendingCast={x,y,elapsed:0,origin:{x:player.x+4,y:player.y-9},lure:fishSet==='lure'};lastCatch=null;update();$('#fishingFeedback').textContent='Backswing… watch the line unfurl. Lead the fish’s path!';
 }
 function advanceFishing(dt){
 if(!fishingActive){pendingCast=null;return;}
 if(document.querySelector('dialog[open]'))return;
-fishingTime+=dt;
-if(pendingCast){pendingCast.elapsed+=dt;if(pendingCast.elapsed>=450){const cast=pendingCast;pendingCast=null;const hit=fishingTargets().find(f=>((cast.x-f.x)/f.radius)**2+((cast.y-f.y)/(f.radius*.65))**2<=1);
+fishingTime+=dt;if(fishingSplash){fishingSplash.elapsed+=dt;if(fishingSplash.elapsed>900)fishingSplash=null;}
+if(pendingCast){pendingCast.elapsed+=dt;if(pendingCast.elapsed>=FISH_CAST_DURATION){const cast=pendingCast;pendingCast=null;fishingSplash={x:cast.x,y:cast.y,elapsed:0};const hit=fishingTargets().find(f=>((cast.x-f.x)/f.radius)**2+((cast.y-f.y)/(f.radius*.65))**2<=1);
 if(hit){state.catches={...state.catches,[hit.id]:(state.catches[hit.id]||0)+1};lastCatch=hit;chime();$('#fishingFeedback').textContent=`Caught a ${hit.name}! Badge count: ${state.catches[hit.id]}. ${sponsored()?'Unlimited bait—keep casting!':state.bait?state.bait+' casts left.':'Bait is gone—refill for 5 crystals.'}`;}
 else $('#fishingFeedback').textContent=`Splash! The fish slipped past. Aim a little ahead. ${sponsored()?'Unlimited bait—try again!':state.bait?state.bait+' casts left.':'Out of bait—refill for 5 crystals.'}`;
 update();checkSponsorship();}}
 }
+function fishingCastPose(cast){
+const t=Math.max(0,Math.min(1,cast.elapsed/FISH_CAST_DURATION)),hand=cast.origin||{x:player.x+4,y:player.y-9};
+const heading=Math.atan2(cast.y-hand.y,cast.x-hand.x),windup=Math.min(1,t/.22),flight=Math.max(0,Math.min(1,(t-.22)/.78));
+const angle=t<.22?heading-1.4-Math.sin(windup*Math.PI/2)*1.3:heading-2.7*Math.exp(-flight*9)+Math.sin(flight*11)*.18*Math.exp(-flight*4);
+const tip={x:hand.x+Math.cos(angle)*25,y:hand.y+Math.sin(angle)*25};
+const start={x:hand.x+Math.cos(heading-2.7)*28,y:hand.y+Math.sin(heading-2.7)*28};
+const bait=t<.22?{x:tip.x+Math.cos(angle-.8)*5,y:tip.y+Math.sin(angle-.8)*5}:{x:start.x+(cast.x-start.x)*flight,y:start.y+(cast.y-start.y)*flight-Math.sin(flight*Math.PI)*Math.min(45,Math.hypot(cast.x-start.x,cast.y-start.y)*.3)};
+const dx=bait.x-tip.x,dy=bait.y-tip.y,length=Math.hypot(dx,dy)||1;
+const loop=t<.22?6:Math.sin(flight*Math.PI)*18+Math.sin(flight*16)*7*(1-flight);
+const line=Array.from({length:33},(_,i)=>{const u=i/32,envelope=Math.sin(Math.PI*u),wave=Math.sin(u*Math.PI*3-flight*12)*loop*envelope;return {x:tip.x+dx*u-dy/length*wave,y:tip.y+dy*u+dx/length*wave+envelope*length*.08*(1-flight)};});
+return {t,hand,tip,bait,line,bend:Math.sin(t*Math.PI*2)*8};
+}
+// Species anatomy is drawn in local coordinates so fins, tails, and arms move independently.
+function drawFishAnatomy(f){
+const c=ctx,beat=f.tail||0,time=fishingTime*.008;
+const shape=(points,color)=>{c.fillStyle=color;c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fill();};
+const eye=(x,y)=>{c.fillStyle='#e7dfb0';c.beginPath();c.arc(x,y,1.15,0,Math.PI*2);c.fill();c.fillStyle='#182f37';c.beginPath();c.arc(x+.25,y,.6,0,Math.PI*2);c.fill();};
+const stroke=(color,width,draw)=>{c.strokeStyle=color;c.lineWidth=width;c.beginPath();draw();c.stroke();};
+if(f.id==='octopus'){
+// Eight tapered, curling arms, individual suckers, and luminous blue rings.
+for(let arm=0;arm<8;arm++){
+ const angle=arm*Math.PI/4,sway=Math.sin(time+arm*.8)*.3,reach=12+(arm%3)*2;
+ const x=Math.cos(angle)*reach,y=Math.sin(angle)*reach*.68;
+ stroke('#92663f',2.7,()=>{c.moveTo(Math.cos(angle)*3,Math.sin(angle)*3);c.bezierCurveTo(x*.5-y*.3,y*.5+x*.15,x-y*sway,y+x*sway,x+Math.sin(time+arm)*2,y-2);});
+ for(let i=1;i<4;i++){const t=i/4;c.fillStyle='#dfbe87';c.beginPath();c.arc(x*t,y*t,.65,0,Math.PI*2);c.fill();}
+}
+c.fillStyle='#c39a5e';c.beginPath();c.ellipse(0,-1,6,7,.2,0,Math.PI*2);c.fill();
+c.fillStyle='#e1b973';c.beginPath();c.ellipse(1,-3,3,4,.2,0,Math.PI*2);c.fill();
+for(let i=0;i<11;i++){const angle=i*2.4,r=2+(i%3)*1.4;stroke('#3460b6',.9,()=>c.ellipse(Math.cos(angle)*r,Math.sin(angle)*r-1,1.15,.9,angle,0,Math.PI*2));}
+eye(3,2);eye(-2,3);return;
+}
+if(f.id==='stingray'){
+const flap=beat*3;
+c.fillStyle='#7c8199';c.beginPath();c.moveTo(11,0);c.bezierCurveTo(4,-5,-1,-11+flap,-13,-13+flap);c.quadraticCurveTo(-8,-3,-9,0);c.quadraticCurveTo(-8,3,-13,13-flap);c.bezierCurveTo(-1,11-flap,4,5,11,0);c.fill();
+c.fillStyle='#aaa8b5';c.beginPath();c.ellipse(1,0,6,4,0,0,Math.PI*2);c.fill();
+stroke('#646a83',1.3,()=>{c.moveTo(-6,0);c.bezierCurveTo(-16,2,-22,beat*5,-29,beat*6);});
+stroke('#b8b7c2',.6,()=>{c.moveTo(4,0);c.quadraticCurveTo(-3,-4,-10,-10+flap);c.moveTo(4,0);c.quadraticCurveTo(-3,4,-10,10-flap);});
+for(let i=0;i<9;i++){c.fillStyle='#d2c8ba';c.beginPath();c.arc(-6+i%3*4,-5+Math.floor(i/3)*5,.55,0,Math.PI*2);c.fill();}eye(5,-2);eye(5,2);return;
+}
+const shark=f.id==='shark',marlin=f.id==='marlin',snook=f.id==='snook';
+const length=marlin?18:shark?18:snook?15:20,depth=shark?5.5:snook?5:marlin?4:3;
+const back=shark?'#607a89':marlin?'#306895':snook?'#7e9065':'#7d9e9b';
+const belly=shark?'#cbd6ce':marlin?'#a0d2d3':snook?'#d4d7b0':'#d2ddd1';
+// Flexing forked/crescent tail, separate from the body.
+c.save();c.translate(-length+3,0);c.rotate(beat*.22);
+shape([[3,0],[-9,-(shark||marlin?10:7)],[-6,-2],[-4,0],[-6,2],[-9,shark||marlin?10:7]],back);c.restore();
+shape([[-5,-2],[-4,-(shark?15:marlin?12:7)],[2,-(marlin?11:4)],[7,-2]],back);
+shape([[2,2],[-4,shark?12:8],[4,5],[8,1]],back);
+if(marlin)for(let i=0;i<5;i++)stroke('#4a9abd',.5,()=>{c.moveTo(-4+i*2,-3);c.lineTo(-4+i*2,-10+i);});
+c.fillStyle=back;c.beginPath();c.moveTo(-length,0);c.bezierCurveTo(-length+6,-depth-1,length-7,-depth-2,length,0);c.bezierCurveTo(length-6,depth+1,-length+6,depth,-length,0);c.fill();
+c.fillStyle=belly;c.beginPath();c.moveTo(-length+2,1);c.quadraticCurveTo(0,depth+3,length-1,0);c.quadraticCurveTo(2,depth-1,-length+2,1);c.fill();
+stroke(snook?'#384f46':'#afc4bc',snook?1.1:.55,()=>{c.moveTo(-length+4,0);c.quadraticCurveTo(0,-.5,length-3,.3);});
+if(f.id==='barracuda'){
+for(let i=0;i<8;i++){const x=-12+i*3;stroke('#4f7475',.75,()=>{c.moveTo(x,-2.1);c.lineTo(x+1,-.5);});}
+shape([[length-2,0],[length+4,1],[length,2],[length-5,1]],'#b7cbc0');
+for(let i=0;i<3;i++)shape([[length-3+i,1],[length-2.5+i,2],[length-2+i,1]],'#e7eee0');
+}
+if(marlin){shape([[length-3,-1],[length+15,-1],[length+4,.1],[length-3,1]],'#6b9aaf');for(let i=0;i<7;i++)stroke('#82c2d1',.65,()=>{const x=-10+i*3;c.moveTo(x,-2.3);c.lineTo(x+1,1.5);});}
+const gills=shark?5:2;for(let i=0;i<gills;i++)stroke('#435e64',.45,()=>{const x=length-8-i*1.2;c.moveTo(x,-depth*.6);c.quadraticCurveTo(x-1,0,x,depth*.6);});
+eye(length-3,-1);
+stroke('#38535a',.45,()=>{c.moveTo(length-3,1.6);c.lineTo(length,1);});
+// Broken highlights suggest scales without turning the swimmer into a flat symbol.
+for(let i=0;i<8;i++){c.fillStyle='#e4e9cc66';c.fillRect(-length+6+i*2.5,-1.7+(i%2)*.5,.8,.45);}
+}
+function drawSwimmingFish(f){
+if(!f.nearSurface)return;
+const c=ctx;c.save();c.translate(f.x,f.y);c.scale(f.direction,1);c.rotate(Math.sin(fishingTime*.004)*.035);
+// The complete anatomy remains water-tinted and submerged.
+c.save();c.globalAlpha=.22+f.surface*.25;drawFishAnatomy(f);c.restore();
+if(f.surface>.12){
+// Only a narrow strip of anatomy breaks the water during a surface pass.
+c.save();c.globalAlpha=f.surface*.8;c.beginPath();c.rect(-40,-3-f.surface*3,85,4+f.surface*2);c.clip();drawFishAnatomy(f);c.restore();
+c.globalAlpha=f.surface*.5;c.strokeStyle='#d7efe6';c.lineWidth=.6;
+for(let i=0;i<3;i++){c.beginPath();c.ellipse(-6-i*5,2+i,9+i*5,1.3+i*.7,0,.15,Math.PI*.95);c.stroke();}
+}
+c.restore();
+}
+
 function drawFishing(){
 if(!fishingActive)return;const c=ctx;
-c.font='7px monospace';c.fillStyle='#edf8e7';['CLOSE','MEDIUM','FAR'].forEach((label,i)=>c.fillText(label,fishingZone.x+165,fishingZone.y+[14,50,86][i]));
-fishingTargets().forEach(f=>{c.save();c.translate(f.x,f.y);c.scale(f.direction,1);c.fillStyle=f.color;c.beginPath();
-if(f.id==='stingray'){c.moveTo(-f.radius,0);c.lineTo(0,-15);c.lineTo(f.radius,0);c.lineTo(0,15);c.closePath();c.fill();c.strokeStyle=f.color;c.beginPath();c.moveTo(-6,0);c.lineTo(-40,7);c.stroke();}
-else if(f.id==='octopus'){c.arc(0,0,14,0,Math.PI*2);c.fill();for(let j=0;j<5;j++){c.strokeStyle='#416fda';c.lineWidth=3;c.beginPath();c.arc(-10+j*5,11,7,0,Math.PI);c.stroke();}c.fillStyle='#4678d4';for(let j=0;j<3;j++){c.beginPath();c.arc(-8+j*7,-3,2.5,0,Math.PI*2);c.fill();}}
-else{c.ellipse(0,0,f.radius,10,0,0,Math.PI*2);c.fill();c.beginPath();c.moveTo(-f.radius+3,0);c.lineTo(-f.radius-12,-11);c.lineTo(-f.radius-12,11);c.closePath();c.fill();if(f.id==='shark'){c.beginPath();c.moveTo(-7,-8);c.lineTo(1,-24);c.lineTo(10,-7);c.fill();}if(f.id==='marlin'){c.fillRect(f.radius-3,-2,23,3);}}
-c.fillStyle='#193e48';c.beginPath();c.arc(f.radius*.55,-2,2,0,Math.PI*2);c.fill();c.restore();c.textAlign='center';c.font='7px sans-serif';c.fillStyle='#f7fff4';c.fillText(f.name,f.x,f.y-17);});
-c.strokeStyle='#fff5c4';c.lineWidth=2;c.beginPath();c.arc(fishingAim.x,fishingAim.y,12,0,Math.PI*2);c.moveTo(fishingAim.x-18,fishingAim.y);c.lineTo(fishingAim.x+18,fishingAim.y);c.stroke();
-if(pendingCast){const t=Math.min(1,pendingCast.elapsed/450),x=player.x+(pendingCast.x-player.x)*t,y=player.y+(pendingCast.y-player.y)*t-Math.sin(t*Math.PI)*40;c.strokeStyle='#fff3c3';c.beginPath();c.moveTo(player.x,player.y-6);c.lineTo(x,y);c.stroke();c.fillStyle='#ef936d';c.beginPath();c.arc(x,y,6,0,Math.PI*2);c.fill();}
-if(lastCatch){c.fillStyle='#fff2cd';c.font='bold 9px sans-serif';c.textAlign='center';c.fillText('✦ '+lastCatch.name+' caught! ✦',fishingZone.x+80,fishingZone.y-12);}
+c.save();c.font='6px monospace';c.fillStyle='#edf8e799';['CLOSE','MEDIUM','FAR'].forEach((label,i)=>c.fillText(label,fishingZone.x+165,fishingZone.y+[14,50,86][i]));c.restore();
+fishingTargets().forEach(drawSwimmingFish);
+c.save();c.strokeStyle='#e4f1dc88';c.lineWidth=.65;c.beginPath();c.arc(fishingAim.x,fishingAim.y,5,0,Math.PI*2);c.stroke();
+const cast=pendingCast||{x:fishingAim.x,y:fishingAim.y,elapsed:FISH_CAST_DURATION,origin:{x:player.x+4,y:player.y-9}},pose=fishingCastPose(cast);
+c.strokeStyle='#705439';c.lineWidth=1.7;c.beginPath();c.moveTo(pose.hand.x,pose.hand.y);c.quadraticCurveTo((pose.hand.x+pose.tip.x)/2+pose.bend,(pose.hand.y+pose.tip.y)/2-pose.bend,pose.tip.x,pose.tip.y);c.stroke();
+if(pendingCast){
+c.strokeStyle='#f5edcfcc';c.lineWidth=.65;c.beginPath();pose.line.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.stroke();
+c.save();c.translate(pose.bait.x,pose.bait.y);c.rotate(Math.atan2(pendingCast.y-pose.hand.y,pendingCast.x-pose.hand.x)+Math.sin(pose.t*14)*.4);
+if(pendingCast.lure){c.fillStyle='#d9c98b';c.fillRect(-2,-.7,4,1.4);c.fillStyle='#b86c55';c.fillRect(1,-.7,1,1.4);}
+else{c.strokeStyle='#c78473';c.lineWidth=1.2;c.beginPath();c.moveTo(-2,-1);c.bezierCurveTo(0,-2,0,2,2,1);c.stroke();}
+c.strokeStyle='#506063';c.lineWidth=.5;c.beginPath();c.arc(1,1,1.2,0,Math.PI);c.stroke();c.restore();
 }
+if(fishingSplash){const p=fishingSplash.elapsed/900;c.strokeStyle=`rgba(225,246,235,${(1-p)*.75})`;c.lineWidth=.8;for(let i=0;i<3;i++){const radius=2+p*13+i*3;c.beginPath();c.ellipse(fishingSplash.x,fishingSplash.y,radius,radius*.36,0,0,Math.PI*2);c.stroke();}}
+if(lastCatch){c.fillStyle='#fff2cd';c.font='bold 9px sans-serif';c.textAlign='center';c.fillText('✦ '+lastCatch.name+' caught! ✦',fishingZone.x+80,fishingZone.y-12);}
+c.restore();
+}
+
 canvas.onpointermove=e=>{if(!fishingActive)return;const r=canvas.getBoundingClientRect();fishingAim={x:(e.clientX-r.left)/r.width*WORLD.viewWidth+camera.x,y:(e.clientY-r.top)/r.height*WORLD.viewHeight+camera.y};};
 canvas.onkeydown=e=>{if(!fishingActive||document.querySelector('dialog[open]'))return;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter','Escape'].includes(e.key)){e.preventDefault();if(e.key==='Escape')stopFishing();else if(e.key===' '||e.key==='Enter')castFishing(fishingAim.x,fishingAim.y);else{fishingAim.x=Math.max(0,Math.min(960,fishingAim.x+(e.key==='ArrowLeft'?-6:e.key==='ArrowRight'?6:0)));fishingAim.y=Math.max(0,Math.min(600,fishingAim.y+(e.key==='ArrowUp'?-6:e.key==='ArrowDown'?6:0)));}}};
 const WORLD={width:960,height:600,viewWidth:480,viewHeight:300};
@@ -452,7 +681,7 @@ $('#buyTicket').hidden=!!state.ferryTicket;
 $('#buyTicket').disabled=state.crystals<50;
 $('#boardFerry').hidden=!state.ferryTicket;
 $('#boardFerry').textContent=returning?'Sail to the main island ↗':'Sail to Crystal Cavern ↗';
-$('#launchBoat').hidden=!sponsored()||returning;$('#boatHarbourInfo').hidden=!sponsored();$('#ferry').showModal();
+$('#launchBoat').hidden=!sponsored()||returning;$('#boatHarbourInfo').hidden=!sponsored();openMapPanel('ferry');
 }
 function buyFerryTicket(){
 if(state.ferryTicket||state.crystals<50)return;
@@ -461,7 +690,7 @@ state.crystals-=50;state.ferryTicket=true;update();chime();openFerry();
 function boardFerry(){
 if(!state.ferryTicket||voyage)return;
 const returning=onFinalIsland(),from=returning?farDock:dock,to=returning?dock:farDock;
-voyage={from,to,elapsed:0,returning};player.x=from.x;player.y=from.y;keys.clear();$('#ferry').close();toast('All aboard! Next stop: '+(returning?'the main island.':'Crystal Cavern.'));
+voyage={from,to,elapsed:0,returning};player.x=from.x;player.y=from.y;keys.clear();closeMapPanel('ferry');toast('All aboard! Next stop: '+(returning?'the main island.':'Crystal Cavern.'));
 }
 function advanceVoyage(dt){
 if(!voyage)return;
@@ -469,14 +698,23 @@ voyage.elapsed+=dt;const t=Math.min(1,voyage.elapsed/3500),e=t*t*(3-2*t);
 player.x=voyage.from.x+(voyage.to.x-voyage.from.x)*e;player.y=voyage.from.y+(voyage.to.y-voyage.from.y)*e;
 if(t===1){const returning=voyage.returning;voyage=null;player.y-=18;save();toast(returning?'Welcome home, explorer!':'Welcome to Crystal Cavern! Walk up to the glowing marker.');}
 }
+function cavernFlag(x,y,height=36){
+// Shared violet crystal pennant for the cavern landing and its ferry.
+const top=y-height,wave=Math.floor(Math.sin(frame/12)*2);
+rect(x-1,top,2,height,'#705d43');rect(x-2,top-2,4,3,'#e9cc80');
+polygon([[x+1,top+2],[x+20,top+3+wave],[x+19,top+15+wave],[x+1,top+14]],'#8266aa');
+rect(x+2,top+3,2,10,'#bda6db');
+polygon([[x+10,top+5],[x+14,top+9],[x+10,top+13],[x+7,top+9]],'#f6e5ab');
+}
 function ferryArt(x,y){
-ellipse(x,y+12,37,9,'#3f8e9866');polygon([[x-35,y],[x+35,y],[x+26,y+15],[x-25,y+15]],'#315d66');rect(x-29,y-4,58,6,'#e7b965');rect(x-19,y-23,36,19,'#fff0c6');rect(x-23,y-25,44,5,'#bc7056');for(let i=0;i<3;i++)rect(x-13+i*10,y-18,6,8,'#7bb8bc');rect(x+7,y-33,5,9,'#535f59');rect(x-27,y-9,5,5,'#e8cf89');rect(x+23,y-9,5,5,'#e8cf89');
+ellipse(x,y+12,37,9,'#3f8e9866');polygon([[x-35,y],[x+35,y],[x+26,y+15],[x-25,y+15]],'#315d66');rect(x-29,y-4,58,6,'#e7b965');rect(x-19,y-23,36,19,'#fff0c6');rect(x-23,y-25,44,5,'#bc7056');for(let i=0;i<3;i++)rect(x-13+i*10,y-18,6,8,'#7bb8bc');rect(x+7,y-33,5,9,'#535f59');rect(x-27,y-9,5,5,'#e8cf89');rect(x+23,y-9,5,5,'#e8cf89');cavernFlag(x-15,y-24,28);
 }
 function fishingBoatArt(x,y){ellipse(x,y+8,24,7,'#397e8866');polygon([[x-24,y-5],[x+24,y-5],[x+15,y+10],[x-15,y+10]],'#f1c67a');rect(x-18,y-7,36,4,'#436b67');rect(x-9,y-6,18,4,'#fff1cf');rect(x+12,y-14,2,11,'#71523b');rect(x+14,y-14,12,6,'#e9a384');if(boating)character(x,y-6);}
 function swimmerArt(){
 const x=player.x,y=player.y;
+if(sharkRide){drawSharkRide();return;}
 if(diveAnimation){const t=Math.min(1,diveAnimation.elapsed/700);if(t<.62){ctx.save();ctx.translate(x,y-Math.sin(t/.62*Math.PI)*16);ctx.rotate(t*Math.PI*1.5);character(0,0);ctx.restore();}else{const r=3+(t-.62)*34;ctx.strokeStyle='#e2f8ee';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,r,r*.45,0,0,Math.PI*2);ctx.stroke();for(let i=0;i<6;i++)ellipse(x+Math.cos(i)*r,y+Math.sin(i)*r*.5-4,1,2,'#e2f8ee');}return;}
-const stroke=Math.sin(frame/7);ellipse(x,y+2,11,4,'#c2eee099');rect(x-5,y-1,10,4,'#ba704a');rect(x-3,y-8,7,7,'#f2c992');rect(x-4,y-10,9,3,'#654a37');rect(x-12,y+stroke*3,7,2,'#f2c992');rect(x+5,y-stroke*3,7,2,'#f2c992');ellipse(x-1,y+7,6,1,'#d5f4e6');
+const colors=characterColors();if(currentProfile().character==='girl')rect(x-7,y-7,4,9,colors.hair);const stroke=Math.sin(frame/7);ellipse(x,y+2,11,4,'#c2eee099');rect(x-5,y-1,10,4,colors.shirt);rect(x-3,y-8,7,7,'#f2c992');rect(x-4,y-10,9,3,colors.hair);rect(x-12,y+stroke*3,7,2,'#f2c992');rect(x+5,y-stroke*3,7,2,'#f2c992');ellipse(x-1,y+7,6,1,'#d5f4e6');
 }
 function draw(){
 frame++;const focus=fishingActive?{x:(player.x+fishingZone.x+85)/2,y:(player.y+fishingZone.y+50)/2}:player;camera.x=Math.max(0,Math.min(WORLD.width-WORLD.viewWidth,focus.x-WORLD.viewWidth/2));camera.y=Math.max(0,Math.min(WORLD.height-WORLD.viewHeight,focus.y-WORLD.viewHeight/2));
@@ -494,6 +732,7 @@ for(let i=0;i<7;i++)tree(250+i*17,460+(i%2)*26,.8);
 polygon([[710,423],[716,392],[737,369],[755,383],[770,423]],'#778675');rect(731,405,19,27,'#374b46');
 rect(89,216,31,12,'#987d54');for(let i=0;i<7;i++)rect(90+i*4,217,2,10,'#d1b580');rect(91,207,2,12,'#6f6349');ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fillText('FISHING DOCK',106,240);
 [dock,farDock].forEach(d=>{rect(d.x-9,d.y-28,18,35,'#987d54');for(let i=0;i<9;i++)rect(d.x-8,d.y-27+i*4,16,2,'#c0a471');});
+rect(farDock.x+10,farDock.y-8,9,3,'#78694e');cavernFlag(farDock.x+14,farDock.y-9,44);
 ferryArt(voyage?player.x:dock.x+43,voyage?player.y:dock.y+2);
 if(sponsored())fishingBoatArt(boating?player.x:boatPosition.x,boating?player.y:boatPosition.y);
 if(!voyage&&onFinalIsland())ferryArt(farDock.x+43,farDock.y+2);
@@ -502,9 +741,23 @@ ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fill
 drawFishing();
 drawSharkFins();if(swimming)swimmerArt();
 if(!voyage&&!boating&&!swimming){if(state.solved.length>=8)character(player.x-13,player.y+6,true);character(player.x,player.y);}ctx.restore();
-// A small chart keeps all five islands visible while the camera follows you.
-const mx=WORLD.viewWidth-114,my=WORLD.viewHeight-88;rect(mx,my,107,70,'#204b49dd');islandPolys.forEach((poly,i)=>polygon(poly.map(([x,y])=>[mx+3+x*.105,my+3+y*.105]),i===4&&!state.ferryTicket?'#9b96a8':'#bbcd86'));ellipse(mx+3+player.x*.105,my+3+player.y*.105,2,2,'#fff3c8');
+drawMiniMap();
 }
+function drawMiniMap(){
+const width=Math.min(108,WORLD.viewWidth-24),scale=(width-10)/WORLD.width,height=WORLD.height*scale+10;
+const x=WORLD.viewWidth-width-7,y=WORLD.viewHeight-height-7,mx=x+5,my=y+5;
+rect(x,y,width,height,'#183e3deb');
+ctx.strokeStyle='#d8e5ba88';ctx.lineWidth=.7;ctx.strokeRect(x,y,width,height);
+const point=(wx,wy)=>[mx+wx*scale,my+wy*scale];
+islandPolys.forEach((poly,i)=>{const points=poly.map(([wx,wy])=>point(wx,wy));polygon(points,'#ddca92',1.5);polygon(points,i===4&&!state.ferryTicket?'#8e899e':'#95b47b');});
+crossings.forEach(b=>rect(mx+b.x*scale,my+b.y*scale,Math.max(1,b.w*scale),Math.max(1,b.h*scale),'#e6c38e'));
+if(state.upgrades.includes('bridge'))rect(mx+290*scale,my+229*scale,2,120*scale,'#e6c38e');
+ctx.strokeStyle='#e3f4ecaa';ctx.lineWidth=.6;ctx.strokeRect(mx+camera.x*scale,my+camera.y*scale,WORLD.viewWidth*scale,WORLD.viewHeight*scale);
+[dock,farDock,fishingDock].forEach(d=>{const [dx,dy]=point(d.x,d.y);rect(dx-1,dy-1,3,3,'#f5c36d');});
+if(boating){const [bx,by]=point(boatPosition.x,boatPosition.y);rect(bx-2,by-1,4,2,'#efb77c');}
+const [px,py]=point(player.x,player.y);ellipse(px,py,2.5,2.5,'#153f3b');ellipse(px,py,1.6,1.6,'#fff8da');
+}
+
 function canWalk(x,y){
 if(boating)return x>=25&&y>=25&&x<935&&y<575&&!islandPolys.some(p=>inside(x,y,p));
 if(x<0||y<0||x>=960||y>=600)return false;
@@ -519,10 +772,10 @@ if(((x-480)/25)**2+((y-186)/14)**2<1)return false;
 if(x>731&&x<750&&y>405&&y<432)return false;
 return true;
 }
-function nearby(){if(swimming)return !diveAnimation&&Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)<44?7:-1;if(boating)return -1;if(Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)<32)return 6;if(Math.hypot(player.x-dock.x,player.y-dock.y)<35||Math.hypot(player.x-farDock.x,player.y-farDock.y)<35)return 5;return locations.findIndex(l=>Math.hypot(l.x-player.x,l.y+20-player.y)<48);}
+function nearby(){if(swimming)return sponsored()&&!diveAnimation&&Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)<44?7:-1;if(boating)return -1;if(Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)<32)return 6;if(Math.hypot(player.x-dock.x,player.y-dock.y)<35||Math.hypot(player.x-farDock.x,player.y-farDock.y)<35)return 5;return locations.findIndex(l=>Math.hypot(l.x-player.x,l.y+20-player.y)<48);}
 function interact(){if(near===7)boardOwnBoat();else if(near===6)openFishing();else if(near===5)openFerry();else if(near>=0)visit(near);}
-let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(voyage)advanceVoyage(dt);else if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);if(canWalk(player.x+dx*speed,player.y))player.x+=dx*speed;if(canWalk(player.x,player.y+dy*speed))player.y+=dy*speed;advanceSwimming(0);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0?`<button id="interactBtn">${near===7?'E · Climb into your boat ↗':near===6?'E · Go fishing ↗':near===5?'E · Board the ferry ↗':'E · '+locations[near].name+' ↗'}</button>`:'';if(near>=0)$('#interactBtn').onclick=interact;$('#region').textContent=swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?'Your sponsored fishing boat':voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':locations[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
-window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target?.tagName))return;const k=e.key.toLowerCase();if(k==='x'&&boating){e.preventDefault();if(!e.repeat)exitBoat();return;}if(k==='f'&&!swimming&&(boating||fishingActive)){e.preventDefault();if(!e.repeat){if(fishingActive)stopFishing();else openFishing();}return;}if(fishingActive)return;if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e'].includes(k)){e.preventDefault();keys.add(k);if(k==='e'&&near>=0&&!e.repeat)interact();}});window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());save();});window.addEventListener('blur',()=>{keys.clear();save();});document.addEventListener('visibilitychange',()=>{keys.clear();save();});document.querySelectorAll('[data-dir]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.dir);};b.onpointerup=b.onpointercancel=()=>{keys.delete(b.dataset.dir);save();};});canvas.onclick=e=>{if(voyage)return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*WORLD.viewWidth+camera.x,y=(e.clientY-r.top)/r.height*WORLD.viewHeight+camera.y;if(fishingActive){fishingAim={x,y};castFishing(x,y);return;}if(swimming){if(Math.hypot(x-boatPosition.x,y-boatPosition.y)<30)boardOwnBoat();return;}if(Math.hypot(x-fishingDock.x,y-fishingDock.y)<28){openFishing();return;}if([dock,farDock].some(d=>Math.hypot(d.x+30-x,d.y-y)<48)){openFerry();return;}const i=locations.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(i>=0)visit(i);else{canvas.focus({preventScroll:true});toast('Walk across the islands, use your field journal to visit, or board the ferry at the main dock.');}};
+let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(voyage)advanceVoyage(dt);else if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);moveExplorer(dx*speed,dy*speed);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0?`<button id="interactBtn">${near===7?'E · Climb into your boat ↗':near===6?'E · Go fishing ↗':near===5?'E · Board the ferry ↗':'E · '+locations[near].name+' ↗'}</button>`:'';if(near>=0)$('#interactBtn').onclick=interact;$('#region').textContent=sharkRide?'Riding a shark!':swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?'Your sponsored fishing boat':voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':locations[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
+window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target?.tagName))return;const k=e.key.toLowerCase();if(k==='escape'&&(activeMapPanel||activeSubmenu)){e.preventDefault();closeMapPanel();return;}if(k==='x'&&sharkRide){e.preventDefault();if(!e.repeat)dismountShark();return;}if(k==='x'&&!swimming&&!voyage&&!fishingActive){e.preventDefault();if(!e.repeat){if(boating)exitBoat();else diveFromIsland();}return;}if(k==='f'&&!swimming&&(boating||fishingActive)){e.preventDefault();if(!e.repeat){if(fishingActive)stopFishing();else openFishing();}return;}if(fishingActive)return;if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e'].includes(k)){e.preventDefault();keys.add(k);if(k==='e'&&near>=0&&!e.repeat)interact();}});window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());save();});window.addEventListener('blur',()=>{keys.clear();save();});document.addEventListener('visibilitychange',()=>{keys.clear();save();});document.querySelectorAll('[data-dir]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.dir);};b.onpointerup=b.onpointercancel=()=>{keys.delete(b.dataset.dir);save();};});canvas.onclick=e=>{if(voyage)return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*WORLD.viewWidth+camera.x,y=(e.clientY-r.top)/r.height*WORLD.viewHeight+camera.y;if(fishingActive){fishingAim={x,y};castFishing(x,y);return;}if(swimming){if(Math.hypot(x-boatPosition.x,y-boatPosition.y)<30)boardOwnBoat();return;}if(Math.hypot(x-fishingDock.x,y-fishingDock.y)<28){openFishing();return;}if([dock,farDock].some(d=>Math.hypot(d.x+30-x,d.y-y)<48)){openFerry();return;}const i=locations.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(i>=0)visit(i);else{canvas.focus({preventScroll:true});toast('Walk across the islands, use your field journal to visit, or board the ferry at the main dock.');}};
 
 function resizeMap(){
 const width=window.innerWidth||960,height=window.innerHeight||600,dpr=Math.min(window.devicePixelRatio||1,2);
@@ -531,5 +784,7 @@ WORLD.viewWidth=width/zoom;WORLD.viewHeight=height/zoom;
 canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(zoom*dpr,0,0,zoom*dpr,0,0);ctx.imageSmoothingEnabled=false;draw();
 }
 window.addEventListener('resize',resizeMap);
-for(const id of ['fishingBtn','ferryBtn','stashBtn','journalBtn','exploreBtn','boatBtn','boatFishBtn']){const button=$('#'+id),action=button.onclick;button.onclick=()=>{$('#islandMenu').close();keys.clear();action();};}
+for(const group of RAIL_GROUPS)$('#'+group+'MenuBtn').onclick=()=>toggleSubmenu(group);
+document.querySelectorAll('[data-submenu-close]').forEach(button=>button.onclick=closeSubmenu);
+for(const id of ['fishingBtn','ferryBtn','stashBtn','journalBtn','exploreBtn','boatBtn','boatFishBtn']){const button=$('#'+id),action=button.onclick;button.onclick=()=>{closeMapPanel();keys.clear();action();};}
 if(!canWalk(player.x,player.y)){player.x=230;player.y=176;}resizeMap();update();checkSponsorship();requestAnimationFrame(tick);

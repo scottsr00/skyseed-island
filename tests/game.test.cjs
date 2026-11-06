@@ -1,9 +1,9 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-function game(saved){const nodes=new Map(),storage=new Map(saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node};}
+function game(saved,stored){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
 test('all 100 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<100;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),100);assert.equal(g.run('state.crystals'),500);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),505);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),445);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),445);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
 test('ferry ticket gates the fifth island and includes return journeys',()=>{
-const g=game();g.run('visit(4)');assert.equal(g.run('active'),0);assert.equal(g.node('#ferry').open,true);
+const g=game();g.run('visit(4)');assert.equal(g.run('active'),0);assert.equal(g.node('#ferry').hidden,false);
 g.run('buyFerryTicket()');assert.equal(g.run('state.ferryTicket'),false);
 g.run('state.crystals=75;state.earnedCrystals=75;buyFerryTicket()');assert.equal(g.run('state.crystals'),25);assert.equal(g.run('state.earnedCrystals'),75);
 g.run('buyFerryTicket()');assert.equal(g.run('state.crystals'),25);
@@ -86,33 +86,33 @@ g.run('player.x=740;player.y=483;draw()');assert.equal(g.run('camera.x'),480);as
 test('fishing purchases charge the right prices and give exactly five attempts',()=>{
 const g=game();g.run('openFishing();buyRod();buyLure()');assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.fishingLure'),false);
 g.run('state.crystals=50;state.earnedCrystals=50;buyRod();buyRod()');assert.equal(g.run('state.crystals'),45);assert.equal(g.run('state.bait'),5);assert.equal(g.run('canWalk(player.x,player.y)'),true);
-for(let i=0;i<5;i++)g.run('castFishing(10,40);castFishing(10,40);advanceFishing(450)');
+for(let i=0;i<5;i++)g.run('castFishing(10,40);castFishing(10,40);advanceFishing(FISH_CAST_DURATION)');
 assert.equal(g.run('state.bait'),0);assert.equal(g.run('Object.values(state.catches).reduce((a,b)=>a+b,0)'),0);
 g.run('castFishing(10,40)');assert.equal(g.run('pendingCast'),null);
 g.run('buyRod();buyLure();buyLure()');assert.equal(g.run('state.bait'),5);assert.equal(g.run('state.crystals'),20);assert.equal(g.run('state.earnedCrystals'),50);assert.equal(g.run('state.fishingLure'),true);
 });
 test('aimed casts catch all six species and repeated catches increment saved badges',()=>{
 const g=game();g.run('state.crystals=100;openFishing();buyRod()');
-for(let i=0;i<3;i++)g.run(`{const fish=fishingTargets(fishingTime+450)[${i}];castFishing(fish.x,fish.y);advanceFishing(450);}`);
+for(let i=0;i<3;i++)g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);}`);
 for(const id of ['barracuda','stingray','shark'])assert.equal(g.run(`state.catches.${id}`),1);
 g.run('buyLure();fishSet="lure";updateFishing()');
-for(let i=0;i<3;i++){if(i===2)g.run('buyRod()');g.run(`{const fish=fishingTargets(fishingTime+450)[${i}];castFishing(fish.x,fish.y);advanceFishing(450);}`);g.node('#sponsorship').close();}
+for(let i=0;i<3;i++){if(i===2)g.run('buyRod()');g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);}`);g.node('#sponsorship').close();}
 for(const id of ['snook','octopus','marlin'])assert.equal(g.run(`state.catches.${id}`),1);
-g.run('{const fish=fishingTargets(fishingTime+450)[0];castFishing(fish.x,fish.y);advanceFishing(450);}');assert.equal(g.run('state.catches.snook'),2);assert.match(g.node('#fishBadges').innerHTML,/Caught × 2/);
+g.run('{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);}');assert.equal(g.run('state.catches.snook'),2);assert.match(g.node('#fishBadges').innerHTML,/Caught × 2/);
 const saved=g.run('JSON.parse(localStorage.getItem(KEY))');const restored=game(saved);assert.equal(restored.run('state.catches.snook'),2);assert.equal(restored.run('state.fishingLure'),true);assert.equal(restored.run('state.bait'),0);
 g.run("switchAge('9-10')");assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.fishingLure'),false);assert.equal(g.run('state.catches.snook'),0);
 g.run("switchAge('11-12')");assert.equal(g.run('state.catches.snook'),2);
 });
 test('closing the fishing dock cancels the hook without granting a catch',()=>{
-const g=game();g.run('state.crystals=5;openFishing();buyRod();castFishing(10,40);stopFishing();advanceFishing(450)');assert.equal(g.run('state.bait'),4);assert.equal(g.run('pendingCast'),null);assert.equal(g.run('Object.values(state.catches).reduce((a,b)=>a+b,0)'),0);
+const g=game();g.run('state.crystals=5;openFishing();buyRod();castFishing(10,40);stopFishing();advanceFishing(FISH_CAST_DURATION)');assert.equal(g.run('state.bait'),4);assert.equal(g.run('pendingCast'),null);assert.equal(g.run('Object.values(state.catches).reduce((a,b)=>a+b,0)'),0);
 });
 
 test('fifth catch announces sponsorship once and unlocks unlimited bait',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod()');
-for(let i=0;i<5;i++){g.run('{const f=fishingTargets(fishingTime+450)[0];castFishing(f.x,f.y);advanceFishing(450);}');if(i<4)assert.equal(g.run('sponsored()'),false);}
+for(let i=0;i<5;i++){g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}');if(i<4)assert.equal(g.run('sponsored()'),false);}
 assert.equal(g.run('sponsored()'),true);assert.equal(g.node('#sponsorship').open,true);assert.equal(g.node('#sponsorName').textContent,'Skyseed Angling Co.');assert.equal(g.run('state.bait'),0);
 g.node('#sponsorship').close();
-for(let i=0;i<8;i++)g.run('castFishing(10,40);advanceFishing(450)');
+for(let i=0;i<8;i++)g.run('castFishing(10,40);advanceFishing(FISH_CAST_DURATION)');
 assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.crystals'),0);assert.equal(g.node('#sponsorship').open,false);assert.match(g.node('#baitCount').textContent,/Unlimited/);
 g.run('buyRod()');assert.equal(g.run('state.crystals'),0);
 const restored=game(g.run('JSON.parse(localStorage.getItem(KEY))'));assert.equal(restored.run('sponsored()'),true);assert.equal(restored.node('#sponsorship').open,undefined);
@@ -133,8 +133,8 @@ test('fishing uses the main map and stops cleanly without a popup',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod()');
 assert.equal(g.run('fishingActive'),true);assert.equal(g.node('#fishing').hidden,false);assert.equal(g.node('#fishing').open,undefined);
 assert.equal(g.run('fishingTargets().every(f=>!islandPolys.some(p=>inside(f.x,f.y,p)))'),true);
-g.run('{const f=fishingTargets(fishingTime+450)[1];castFishing(f.x,f.y);advanceFishing(450);draw();}');assert.equal(g.run('state.catches.stingray'),1);
-g.run('castFishing(10,40);stopFishing();advanceFishing(450)');assert.equal(g.run('pendingCast'),null);assert.equal(g.node('#fishing').hidden,true);
+g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[1];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);draw();}');assert.equal(g.run('state.catches.stingray'),1);
+g.run('castFishing(10,40);stopFishing();advanceFishing(FISH_CAST_DURATION)');assert.equal(g.run('pendingCast'),null);assert.equal(g.node('#fishing').hidden,true);
 const html=fs.readFileSync('dist/index.html','utf8');assert.doesNotMatch(html,/<dialog id="fishing"/);assert.doesNotMatch(html,/id="fishingWater"/);assert.match(html,/<section id="fishing"/);
 });
 
@@ -147,8 +147,8 @@ assert.equal(g.run('WORLD.viewWidth<=WORLD.width&&WORLD.viewHeight<=WORLD.height
 }
 });
 test('map menus hand off to activities and fishing clicks use the resized viewport',()=>{
-const g=game();g.node('#menuBtn').onclick();assert.equal(g.node('#islandMenu').open,true);
-g.node('#fishingBtn').onclick();assert.equal(g.node('#islandMenu').open,false);assert.equal(g.run('fishingActive'),true);
+const g=game();g.node('#settingsBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,false);
+g.node('#fishingBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.run('fishingActive'),true);
 g.run('window.innerWidth=390;window.innerHeight=844;resizeMap();state.crystals=5;buyRod()');
 g.node('#world').getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});
 const point=g.run('({x:(10-camera.x)/WORLD.viewWidth*390,y:(40-camera.y)/WORLD.viewHeight*844})');
@@ -174,7 +174,7 @@ const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/id="wate
 });
 
 test('shark fins randomly surface in open water while swimming and clear on reboarding',()=>{
-const g=game();g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;exitBoat();nextSharkFin=0;advanceSwimming(350)');assert.equal(g.run('sharkFins.length'),0);
+const g=game();g.run("Math.random=()=>.25");g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;exitBoat();nextSharkFin=0;advanceSwimming(350)');assert.equal(g.run('sharkFins.length'),0);
 g.run('advanceSwimming(350)');assert.ok(g.run('sharkFins.length')>0);
 assert.equal(g.run('sharkFins.every(f=>!islandPolys.some(p=>inside(f.x,f.y,p)))'),true);
 g.run('advanceSwimming(500);draw()');assert.equal(g.run('sharkFins.some(f=>f.age>0)'),true);
@@ -225,7 +225,7 @@ const g=game();g.run(`switchAge('${age}');startFlash()`);
 for(let i=0;i<10;i++){
 g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');
 assert.equal(g.run('state.tradingTickets'),i===9?1:0);
-if(i<9){assert.equal(g.run('flashRun.correct'),i+1);assert.ok(g.run('flashRun.deadline-Date.now()')>9900);}
+if(i<9){assert.equal(g.run('flashRun.correct'),i+1);assert.ok(g.run('flashRun.deadline-Date.now()')>14900);}
 }
 g.run('submitFlash()');assert.equal(g.run('state.tradingTickets'),1);
 assert.equal(g.run('state.crystals'),0);assert.equal(g.run('state.solved.length'),0);
@@ -248,4 +248,152 @@ test('trade selector only offers the same tier and mythic has no alternative swa
 const g=game({solved:[],upgrades:[],earnedCrystals:1450});g.run('state.tradingTickets=1');
 g.node('#tradeGive').value='0';g.run('updateTradeOptions()');assert.match(g.node('#tradeReceive').innerHTML,/nice-cube/);assert.doesNotMatch(g.node('#tradeReceive').innerHTML,/gold-cube|gummy-bear/);
 g.node('#tradeGive').value='28';g.run('updateTradeOptions()');assert.equal(g.node('#tradeReceive').innerHTML,'');assert.equal(g.node('#tradeSubmit').disabled,true);
+});
+
+test('left icon rail toggles nonmodal panels and preserves map actions',()=>{
+const g=game();g.node('#settingsBtn').onclick();assert.equal(g.run('activeMapPanel'),'settingsPanel');assert.equal(g.node('#settingsPanel').hidden,false);
+g.node('#upgradesBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.node('#upgradesPanel').hidden,false);
+g.node('#upgradesBtn').onclick();assert.equal(g.node('#upgradesPanel').hidden,true);assert.equal(g.run('activeMapPanel'),null);
+g.node('#railFerryBtn').onclick();assert.equal(g.node('#ferry').hidden,false);g.run('state.crystals=50;buyFerryTicket()');assert.equal(g.node('#ferry').hidden,false);assert.equal(g.run('state.ferryTicket'),true);
+g.node('#railFishingBtn').onclick();assert.equal(g.node('#ferry').hidden,true);assert.equal(g.run('fishingActive'),true);
+const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/map-icon-rail/);assert.doesNotMatch(html,/id="islandMenu"/);assert.doesNotMatch(html,/<dialog id="(?:journal|stash|ferry|welcome)"/);
+});
+
+test('pixel icon groups expand submenus and hand off to map controls',()=>{
+const g=game();g.node('#exploreMenuBtn').onclick();assert.equal(g.run('activeSubmenu'),'explore');assert.equal(g.node('#exploreSubmenu').hidden,false);
+g.node('#waterMenuBtn').onclick();assert.equal(g.node('#exploreSubmenu').hidden,true);assert.equal(g.node('#waterSubmenu').hidden,false);
+g.node('#waterMenuBtn').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('activeSubmenu'),null);
+g.node('#settingsMenuBtn').onclick();g.node('#settingsBtn').onclick();assert.equal(g.node('#settingsSubmenu').hidden,true);assert.equal(g.node('#settingsPanel').hidden,false);
+g.node('#waterMenuBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);g.node('#railFishingBtn').onclick();assert.equal(g.run('activeSubmenu'),null);assert.equal(g.run('fishingActive'),true);
+g.node('#soundBtn').onclick();assert.match(g.node('#soundBtn').innerHTML,/<svg/);assert.match(g.node('#soundBtn').innerHTML,/Sound on/);
+const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/shape-rendering="crispEdges"/);assert.match(html,/class="submenu-action"/);
+});
+
+test('every island shoreline supports the shared dive without a boat or sponsorship',()=>{
+const g=game();g.run('state.ferryTicket=true');
+for(let island=0;island<5;island++){
+g.run(`swimming=false;diveAnimation=null;{
+const poly=islandPolys[${island}],center=locations[${island}];let found=false;
+for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length],x=(a[0]+b[0])/2,y=(a[1]+b[1])/2,len=Math.hypot(center.x-x,center.y-y);player.x=x+(center.x-x)/len*3;player.y=y+(center.y-y)/len*3;if(shoreDiveTarget()){found=true;break;}}
+if(!found)throw Error('No shoreline for island ${island}');
+}updateWaterControls()`);
+assert.equal(g.node('#mapDive').hidden,false);
+g.node('#mapDive').onclick();assert.equal(g.run('swimming'),true);assert.equal(g.run('diveAnimation.elapsed'),0);
+const start=g.run('({x:player.x,y:player.y})');g.run('advanceSwimming(350);draw()');assert.notEqual(g.run('player.x===diveAnimation.to.x&&player.y===diveAnimation.to.y'),true);
+g.run('advanceSwimming(350);draw()');assert.equal(g.run('diveAnimation'),null);assert.equal(g.run('islandPolys.some(p=>inside(player.x,player.y,p))'),false);
+assert.equal(g.run('sponsored()'),false);g.run('boardOwnBoat()');assert.equal(g.run('boating'),false);assert.equal(g.node('#mapBoatBoard').hidden,true);
+g.run(`player.x=${start.x};player.y=${start.y};advanceSwimming(0)`);assert.equal(g.run('swimming'),false);
+}
+});
+test('walking off shore dives automatically while inland obstacles do not',()=>{
+const g=game();
+g.run('player.x=230;player.y=176;moveExplorer(2,0)');assert.equal(g.run('swimming'),false);assert.equal(g.run('player.x'),232);
+g.run('player.x=186;player.y=120;moveExplorer(3,0)');assert.equal(g.run('swimming'),false);assert.equal(g.run('player.x'),186);
+g.run('diveFromIsland()');assert.equal(g.run('swimming'),false);
+g.run(`{
+let found=false;
+for(let y=60;y<270&&!found;y+=2)for(let x=65;x<330&&!found;x+=2){if(canWalk(x,y)&&!islandPolys.some(p=>inside(x+3,y,p))&&!canWalk(x+3,y)){player.x=x;player.y=y;found=true;}}
+if(!found)throw Error('No east-facing shoreline found');
+}moveExplorer(3,0)`);
+assert.equal(g.run('swimming'),true);assert.equal(g.run('diveAnimation.elapsed'),0);
+g.run('advanceSwimming(700)');assert.equal(g.run('canWalk(740,483)'),false);
+g.run('save()');const restored=game(g.run('JSON.parse(localStorage.getItem(KEY))'));assert.equal(restored.run('canWalk(player.x,player.y)'),true);
+g.run('returnBoat()');assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+});
+
+test('casting unfurls a curved line, lands exactly on aim, and waits for the full flight',()=>{
+const g=game();g.run('state.crystals=5;openFishing();buyRod();{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);}');
+assert.equal(g.run('pendingCast.lure'),false);g.run('advanceFishing(200);draw()');assert.equal(g.run('totalCatches()'),0);assert.equal(g.run('pendingCast!==null'),true);
+assert.equal(g.run('fishingCastPose(pendingCast).line.length'),33);
+g.run('advanceFishing(250);draw()');assert.equal(g.run('fishingCastPose(pendingCast).line.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))'),true);
+const pose=g.run('fishingCastPose({...pendingCast,elapsed:FISH_CAST_DURATION})');assert.ok(Math.abs(pose.bait.x-g.run('pendingCast.x'))<.00001);assert.ok(Math.abs(pose.bait.y-g.run('pendingCast.y'))<.00001);
+g.run('advanceFishing(FISH_CAST_DURATION-450)');assert.equal(g.run('totalCatches()'),1);assert.equal(g.run('fishingSplash!==null'),true);g.run('advanceFishing(1000)');assert.equal(g.run('fishingSplash'),null);
+});
+test('fish swim smoothly and only surface intermittently in both fishing panels',()=>{
+const g=game();g.run('openFishing()');
+for(const panel of ['classic','lure']){
+g.run(`fishSet='${panel}'`);
+assert.equal(g.run('fishingTargets(800).some(f=>f.surface>0)'),true);
+assert.equal(g.run('fishingTargets(4000)[0].surface'),0);assert.equal(g.run('fishingTargets(4000)[0].nearSurface'),false);
+for(const time of [0,500,1500,3000,6500,9000])g.run(`fishingTime=${time};draw()`);
+assert.equal(g.run('fishingTargets().every(f=>Math.abs(f.tail)<=1&&f.surface>=0&&f.surface<=1)'),true);
+}
+g.run('state.fishingLure=true;state.crystals=5;buyRod();castFishing(10,40)');assert.equal(g.run('pendingCast.lure'),true);
+});
+
+
+test('named profiles preserve legacy progress and isolate progress across profiles and both ages',()=>{
+const g=game({solved:[0,1],upgrades:['cottage'],crystals:35,earnedCrystals:50,tradingTickets:2,catches:{shark:3}});
+g.node('#profileName').value='Alex';g.node('#characterChoice').value='boy';g.run('editProfile()');
+assert.equal(g.run('currentProfile().name'),'Alex');assert.equal(g.run('state.crystals'),35);
+g.run("switchAge('9-10');state.crystals=20;state.earnedCrystals=20;save();switchAge('11-12')");
+g.node('#profileName').value='Maya';g.node('#characterChoice').value='girl';g.run('createProfile()');
+assert.equal(g.run('currentProfile().name'),'Maya');assert.equal(g.run('currentProfile().character'),'girl');assert.equal(g.run('state.crystals'),0);
+assert.equal(g.run('state.tradingTickets'),0);assert.equal(g.run('state.catches.shark'),0);assert.equal(g.run('state.squishyInventory.length'),0);
+g.run('state.crystals=100;state.earnedCrystals=100;state.tradingTickets=4;update()');
+g.run("switchAge('9-10');state.crystals=10;save();switchProfile('legacy')");
+assert.equal(g.run('ageLevel'),'11-12');assert.equal(g.run('state.crystals'),35);assert.equal(g.run('state.tradingTickets'),2);assert.equal(g.run('state.upgrades[0]'),'cottage');assert.equal(g.run('state.squishyInventory[0]'),'gummy-bear');
+assert.equal(g.run('currentProfile().character'),'boy');
+g.run("switchAge('9-10')");assert.equal(g.run('state.crystals'),20);
+g.run("switchProfile('p1')");assert.equal(g.run('ageLevel'),'9-10');assert.equal(g.run('state.crystals'),10);
+g.run("switchAge('11-12')");assert.equal(g.run('state.crystals'),100);assert.equal(g.run('state.tradingTickets'),4);
+const restored=game(null,g.snapshot());assert.equal(restored.run('currentProfile().name'),'Maya');assert.equal(restored.run('currentProfile().character'),'girl');assert.equal(restored.run('state.crystals'),100);assert.equal(restored.run('ageLevel'),'11-12');
+restored.run("switchProfile('legacy')");assert.equal(restored.run('state.crystals'),20);assert.equal(restored.run('ageLevel'),'9-10');
+});
+test('profile names are unique, safely displayed, and renaming keeps the same save',()=>{
+const g=game();g.node('#profileName').value='  Sam  ';g.node('#characterChoice').value='girl';g.run('editProfile()');
+assert.equal(g.run('currentProfile().name'),'Sam');assert.equal(g.run('currentProfile().character'),'girl');
+g.run('state.crystals=55;save()');
+for(const name of ['sam','  SAM  ','','x'.repeat(25)]){g.node('#profileName').value=name;g.run('createProfile()');assert.equal(g.run('profiles.length'),1);}
+g.node('#profileName').value='<A & B>';g.run('editProfile()');assert.equal(g.run('state.crystals'),55);assert.equal(g.run('profileId'),'legacy');
+assert.match(g.node('#profileSelect').innerHTML,/&lt;A &amp; B&gt;/);assert.doesNotMatch(g.node('#profileSelect').innerHTML,/<A/);
+assert.equal(g.node('#profileBadge').textContent,'<A & B>');
+const restored=game(null,g.snapshot());assert.equal(restored.run('currentProfile().name'),'<A & B>');assert.equal(restored.run('state.crystals'),55);
+});
+test('character preview remains a draft until saved and both characters render on land and in water',()=>{
+const g=game();g.node('#characterChoice').value='girl';g.node('#characterChoice').onchange();assert.equal(g.run('currentProfile().character'),'boy');assert.match(g.node('#characterPreview').innerHTML,/Girl explorer preview/);
+g.node('#profileName').value='Zoe';g.run('editProfile()');assert.equal(g.run('currentProfile().character'),'girl');
+g.run('draw();swimming=true;player.x=430;player.y=310;draw();diveAnimation={elapsed:200,from:{x:430,y:310},to:{x:454,y:320}};draw()');
+g.run('swimming=false;diveAnimation=null');g.node('#characterChoice').value='boy';g.run('editProfile();draw()');assert.equal(g.run('currentProfile().character'),'boy');assert.match(g.node('#characterPreview').innerHTML,/Boy explorer preview/);
+});
+test('profile switches cancel flash streaks, fishing, and swimming; reset affects only the active profile',()=>{
+const g=game();g.run('state.crystals=80;state.earnedCrystals=100;save()');g.node('#profileName').value='New player';g.run('createProfile()');
+g.run('state.crystals=20;startFlash();switchProfile("legacy")');assert.equal(g.run('flashRun'),null);assert.equal(g.node('#flash').open,false);assert.equal(g.run('state.crystals'),80);
+g.run('openFishing();switchProfile("p1")');assert.equal(g.run('fishingActive'),false);assert.equal(g.run('state.crystals'),20);
+g.node('#resetBtn').onclick();assert.equal(g.run('state.crystals'),0);assert.equal(g.run('currentProfile().name'),'New player');
+g.run('switchProfile("legacy")');assert.equal(g.run('state.crystals'),80);assert.equal(g.run('state.squishyInventory.length'),2);
+g.run('state.crystals=100;buyFerryTicket();boardFerry();switchProfile("p1")');assert.equal(g.run('profileId'),'legacy');assert.match(g.node('#profileFeedback').textContent,/ferry arrives/);
+g.run('advanceVoyage(3500);switchProfile("p1")');assert.equal(g.run('profileId'),'p1');assert.equal(g.run('voyage'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+});
+
+test('swimming close to a surfaced shark latches automatically, speeds up, and leaves a trailing wake',()=>{
+const g=game();g.run('swimming=true;player.x=430;player.y=310;sharkFins=[{x:442,y:310,vx:.02,vy:0,age:500,duration:4000}];advanceSwimming(0)');
+assert.equal(g.run('sharkRide!==null'),true);assert.equal(g.run('sharkFins.length'),0);assert.equal(g.node('#mapSharkExit').hidden,false);assert.match(g.node('#waterControls').textContent,/SHARK RIDE/);
+const start=g.run('player.x');g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')-start>3*.065*190);
+assert.ok(g.run('sharkWake.length')>0);assert.equal(g.run('sharkWake.every(w=>w.x<player.x&&Math.abs(w.y-player.y)<.001)'),true);
+g.run('advanceSwimming(4500);draw()');assert.equal(g.run('sharkRide!==null'),true);assert.equal(g.run('sharkWater(player.x,player.y)'),true);
+assert.equal(g.run('sharkWake.every(w=>w.age<900)&&sharkWake.length<=32'),true);
+});
+test('sharks can be steered, stay in water, and preserve the final-island gate',()=>{
+const g=game();g.run('swimming=true;player.x=600;player.y=310;sharkFins=[{x:605,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();keys.add("down");advanceSwimming(100)');assert.ok(g.run('player.y')>310);assert.ok(Math.abs(g.run('player.x')-600)<.001);
+g.run('keys.clear();player.x=20;player.y=20;sharkRide.heading=Math.PI;advanceSwimming(100)');assert.equal(g.run('sharkWater(player.x,player.y)'),true);
+g.run('player.x=740;player.y=325;keys.add("down")');
+for(let i=0;i<150;i++){g.run('advanceSwimming(40)');assert.equal(g.run('sharkWater(player.x,player.y)'),true);}
+assert.equal(g.run('canWalk(740,483)'),false);g.run('save()');const restored=game(null,g.snapshot());assert.equal(restored.run('sharkRide'),null);assert.equal(restored.run('swimming'),false);assert.equal(restored.run('canWalk(player.x,player.y)'),true);
+});
+test('hop off returns to swimming without immediately latching again',()=>{
+const g=game();g.run('swimming=true;player.x=430;player.y=310;sharkFins=[{x:435,y:310,vx:.02,vy:0,age:500,duration:4000}];latchShark();advanceSwimming(100)');
+g.node('#mapSharkExit').onclick();assert.equal(g.run('sharkRide'),null);assert.equal(g.run('swimming'),true);assert.equal(g.run('sharkWake.length'),0);assert.equal(g.node('#mapSharkExit').hidden,true);
+g.run('advanceSwimming(200)');assert.equal(g.run('sharkRide'),null);
+g.run('sharkLatchCooldown=0;sharkFins=[{x:player.x+5,y:player.y,vx:.02,vy:0,age:500,duration:4000}];advanceSwimming(0)');assert.equal(g.run('sharkRide!==null'),true);
+g.run('returnBoat()');assert.equal(g.run('sharkRide'),null);assert.equal(g.run('sharkWake.length'),0);assert.equal(g.run('swimming'),false);
+});
+test('shark rides require swimming and end cleanly on profile, age, or boat changes',()=>{
+const g=game();const shark='sharkFins=[{x:player.x+5,y:player.y,vx:.02,vy:0,age:500,duration:4000}]';
+g.run(`${shark};latchShark()`);assert.equal(g.run('sharkRide'),null);
+g.run(`swimming=true;player.x=430;player.y=310;${shark};diveAnimation={elapsed:0,from:{x:430,y:310},to:{x:454,y:320}};latchShark()`);assert.equal(g.run('sharkRide'),null);
+g.run('diveAnimation=null;latchShark();advanceSwimming(100)');assert.equal(g.run('sharkRide!==null'),true);
+g.node('#profileName').value='Shark explorer';g.run('createProfile()');assert.equal(g.run('sharkRide'),null);assert.equal(g.run('sharkWake.length'),0);
+g.run(`swimming=true;player.x=430;player.y=310;${shark};latchShark();switchAge('9-10')`);assert.equal(g.run('sharkRide'),null);
+g.run(`state.catches={barracuda:5};swimming=true;player.x=boatPosition.x;player.y=boatPosition.y;${shark};latchShark();boardOwnBoat()`);assert.equal(g.run('sharkRide'),null);assert.equal(g.run('boating'),true);
 });
