@@ -137,3 +137,20 @@ g.run('{const f=fishingTargets(fishingTime+450)[1];castFishing(f.x,f.y);advanceF
 g.run('castFishing(10,40);stopFishing();advanceFishing(450)');assert.equal(g.run('pendingCast'),null);assert.equal(g.node('#fishing').hidden,true);
 const html=fs.readFileSync('dist/index.html','utf8');assert.doesNotMatch(html,/<dialog id="fishing"/);assert.doesNotMatch(html,/id="fishingWater"/);assert.match(html,/<section id="fishing"/);
 });
+
+test('full-window map preserves proportions on desktop, portrait, and landscape screens',()=>{
+const g=game();for(const [width,height] of [[1440,900],[390,844],[844,390],[2560,1080]]){
+g.run(`window.innerWidth=${width};window.innerHeight=${height};window.devicePixelRatio=2;resizeMap()`);
+assert.ok(Math.abs(g.run('WORLD.viewWidth/WORLD.viewHeight')-width/height)<.000001);
+assert.equal(g.node('#world').width,width*2);assert.equal(g.node('#world').height,height*2);
+assert.equal(g.run('WORLD.viewWidth<=WORLD.width&&WORLD.viewHeight<=WORLD.height'),true);
+}
+});
+test('map menus hand off to activities and fishing clicks use the resized viewport',()=>{
+const g=game();g.node('#menuBtn').onclick();assert.equal(g.node('#islandMenu').open,true);
+g.node('#fishingBtn').onclick();assert.equal(g.node('#islandMenu').open,false);assert.equal(g.run('fishingActive'),true);
+g.run('window.innerWidth=390;window.innerHeight=844;resizeMap();state.crystals=5;buyRod()');
+g.node('#world').getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});
+const point=g.run('({x:(10-camera.x)/WORLD.viewWidth*390,y:(40-camera.y)/WORLD.viewHeight*844})');
+g.node('#world').onclick({clientX:point.x,clientY:point.y});assert.ok(Math.abs(g.run('pendingCast.x')-10)<.000001);assert.ok(Math.abs(g.run('pendingCast.y')-40)<.000001);
+});

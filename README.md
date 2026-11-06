@@ -3,6 +3,7 @@ A dependency-free, browser-local pixel-art math adventure for ages 9–10 and 11
 
 Run `npm run dev` and open http://localhost:5173. Run `npm run check` for JavaScript syntax verification.
 
+- Full-window browser map with responsive camera proportions, floating crystal/status displays, an Island menu, and fishing controls over the map.
 - Keyboard (WASD/arrows), touch movement, and tappable destination markers.
 - 100 guided math challenges per age level (20 per destination) across five island destinations.
 - Five crystals per first completion; repeat practice earns crystals after all 100 discoveries are complete.
