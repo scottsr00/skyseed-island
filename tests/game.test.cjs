@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-function game(saved){const nodes=new Map(),storage=new Map(saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node};}
+function game(saved){const nodes=new Map(),storage=new Map(saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node};}
 test('all 100 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<100;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),100);assert.equal(g.run('state.crystals'),500);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),505);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),445);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),445);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
 test('ferry ticket gates the fifth island and includes return journeys',()=>{
@@ -28,7 +28,7 @@ for(let i=20;i<70;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run
 assert.equal(g.run('state.earnedCrystals'),350);
 assert.equal(g.run('earnedSquishies()'),7);
 assert.match(g.node('#challengeBody').innerHTML,/NeeDoh Skull Cat/);
-assert.match(g.node('#squishyProgress').textContent,/All seven/);
+assert.match(g.node('#squishyProgress').textContent,/Classic NeeDoh/);
 assert.equal(g.run('JSON.parse(localStorage.getItem(KEY)).earnedCrystals'),350);
 assert.equal(g.run('squishies[1].detail'),'Pink glow-in-the-dark edition');
 });
@@ -61,7 +61,7 @@ for(let i=0;i<100;i++){
 g.run(`openQuestion(${i})`);g.node('#answer').value='999999';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),i);
 g.node('#answer').value=g.run(`String(questions[${i}].answer)`);g.run('checkAnswer();checkAnswer()');assert.equal(g.run('state.solved.length'),i+1);
 }
-assert.equal(g.run('state.crystals'),500);assert.equal(g.run('earnedSquishies()'),7);
+assert.equal(g.run('state.crystals'),500);assert.equal(g.run('earnedSquishies()'),10);
 assert.match(g.node('#challengeBody').innerHTML,/All 100 discoveries/);
 });
 test('age switching preserves independent rewards, progress, upgrades, and stash',()=>{
@@ -153,4 +153,99 @@ g.run('window.innerWidth=390;window.innerHeight=844;resizeMap();state.crystals=5
 g.node('#world').getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});
 const point=g.run('({x:(10-camera.x)/WORLD.viewWidth*390,y:(40-camera.y)/WORLD.viewHeight*844})');
 g.node('#world').onclick({clientX:point.x,clientY:point.y});assert.ok(Math.abs(g.run('pendingCast.x')-10)<.000001);assert.ok(Math.abs(g.run('pendingCast.y')-40)<.000001);
+});
+
+test('exit at the ferry dock steps onto walkable land without diving',()=>{
+const g=game();g.run('state.catches={barracuda:5};launchBoat();exitBoat()');
+assert.equal(g.run('boating'),false);assert.equal(g.run('swimming'),false);assert.equal(g.run('diveAnimation'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.node('#mapBoatExit').hidden,true);
+});
+test('offshore exit animates a dive, leaves the boat, and permits reboarding',()=>{
+const g=game();g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;openFishing();exitBoat()');
+assert.equal(g.run('fishingActive'),false);assert.equal(g.run('boating'),false);assert.equal(g.run('swimming'),true);assert.equal(g.run('boatPosition.x'),430);assert.equal(g.run('diveAnimation!==null'),true);
+g.run('advanceSwimming(350);draw()');assert.equal(g.run('diveAnimation.elapsed'),350);g.run('boardOwnBoat()');assert.equal(g.run('boating'),false);
+g.run('advanceSwimming(350);draw()');assert.equal(g.run('diveAnimation'),null);assert.equal(g.run('canWalk(600,350)'),true);assert.match(g.node('#waterControls').textContent,/E beside your boat/);assert.equal(g.node('#mapBoatBoard').hidden,false);
+g.run('boardOwnBoat()');assert.equal(g.run('boating'),true);assert.equal(g.run('swimming'),false);assert.equal(g.run('player.x'),430);assert.equal(g.run('player.y'),310);assert.match(g.node('#waterControls').textContent,/X or Exit boat/);
+});
+test('swimmers walk onto shore, preserve the final-island gate, and save safely',()=>{
+const g=game();g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;exitBoat();advanceSwimming(700);save()');
+assert.equal(g.run('state.x'),217);assert.equal(g.run('state.y'),247);assert.equal(g.run('canWalk(740,483)'),false);
+g.run('player.x=217;player.y=247;advanceSwimming(0)');assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/id="waterControls"/);assert.match(html,/id="mapBoatExit"/);
+});
+
+test('shark fins randomly surface in open water while swimming and clear on reboarding',()=>{
+const g=game();g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;exitBoat();nextSharkFin=0;advanceSwimming(350)');assert.equal(g.run('sharkFins.length'),0);
+g.run('advanceSwimming(350)');assert.ok(g.run('sharkFins.length')>0);
+assert.equal(g.run('sharkFins.every(f=>!islandPolys.some(p=>inside(f.x,f.y,p)))'),true);
+g.run('advanceSwimming(500);draw()');assert.equal(g.run('sharkFins.some(f=>f.age>0)'),true);
+g.run('boardOwnBoat()');assert.equal(g.run('sharkFins.length'),0);
+});
+test('shark fins expire, stay capped, and never appear on foot',()=>{
+const g=game();g.run('advanceSharkFins(10000)');assert.equal(g.run('sharkFins.length'),0);
+g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;exitBoat();advanceSwimming(700)');
+for(let i=0;i<8;i++){g.run('nextSharkFin=0;advanceSharkFins(100)');assert.ok(g.run('sharkFins.length')<=3);}
+g.run('nextSharkFin=100000;advanceSharkFins(10000)');assert.equal(g.run('sharkFins.length'),0);
+g.run('returnBoat();advanceSharkFins(10000)');assert.equal(g.run('sharkFins.length'),0);
+});
+
+
+test('all six tiers are earnable and legacy collections migrate without losing treasures',()=>{
+const g=game({solved:[],upgrades:[],crystals:10,earnedCrystals:350});
+assert.equal(g.run('state.squishyInventory.length'),7);
+assert.equal(g.run('state.squishyInventory[6]'),'skull-cat');
+assert.equal(g.run('squishyTiers.length'),6);
+assert.equal(g.run('squishies.length'),29);
+assert.equal(g.run('squishies.every(s=>squishyTiers.some(t=>t.id===s.tier))'),true);
+g.run('state.earnedCrystals=1450;update()');
+assert.equal(g.run('state.squishyInventory.length'),29);
+assert.equal(g.run('state.squishyInventory.includes("gold-cube")'),true);
+assert.match(g.node('#squishyCatalog').innerHTML,/50th Anniversary Gold Nice Cube/);
+assert.match(g.node('#squishyProgress').textContent,/All collection rewards/);
+});
+test('trades require a ticket and matching tiers, swap one item, and persist without regranting',()=>{
+const g=game({solved:[],upgrades:[],crystals:0,earnedCrystals:50});
+g.node('#tradeGive').value='0';g.node('#tradeReceive').value='nice-cube';g.run('tradeSquishy()');
+assert.equal(g.run('state.squishyInventory[0]'),'gummy-bear');
+g.run('state.tradingTickets=2');g.node('#tradeReceive').value='gold-cube';g.run('tradeSquishy()');
+assert.equal(g.run('state.tradingTickets'),2);
+g.node('#tradeReceive').value='gummy-bear';g.run('tradeSquishy()');assert.equal(g.run('state.tradingTickets'),2);
+g.node('#tradeReceive').value='nice-cube';g.run('tradeSquishy()');
+assert.equal(g.run('state.squishyInventory[0]'),'nice-cube');assert.equal(g.run('state.tradingTickets'),1);
+assert.equal(g.run('state.squishyInventory.length'),1);
+const restored=game(g.run('JSON.parse(localStorage.getItem(KEY))'));
+assert.equal(restored.run('state.squishyInventory[0]'),'nice-cube');assert.equal(restored.run('state.tradingTickets'),1);
+restored.run('state.earnedCrystals=100;update();update()');assert.equal(restored.run('state.squishyInventory.length'),2);
+assert.equal(restored.run('state.squishyInventory.includes("gummy-bear")'),false);
+restored.run("switchAge('9-10')");assert.equal(restored.run('state.tradingTickets'),0);assert.equal(restored.run('state.squishyInventory.length'),0);
+restored.run("switchAge('11-12')");assert.equal(restored.run('state.tradingTickets'),1);assert.equal(restored.run('state.squishyInventory[0]'),'nice-cube');
+});
+test('ten consecutive flash answers earn exactly one saved ticket and no crystals or discoveries',()=>{
+for(const age of ['9-10','11-12']){
+const g=game();g.run(`switchAge('${age}');startFlash()`);
+for(let i=0;i<10;i++){
+g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');
+assert.equal(g.run('state.tradingTickets'),i===9?1:0);
+if(i<9){assert.equal(g.run('flashRun.correct'),i+1);assert.ok(g.run('flashRun.deadline-Date.now()')>9900);}
+}
+g.run('submitFlash()');assert.equal(g.run('state.tradingTickets'),1);
+assert.equal(g.run('state.crystals'),0);assert.equal(g.run('state.solved.length'),0);
+assert.equal(g.run('JSON.parse(localStorage.getItem(KEY)).tradingTickets'),1);
+}
+});
+test('wrong, invalid, or timed-out answers end the streak and retries start at zero',()=>{
+const g=game();
+for(const answer of ['999999','not a number','']){
+g.run('startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');
+g.node('#flashAnswer').value=answer;g.run('submitFlash()');assert.equal(g.run('flashRun'),null);assert.equal(g.run('state.tradingTickets'),0);
+g.run('startFlash()');assert.equal(g.run('flashRun.correct'),0);
+}
+g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('flashRun.deadline=Date.now()-1;submitFlash()');assert.equal(g.run('flashRun'),null);assert.equal(g.run('state.tradingTickets'),0);
+g.run('startFlash();flashRun.deadline=Date.now()-1;updateFlashClock()');assert.equal(g.run('flashRun'),null);assert.match(g.node('#flashBody').innerHTML,/Time’s up/);
+g.run("startFlash();switchAge('9-10')");assert.equal(g.run('flashRun'),null);assert.equal(g.run('state.tradingTickets'),0);
+g.run('startFlash();cancelFlash();submitFlash()');assert.equal(g.run('state.tradingTickets'),0);
+});
+test('trade selector only offers the same tier and mythic has no alternative swap',()=>{
+const g=game({solved:[],upgrades:[],earnedCrystals:1450});g.run('state.tradingTickets=1');
+g.node('#tradeGive').value='0';g.run('updateTradeOptions()');assert.match(g.node('#tradeReceive').innerHTML,/nice-cube/);assert.doesNotMatch(g.node('#tradeReceive').innerHTML,/gold-cube|gummy-bear/);
+g.node('#tradeGive').value='28';g.run('updateTradeOptions()');assert.equal(g.node('#tradeReceive').innerHTML,'');assert.equal(g.node('#tradeSubmit').disabled,true);
 });
