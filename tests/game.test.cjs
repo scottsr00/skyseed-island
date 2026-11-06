@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-function game(saved,stored){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
+function game(saved,stored){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:()=>()=>{}});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{addEventListener(){}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
 test('all 100 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<100;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),100);assert.equal(g.run('state.crystals'),500);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),505);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),445);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),445);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
 test('ferry ticket gates the fifth island and includes return journeys',()=>{
@@ -93,15 +93,38 @@ g.run('buyRod();buyLure();buyLure()');assert.equal(g.run('state.bait'),5);assert
 });
 test('aimed casts catch all six species and repeated catches increment saved badges',()=>{
 const g=game();g.run('state.crystals=100;openFishing();buyRod()');
-for(let i=0;i<3;i++)g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);}`);
+for(let i=0;i<3;i++)g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}`);
 for(const id of ['barracuda','stingray','shark'])assert.equal(g.run(`state.catches.${id}`),1);
 g.run('buyLure();fishSet="lure";updateFishing()');
-for(let i=0;i<3;i++){if(i===2)g.run('buyRod()');g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);}`);g.node('#sponsorship').close();}
+for(let i=0;i<3;i++){if(i===2)g.run('buyRod()');g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}`);g.node('#sponsorship').close();}
 for(const id of ['snook','octopus','marlin'])assert.equal(g.run(`state.catches.${id}`),1);
-g.run('{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);}');assert.equal(g.run('state.catches.snook'),2);assert.match(g.node('#fishBadges').innerHTML,/Caught × 2/);
+g.run('{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}');assert.equal(g.run('state.catches.snook'),2);assert.match(g.node('#fishBadges').innerHTML,/Caught × 2/);
 const saved=g.run('JSON.parse(localStorage.getItem(KEY))');const restored=game(saved);assert.equal(restored.run('state.catches.snook'),2);assert.equal(restored.run('state.fishingLure'),true);assert.equal(restored.run('state.bait'),0);
 g.run("switchAge('9-10')");assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.fishingLure'),false);assert.equal(g.run('state.catches.snook'),0);
 g.run("switchAge('11-12')");assert.equal(g.run('state.catches.snook'),2);
+});
+test('hooked fish struggle and escape after exactly two seconds without reeling',()=>{
+const g=game();g.run('state.crystals=5;openFishing();buyRod();{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}');
+assert.equal(g.run('totalCatches()'),0);assert.equal(g.node('#reelFish').hidden,false);
+const first=g.run('hookedFishingPose().fish.x');g.run('advanceFishing(150);draw()');assert.notEqual(g.run('hookedFishingPose().fish.x'),first);
+g.run('advanceFishing(1849)');assert.equal(g.run('!!hookedFish'),true);
+g.run('advanceFishing(1);reelFishing()');assert.equal(g.run('hookedFish'),null);assert.equal(g.run('totalCatches()'),0);assert.equal(g.node('#reelFish').hidden,true);assert.match(g.node('#fishingFeedback').textContent,/shook free/);
+});
+test('reeling resets the escape timer, bends the rod, and rewards only a landed fish',()=>{
+const g=game();g.run('state.crystals=5;openFishing();buyRod();{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}advanceFishing(1900)');
+const tip=g.run('hookedFishingPose().tip.y'),lean=g.run('hookedFishingPose().lean');
+g.node('#reelFish').onclick();assert.ok(g.run('hookedFishingPose().tip.y')<tip);assert.ok(g.run('hookedFishingPose().lean')>lean);
+const target=g.run('hookedFish.target');g.run('reelFishing()');assert.equal(g.run('hookedFish.target'),target);
+g.run('advanceFishing(1800);draw()');assert.equal(g.run('!!hookedFish'),true);assert.equal(g.run('totalCatches()'),0);
+g.run('for(let r=0;r<5;r++){reelFishing();advanceFishing(180);draw();}');assert.equal(g.run('hookedFish'),null);assert.equal(g.run('totalCatches()'),1);
+g.run('reelFishing();advanceFishing(3000)');assert.equal(g.run('totalCatches()'),1);
+});
+test('stopping or switching profiles releases a hooked fish without a reward',()=>{
+const g=game();
+for(const end of ['stopFishing()','switchAge("9-10")']){
+g.run('state.crystals=5;openFishing();buyRod();{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}');
+assert.equal(g.run('!!hookedFish'),true);g.run(end);assert.equal(g.run('hookedFish'),null);assert.equal(g.run('totalCatches()'),0);
+}
 });
 test('closing the fishing dock cancels the hook without granting a catch',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod();castFishing(10,40);stopFishing();advanceFishing(FISH_CAST_DURATION)');assert.equal(g.run('state.bait'),4);assert.equal(g.run('pendingCast'),null);assert.equal(g.run('Object.values(state.catches).reduce((a,b)=>a+b,0)'),0);
@@ -109,7 +132,7 @@ const g=game();g.run('state.crystals=5;openFishing();buyRod();castFishing(10,40)
 
 test('fifth catch announces sponsorship once and unlocks unlimited bait',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod()');
-for(let i=0;i<5;i++){g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}');if(i<4)assert.equal(g.run('sponsored()'),false);}
+for(let i=0;i<5;i++){g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}');if(i<4)assert.equal(g.run('sponsored()'),false);}
 assert.equal(g.run('sponsored()'),true);assert.equal(g.node('#sponsorship').open,true);assert.equal(g.node('#sponsorName').textContent,'Skyseed Angling Co.');assert.equal(g.run('state.bait'),0);
 g.node('#sponsorship').close();
 for(let i=0;i<8;i++)g.run('castFishing(10,40);advanceFishing(FISH_CAST_DURATION)');
@@ -133,7 +156,7 @@ test('fishing uses the main map and stops cleanly without a popup',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod()');
 assert.equal(g.run('fishingActive'),true);assert.equal(g.node('#fishing').hidden,false);assert.equal(g.node('#fishing').open,undefined);
 assert.equal(g.run('fishingTargets().every(f=>!islandPolys.some(p=>inside(f.x,f.y,p)))'),true);
-g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[1];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);draw();}');assert.equal(g.run('state.catches.stingray'),1);
+g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[1];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}draw();}');assert.equal(g.run('state.catches.stingray'),1);
 g.run('castFishing(10,40);stopFishing();advanceFishing(FISH_CAST_DURATION)');assert.equal(g.run('pendingCast'),null);assert.equal(g.node('#fishing').hidden,true);
 const html=fs.readFileSync('dist/index.html','utf8');assert.doesNotMatch(html,/<dialog id="fishing"/);assert.doesNotMatch(html,/id="fishingWater"/);assert.match(html,/<section id="fishing"/);
 });
@@ -307,7 +330,7 @@ assert.equal(g.run('pendingCast.lure'),false);g.run('advanceFishing(200);draw()'
 assert.equal(g.run('fishingCastPose(pendingCast).line.length'),33);
 g.run('advanceFishing(250);draw()');assert.equal(g.run('fishingCastPose(pendingCast).line.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))'),true);
 const pose=g.run('fishingCastPose({...pendingCast,elapsed:FISH_CAST_DURATION})');assert.ok(Math.abs(pose.bait.x-g.run('pendingCast.x'))<.00001);assert.ok(Math.abs(pose.bait.y-g.run('pendingCast.y'))<.00001);
-g.run('advanceFishing(FISH_CAST_DURATION-450)');assert.equal(g.run('totalCatches()'),1);assert.equal(g.run('fishingSplash!==null'),true);g.run('advanceFishing(1000)');assert.equal(g.run('fishingSplash'),null);
+g.run('advanceFishing(FISH_CAST_DURATION-450)');assert.equal(g.run('totalCatches()'),0);assert.equal(g.run('!!hookedFish'),true);g.run('for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}');assert.equal(g.run('totalCatches()'),1);g.run('advanceFishing(1000)');assert.equal(g.run('fishingSplash'),null);
 });
 test('fish swim smoothly and only surface intermittently in both fishing panels',()=>{
 const g=game();g.run('openFishing()');
@@ -360,7 +383,7 @@ test('profile switches cancel flash streaks, fishing, and swimming; reset affect
 const g=game();g.run('state.crystals=80;state.earnedCrystals=100;save()');g.node('#profileName').value='New player';g.run('createProfile()');
 g.run('state.crystals=20;startFlash();switchProfile("legacy")');assert.equal(g.run('flashRun'),null);assert.equal(g.node('#flash').open,false);assert.equal(g.run('state.crystals'),80);
 g.run('openFishing();switchProfile("p1")');assert.equal(g.run('fishingActive'),false);assert.equal(g.run('state.crystals'),20);
-g.node('#resetBtn').onclick();assert.equal(g.run('state.crystals'),0);assert.equal(g.run('currentProfile().name'),'New player');
+g.node('#resetBtn').onclick();assert.equal(g.node('#resetConfirm').open,true);g.node('#confirmReset').onclick();assert.equal(g.run('state.crystals'),0);assert.equal(g.run('currentProfile().name'),'New player');
 g.run('switchProfile("legacy")');assert.equal(g.run('state.crystals'),80);assert.equal(g.run('state.squishyInventory.length'),2);
 g.run('state.crystals=100;buyFerryTicket();boardFerry();switchProfile("p1")');assert.equal(g.run('profileId'),'legacy');assert.match(g.node('#profileFeedback').textContent,/ferry arrives/);
 g.run('advanceVoyage(3500);switchProfile("p1")');assert.equal(g.run('profileId'),'p1');assert.equal(g.run('voyage'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);
@@ -396,4 +419,88 @@ g.run('diveAnimation=null;latchShark();advanceSwimming(100)');assert.equal(g.run
 g.node('#profileName').value='Shark explorer';g.run('createProfile()');assert.equal(g.run('sharkRide'),null);assert.equal(g.run('sharkWake.length'),0);
 g.run(`swimming=true;player.x=430;player.y=310;${shark};latchShark();switchAge('9-10')`);assert.equal(g.run('sharkRide'),null);
 g.run(`state.catches={barracuda:5};swimming=true;player.x=boatPosition.x;player.y=boatPosition.y;${shark};latchShark();boardOwnBoat()`);assert.equal(g.run('sharkRide'),null);assert.equal(g.run('boating'),true);
+});
+
+test('reset confirmation preserves progress when cancelled',()=>{
+const g=game();g.run('state.crystals=35;state.earnedCrystals=50;state.solved=[0]');
+g.node('#resetBtn').onclick();assert.equal(g.node('#resetConfirm').open,true);
+assert.equal(g.run('state.crystals'),35);g.node('#cancelReset').onclick();
+assert.equal(g.node('#resetConfirm').open,false);g.node('#confirmReset').onclick();
+assert.equal(g.run('state.crystals'),35);assert.equal(g.run('state.solved.length'),1);
+});
+
+test('education help opens a complete 12 by 12 multiplication reference',()=>{
+const g=game();g.node('#educationMenuBtn').onclick();
+assert.equal(g.run('activeSubmenu'),'education');assert.equal(g.node('#educationSubmenu').hidden,false);
+g.node('#timesTablesBtn').onclick();assert.equal(g.run('activeSubmenu'),null);
+assert.equal(g.node('#educationSubmenu').hidden,true);assert.equal(g.node('#timesTables').open,true);
+const html=g.node('#timesTableGrid').innerHTML;
+const products=[...html.matchAll(/<td>(\d+)<\/td>/g)].map(match=>Number(match[1]));
+assert.equal(products.length,144);
+for(let row=1;row<=12;row++)for(let col=1;col<=12;col++)assert.equal(products[(row-1)*12+col-1],row*col);
+assert.equal((html.match(/scope="col"/g)||[]).length,13);assert.equal((html.match(/scope="row"/g)||[]).length,12);
+g.run("closeSurface('timesTables')");assert.equal(g.node('#timesTables').open,false);
+g.node('#educationMenuBtn').onclick();g.node('#settingsMenuBtn').onclick();assert.equal(g.node('#educationSubmenu').hidden,true);
+});
+
+test('shark dives offshore before the rider rolls onto walkable land',()=>{
+const g=game();
+g.run(`swimming=true;player.y=176;
+const shoreX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));
+player.x=shoreX-28;sharkFins=[{x:player.x+2,y:176,vx:.02,vy:0,age:500,duration:4000}];latchShark();advanceSwimming(16)`);
+assert.equal(g.run('!!sharkRide.landing'),true);
+assert.equal(g.run('sharkWater(sharkRide.x+Math.cos(sharkRide.heading)*25,sharkRide.y+Math.sin(sharkRide.heading)*25)'),true);
+const sharkX=g.run('sharkRide.x'),start=g.run('player.x');
+assert.ok(g.run('Math.hypot(sharkRide.landing.to.x-sharkRide.landing.from.x,sharkRide.landing.to.y-sharkRide.landing.from.y)')<=36);
+assert.ok(g.run('sharkRide.landing.to.x-shoreX')<=6);
+g.run('advanceSwimming(16);draw()');assert.ok(g.run('player.x')>start);assert.ok(g.run('sharkRide.x')>sharkX);
+g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')>start);
+assert.equal(g.node('#mapSharkExit').hidden,true);
+g.run('dismountShark()');assert.equal(g.run('!!sharkRide.landing'),true);
+g.run('advanceSwimming(500);draw()');assert.equal(g.run('sharkRide'),null);assert.equal(g.run('swimming'),false);
+assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('sharkWake.length'),0);
+const restored=game(null,g.snapshot());assert.equal(restored.run('player.x'),g.run('player.x'));
+});
+
+test('swimming onto shore pulls the explorer up before walking resumes',()=>{
+const g=game();g.run(`swimming=true;player.y=176;
+const beachX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));player.x=beachX-1;moveExplorer(2,0)`);
+assert.equal(g.run('!!shoreClimb'),true);assert.equal(g.run('swimming'),true);assert.equal(g.run('sharkRide'),null);
+const start=g.run('player.x');g.run('moveExplorer(20,0)');assert.equal(g.run('player.x'),start);
+for(const elapsed of [100,150,150])g.run(`advanceSwimming(${elapsed});draw()`);
+assert.ok(g.run('player.x')>start);assert.equal(g.run('!!shoreClimb'),true);
+g.run('advanceSwimming(250);draw()');assert.equal(g.run('shoreClimb'),null);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('swimming=true;player.x=beachX-1;moveExplorer(2,0);switchAge("9-10")');assert.equal(g.run('shoreClimb'),null);
+});
+
+test('water entries randomly choose a stable roll, backflip, or dive and finish swimming',()=>{
+const g=game();
+for(const [random,style] of [[0,'roll'],[.5,'backflip'],[.999,'dive']]){
+g.run(`Math.random=()=>${random};player.x=430;player.y=310;startDive({x:454,y:320})`);
+assert.equal(g.run('diveAnimation.style'),style);
+for(const elapsed of [0,80,200,350,430,500,699]){
+g.run(`diveAnimation.elapsed=${elapsed};draw()`);
+assert.equal(g.run('diveAnimation.style'),style);
+}
+g.run('advanceSwimming(1)');
+assert.equal(g.run('diveAnimation'),null);assert.equal(g.run('swimming'),true);
+assert.equal(g.run('player.x'),454);assert.equal(g.run('player.y'),320);
+}
+});
+
+test('ferry passes stay with an explorer across age changes, reset, and reload',()=>{
+const g=game();g.run('state.crystals=75;buyFerryTicket()');assert.equal(g.run('state.crystals'),25);
+g.run("switchAge('9-10')");assert.equal(g.run('state.ferryTicket'),true);
+g.run('state.crystals=70;buyFerryTicket()');assert.equal(g.run('state.crystals'),70);
+g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.ferryTicket'),true);
+g.run("switchAge('11-12')");assert.equal(g.run('state.ferryTicket'),true);
+const restored=game(null,g.snapshot());assert.equal(restored.run('state.ferryTicket'),true);
+g.node('#profileName').value='Separate explorer';g.run('createProfile()');assert.equal(g.run('state.ferryTicket'),false);
+g.run("switchProfile('legacy')");assert.equal(g.run('state.ferryTicket'),true);
+});
+
+test('existing ferry passes migrate from the other age level to permanent profile ownership',()=>{
+const g=game(null,{'skyseed-v1-9-10':JSON.stringify({solved:[],upgrades:[],ferryTicket:true})});
+assert.equal(g.run('state.ferryTicket'),true);assert.equal(g.run('currentProfile().ferryTicket'),true);
+g.run("switchAge('9-10')");assert.equal(g.run('state.ferryTicket'),true);
 });
