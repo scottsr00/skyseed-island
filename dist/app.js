@@ -677,14 +677,15 @@ if(body){ctx.globalAlpha*=.5;ctx.beginPath();ctx.ellipse(-length*.25,0,spread,sp
 ctx.restore();
 }
 }
-function drawSharkRide(){
-if(sharkRide.kind==='dragon'){drawLochDragonRide();return;}
-const submerge=sharkDiveDepth(),landing=sharkRide.landing,depth=Math.max(submerge,landing?Math.min(1,landing.elapsed/400):0);
-sharkWake.forEach(w=>{const fade=(1-w.age/900)*(1-submerge),spread=3+w.age*.012;ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.globalAlpha=fade*.38;ctx.strokeStyle='#edfff6';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-spread,-spread);ctx.lineTo(2,-3);ctx.moveTo(-spread,spread);ctx.lineTo(2,3);ctx.stroke();ctx.restore();});
-ctx.save();ctx.translate(sharkRide.x,sharkRide.y);ctx.rotate(sharkRide.heading);
+function sharkSegmentOpacity(localX,depth){
+const along=Math.max(0,Math.min(1,(localX+40)/68));
+const visible=Math.max(0,Math.min(1,(1.25-1.5*depth-along)/.25));
+return visible*visible*(3-2*visible);
+}
+function drawSharkBody(phase,opacity){
 // Keep the body and side fins beneath the surface, with the dorsal fin above it.
-ctx.globalAlpha=(1-depth)*.65;ctx.scale(1-depth*.25,.82*(1-depth*.6));
-const beat=Math.sin(sharkRide.phase||0),tail=beat*3;
+ctx.globalAlpha=opacity*.65;
+const beat=Math.sin(phase||0),tail=beat*3;
 ellipse(-2,2,32,10,'#538c9633');
 // Paired pectoral fins, a narrow tail stock, and a rounded, tapered snout.
 polygon([[5,-4],[-9,-17],[-6,-6],[-14,-3]],'#456975');
@@ -699,9 +700,24 @@ ctx.fillStyle='#9fb9bd';ctx.beginPath();ctx.moveTo(24,1);ctx.bezierCurveTo(14,7,
 ctx.strokeStyle='#3d606d';ctx.lineWidth=.7;
 for(let i=0;i<4;i++){const x=9-i*2;ctx.beginPath();ctx.moveTo(x,-5);ctx.quadraticCurveTo(x-1,-3,x,-1);ctx.stroke();}
 ellipse(19,-3,1,1,'#183e48');ellipse(19,3,1,1,'#183e48');
-ctx.globalAlpha=(1-depth)*.4;ctx.strokeStyle='#c2eee0';ctx.lineWidth=1;
+ctx.globalAlpha=opacity*.4;ctx.strokeStyle='#c2eee0';ctx.lineWidth=1;
 for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(-14,side*5);ctx.quadraticCurveTo(0,side*9,14,side*5);ctx.stroke();}
-ctx.globalAlpha=1-depth;polygon([[-5,-1],[-1,-12],[4,-3],[7,0]],'#395d6b');
+ctx.globalAlpha=opacity;polygon([[-5,-1],[-1,-12],[4,-3],[7,0]],'#395d6b');
+}
+function drawSharkRide(){
+if(sharkRide.kind==='dragon'){drawLochDragonRide();return;}
+const submerge=sharkDiveDepth(),landing=sharkRide.landing,depth=Math.max(submerge,landing?Math.min(1,landing.elapsed/400):0);
+sharkWake.forEach(w=>{const fade=(1-w.age/900)*(1-submerge),spread=3+w.age*.012;ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.globalAlpha=fade*.38;ctx.strokeStyle='#edfff6';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-spread,-spread);ctx.lineTo(2,-3);ctx.moveTo(-spread,spread);ctx.lineTo(2,3);ctx.stroke();ctx.restore();});
+ctx.save();ctx.translate(sharkRide.x,sharkRide.y);ctx.rotate(sharkRide.heading);
+ctx.scale(1-depth*.25,.82*(1-depth*.6));
+if(depth<=0)drawSharkBody(sharkRide.phase,1);
+else if(depth<1){
+// Slice in the shark's own heading so the fading front follows every turn.
+for(let left=-40;left<29;left+=3){
+const opacity=sharkSegmentOpacity(left+1.5,depth);if(opacity<=0)continue;
+ctx.save();ctx.beginPath();ctx.rect(left,-32,3,64);ctx.clip();drawSharkBody(sharkRide.phase,opacity);ctx.restore();
+}
+}
 ctx.restore();
 drawSharkSurfaceWake();
 if(landing){
@@ -782,8 +798,10 @@ if(!boating&&!swimming&&(dx||dy)&&canWalk(player.x,player.y)&&openSea(x,y)){
 const length=Math.hypot(dx,dy),landing={x:x+dx/length*24,y:y+dy/length*24};
 closeMapPanel();startDive(openSea(landing.x,landing.y)?landing:{x,y});return;
 }
+const from={x:player.x,y:player.y};
 if(canWalk(x,player.y))player.x=x;
 if(canWalk(player.x,y))player.y=y;
+recordSwimMovement(from);
 advanceSwimming(0);
 }
 function exitBoat(){
@@ -799,6 +817,7 @@ if(!sponsored()||!swimming||diveAnimation||shoreClimb||sharkRide?.landing||Math.
 stopFishing();swimming=false;boating=true;player.x=boatPosition.x;player.y=boatPosition.y;keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast('Back aboard! X exits your boat; F starts fishing.');
 }
 function advanceSwimming(dt){
+advanceSwimMotion(dt);
 if(shoreClimb){
 shoreClimb.elapsed+=dt;const t=Math.min(1,shoreClimb.elapsed/650),ease=t*t*(3-2*t);
 player.x=shoreClimb.from.x+(shoreClimb.to.x-shoreClimb.from.x)*ease;player.y=shoreClimb.from.y+(shoreClimb.to.y-shoreClimb.from.y)*ease;
@@ -811,7 +830,7 @@ if(boating)boatPosition={x:player.x,y:player.y};
 advanceLochDragon(dt);advanceSharkFins(dt);if(swimming&&!sharkRide){latchLochDragon();latchShark();}updateWaterControls();
 }
 function updateWaterControls(){
-if(!swimming){sharkFins=[];clearSharkRide();}
+if(!swimming){sharkFins=[];clearSharkRide();resetSwimMotion();}
 $('#mapSharkExit').hidden=!sharkRide||!!sharkRide.landing;
 $('#mapSharkExit').textContent=sharkRide?.kind==='dragon'?'Hop off dragon · X ↗':'Hop off shark · X ↗';
 $('#mapDive').hidden=!shoreDiveTarget();$('#mapBoatExit').hidden=!boating;$('#mapBoatBoard').hidden=!sponsored()||!swimming||!!diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>44;
@@ -1116,27 +1135,78 @@ rect(-4,-1,9,2,'#345362');rect(2,-2,4,4,'#e9e5bd');rect(3,-1,2,2,'#77d5df');
 if(withSnorkel)swimSnorkel(0,0);
 ctx.restore();
 }
-function drawSwimmingCharacter(x,y){
-const colors=characterColors(),facing=player.facing||'down',stroke=Math.sin(frame/7),girl=currentProfile().character==='girl';
-ellipse(x,y+2,11,4,'#c2eee099');
-ctx.save();ctx.translate(x,y);
-if(facing==='left'||facing==='right'){
-ctx.scale(facing==='left'?-1:1,1);
-rect(-11,2+stroke,5,2,'#3e5555');rect(-10,5-stroke,5,2,'#3e5555');
-rect(-7,-1,10,5,colors.shirt);rect(-5,0,6,2,colors.accent);
-if(girl)rect(-2,-7,3,9,colors.hair);
-rect(0,-8,7,7,'#f2c992');rect(6,-5,2,2,'#f2c992');rect(-1,-10,8,3,colors.hair);
-rect(-2,-7,2,5,colors.hair);
-rect(-3,2+stroke*2,12,2,'#f2c992');rect(8,stroke*2,3,3,'#f2c992');
-}else{
-rect(-5,-1,10,4,colors.shirt);rect(-3,0,6,2,colors.accent);
-rect(-3,-8,7,7,facing==='up'?colors.hair:'#f2c992');rect(-4,-10,9,3,colors.hair);
-if(girl)rect(facing==='up'?-4:-7,-7,facing==='up'?9:4,8,colors.hair);
-const reach=facing==='up'?-4:0;
-rect(-12,reach+stroke*3,7,2,'#f2c992');rect(5,reach-stroke*3,7,2,'#f2c992');
+let swimMotion={phase:0,time:0,heading:Math.PI/2,targetHeading:Math.PI/2,movingFor:0,effort:0,distance:0,wake:[]};
+function resetSwimMotion(){
+const heading={up:-Math.PI/2,down:Math.PI/2,left:Math.PI,right:0}[player.facing]??Math.PI/2;
+swimMotion={phase:0,time:0,heading,targetHeading:heading,movingFor:0,effort:0,distance:0,wake:[]};
 }
-ctx.restore();directionalSwimGear(x+(facing==='left'?-3:facing==='right'?3:0),y-5);
-ellipse(x-1,y+7,6,1,'#d5f4e6');
+function advanceSwimMotion(dt){
+if(!swimming||boating||sharkRide||diveAnimation||shoreClimb){resetSwimMotion();return;}
+if(dt<=0)return;
+swimMotion.time+=dt;swimMotion.movingFor=Math.max(0,swimMotion.movingFor-dt);
+const active=swimMotion.movingFor>0?1:0;
+swimMotion.effort+=(active-swimMotion.effort)*(1-Math.exp(-dt/160));
+swimMotion.phase+=dt/1000*Math.PI*2*(.28+.82*swimMotion.effort);
+const turn=Math.atan2(Math.sin(swimMotion.targetHeading-swimMotion.heading),Math.cos(swimMotion.targetHeading-swimMotion.heading));
+swimMotion.heading+=turn*(1-Math.exp(-dt/95));
+swimMotion.wake=swimMotion.wake.filter(w=>{w.age+=dt;return w.age<1400;});
+}
+function recordSwimMovement(from){
+if(!swimming||boating||sharkRide||diveAnimation||shoreClimb)return;
+const dx=player.x-from.x,dy=player.y-from.y,distance=Math.hypot(dx,dy);
+if(distance<.001)return;
+const heading=Math.atan2(dy,dx);
+swimMotion.targetHeading=heading;swimMotion.movingFor=100;
+// Place ripples along the traveled segment, never in front of the swimmer.
+for(let d=5-swimMotion.distance;d<=distance;d+=5){
+const x=from.x+dx*d/distance-Math.cos(heading)*12,y=from.y+dy*d/distance-Math.sin(heading)*12;
+if(sharkWater(x,y))swimMotion.wake.push({x,y,heading,age:0});
+}
+swimMotion.distance=(swimMotion.distance+distance)%5;
+swimMotion.wake=swimMotion.wake.slice(-40);
+}
+function drawSwimmerWake(){
+for(const w of swimMotion.wake){
+const t=w.age/1400,spread=3+t*10,length=3+t*9;
+ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);
+ctx.globalAlpha=(1-t)*(1-t)*.42;ctx.strokeStyle='#e4f7e8';ctx.lineWidth=.8;
+ctx.beginPath();ctx.moveTo(-length,-spread);ctx.quadraticCurveTo(-length*.35,-spread*.8,2,-2);
+ctx.moveTo(-length,spread);ctx.quadraticCurveTo(-length*.35,spread*.8,2,2);ctx.stroke();
+ctx.globalAlpha*=.45;ellipse(-length*.5,0,1+t,Math.max(.4,.7-t*.3),'#e8fff3');ctx.restore();
+}
+}
+function drawSwimmingCharacter(x,y){
+const colors=characterColors(),motion=swimMotion,phase=motion.phase,effort=motion.effort;
+const kick=Math.sin(phase*2.8),roll=Math.sin(phase)*effort,bob=Math.sin(motion.time*.002)*.5;
+drawSwimmerWake();
+ctx.save();ctx.translate(x,y+bob);ctx.rotate(motion.heading);
+// A long, low silhouette: legs and torso sit just beneath the water.
+ctx.globalAlpha=.35;ellipse(-2,1,17,6,'#467f82');
+ctx.globalAlpha=.65;
+for(const side of [-1,1]){
+const foot=-15+kick*side*(1+effort*2),spread=side*(2.5+Math.cos(phase*2.8)*side*effort);
+polygon([[-5,side*2],[-10,spread-1],[foot,spread-1],[foot-1,spread+1],[-10,spread+1],[-4,side*3]],'#3e5555');
+ellipse(foot-1,spread,2,1,'#d9b78d');
+}
+ctx.globalAlpha=.9;ellipse(-1,roll*.6,9,4,colors.shirt);
+ellipse(0,-.5+roll*.6,6,2,colors.accent);
+// Opposite arms cycle through forward recovery, catch, and underwater pull.
+for(const side of [-1,1]){
+const cycle=(phase+(side<0?Math.PI:0))%(Math.PI*2),reach=Math.cos(cycle),sweep=Math.sin(cycle);
+const handX=2+reach*(4+effort*9),handY=side*(5+Math.max(0,sweep)*(2+effort*5));
+const elbowX=(handX+2)*.5-1,elbowY=side*(6+Math.max(0,sweep)*3);
+ctx.globalAlpha=sweep>0?.55:.95;ctx.strokeStyle='#e4bd88';ctx.lineWidth=2.5;ctx.lineCap='round';
+ctx.beginPath();ctx.moveTo(2,side*3);ctx.lineTo(elbowX,elbowY);ctx.lineTo(handX,handY);ctx.stroke();
+ellipse(handX,handY,1.6,1.2,'#f2c992');
+if(effort>.25&&Math.abs(sweep)<.22){ctx.globalAlpha=.45*effort;ctx.strokeStyle='#e4f7e8';ctx.lineWidth=.7;ctx.beginPath();ctx.ellipse(handX,handY,2.5,1.4,0,0,Math.PI);ctx.stroke();}
+}
+ctx.globalAlpha=1;
+if(currentProfile().character==='girl'){polygon([[5,-3],[1,-4],[-2,-2],[3,0],[5,3]],colors.hair);}
+ellipse(8,0,4.5,3.5,'#f2c992');ellipse(6.5,0,2.5,3.7,colors.hair);
+// Goggles face the swimming direction; the breathing tube stays above water.
+ctx.save();ctx.translate(10,0);ctx.rotate(Math.PI/2);swimGoggles(0,0);ctx.restore();
+ctx.globalAlpha=.25;ctx.strokeStyle='#d4efdf';ctx.lineWidth=.7;ctx.beginPath();ctx.ellipse(0,0,11,5,0,-1,1);ctx.stroke();
+ctx.restore();
 }
 function rollingCharacter(x,y,angle,tuck){
 // Curl around the torso: knees against the chest, hands around the shins.
@@ -1208,10 +1278,15 @@ rect(x-8,bodyY-16,16,3,colors.hat);rect(x-5,bodyY-21,10,5,colors.hat);
 swimGoggles(x,bodyY-9);
 // Hands plant on the beach; elbows bend as the chest rises over the edge.
 for(const side of [-1,1]){
-const release=Math.max(0,(t-.8)/.2),hx=handX+side*7,hy=handY-3;
-const endX=hx+(x+side*7-hx)*release,endY=hy+(bodyY+6-hy)*release;
-ctx.strokeStyle='#f2c992';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+side*5,bodyY);
-ctx.lineTo((x+side*5+endX)/2+side*lift*3,(bodyY+endY)/2-lift*3);ctx.lineTo(endX,endY);ctx.stroke();rect(endX-2,endY-1,4,3,'#f2c992');
+const release=Math.max(0,(t-.8)/.2),hx=handX+side*6,hy=handY-3;
+const targetX=hx+(x+side*6-hx)*release,targetY=hy+(bodyY+5-hy)*release;
+const shoulderX=x+side*5,desiredElbowX=(shoulderX+targetX)/2+side*lift,desiredElbowY=(bodyY+targetY)/2-lift;
+const upperArmLength=Math.hypot(desiredElbowX-shoulderX,desiredElbowY-bodyY),upperReach=Math.min(1,4/Math.max(1,upperArmLength));
+const elbowX=shoulderX+(desiredElbowX-shoulderX)*upperReach,elbowY=bodyY+(desiredElbowY-bodyY)*upperReach;
+const forearmLength=Math.hypot(targetX-elbowX,targetY-elbowY),reachScale=Math.min(1,5/Math.max(1,forearmLength));
+const endX=elbowX+(targetX-elbowX)*reachScale,endY=elbowY+(targetY-elbowY)*reachScale;
+ctx.strokeStyle='#f2c992';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(shoulderX,bodyY);
+ctx.lineTo(elbowX,elbowY);ctx.lineTo(endX,endY);ctx.stroke();rect(endX-2,endY-1,4,3,'#f2c992');
 }
 }
 function swimmerArt(){

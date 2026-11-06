@@ -397,6 +397,20 @@ assert.ok(g.run('sharkWake.length')>0);assert.equal(g.run('sharkWake.every(w=>w.
 g.run('advanceSwimming(4500);draw()');assert.equal(g.run('sharkRide!==null'),true);assert.equal(g.run('sharkWater(player.x,player.y)'),true);
 assert.equal(g.run('sharkWake.every(w=>w.age<900)&&sharkWake.length<=32'),true);
 });
+test('shark fades head first on descent and tail first on resurfacing in every heading',()=>{
+const g=game();
+for(const x of [-35,-15,0,15,25]){
+assert.equal(g.run(`sharkSegmentOpacity(${x},0)`),1);assert.equal(g.run(`sharkSegmentOpacity(${x},1)`),0);
+}
+assert.ok(g.run('sharkSegmentOpacity(-30,.5)>sharkSegmentOpacity(20,.5)'));
+for(const x of [-30,0,20])assert.ok(g.run(`sharkSegmentOpacity(${x},.3)>=sharkSegmentOpacity(${x},.6)`));
+g.run('swimming=true;player.x=600;player.y=310;sharkRide={x:600,y:310,heading:0,phase:0,diveElapsed:5400};const originalBody=drawSharkBody;let slices=[];drawSharkBody=(phase,opacity)=>{slices.push(opacity);originalBody(phase,opacity)}');
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+g.run(`sharkRide.heading=${heading};sharkRide.diveElapsed=5400;slices=[];drawSharkRide()`);
+const diving=g.run('JSON.stringify(slices)');assert.ok(g.run('slices.length>1&&slices.some(a=>a>0&&a<1)'));
+g.run('sharkRide.diveElapsed=8000;slices=[];drawSharkRide()');assert.equal(g.run('JSON.stringify(slices)'),diving);
+}
+});
 test('shark dives ease underwater periodically and resurface with only the snorkel visible at depth',()=>{
 const g=game();
 assert.equal(g.run('sharkDiveDepth()'),0);
@@ -683,4 +697,27 @@ g.run("lochDragon={x:430,y:310,heading:0,age:1000,duration:18000};switchAge('7-8
 g.run('swimming=true;player.x=430;player.y=310;lochDragon={x:435,y:310,heading:0,age:1000,duration:18000};latchLochDragon()');
 assert.equal(g.run('sharkRide.kind'),'dragon');g.node('#profileName').value='Dragon watcher';g.run('createProfile()');
 assert.equal(g.run('sharkRide'),null);assert.equal(g.run('lochDragon'),null);
+});
+
+test('swimmer wake follows actual movement, preserves turns, and fades while resting',()=>{
+const g=game();g.run('swimming=true;player.x=430;player.y=310;nextSharkFin=1e9;nextLochDragon=1e9');
+for(let i=0;i<12;i++)g.run('advanceSwimming(40);moveExplorer(2.6,0)');
+assert.ok(g.run('swimMotion.wake.length')>0);assert.ok(g.run('swimMotion.effort')>.5);
+assert.equal(g.run('swimMotion.wake.every(w=>w.x<player.x&&Math.abs(w.y-310)<.001)'),true);
+const original=JSON.parse(g.run('JSON.stringify(swimMotion.wake[0])'));
+for(let i=0;i<6;i++)g.run('advanceSwimming(40);moveExplorer(0,2.6)');
+assert.equal(g.run('swimMotion.wake[0].x'),original.x);assert.equal(g.run('swimMotion.wake[0].y'),original.y);
+assert.ok(g.run('swimMotion.wake.some(w=>Math.abs(w.heading-Math.PI/2)<.001)'));
+const phase=g.run('swimMotion.phase');g.run('draw();draw();draw()');assert.equal(g.run('swimMotion.phase'),phase);
+g.run('advanceSwimming(1600);draw()');assert.equal(g.run('swimMotion.wake.length'),0);assert.ok(g.run('swimMotion.effort')<.01);
+g.run('moveExplorer(2.6,0);moveExplorer(2.6,0)');assert.ok(g.run('swimMotion.wake.length')>0);
+g.run('returnBoat()');assert.equal(g.run('swimMotion.wake.length'),0);
+});
+
+test('swimmer stroke and wake reset when mounting a sea creature or changing players',()=>{
+const g=game();g.run('swimming=true;player.x=430;player.y=310;moveExplorer(10,0);advanceSwimMotion(40)');
+assert.ok(g.run('swimMotion.wake.length')>0);
+g.run('sharkFins=[{x:player.x+2,y:player.y,vx:.02,vy:0,age:500,duration:4000}];latchShark();advanceSwimming(40)');
+assert.equal(g.run('swimMotion.wake.length'),0);g.run('draw();dismountShark()');
+g.node('#profileName').value='Swim friend';g.run('createProfile()');assert.equal(g.run('swimMotion.effort'),0);assert.equal(g.run('swimMotion.wake.length'),0);
 });
