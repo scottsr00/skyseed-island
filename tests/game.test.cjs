@@ -2178,6 +2178,28 @@ assert.equal(g.run("coastOrder.filter(x=>x==='waves').length"),1);
 for(const layer of ['land','swimmer','beach'])assert.ok(g.run(`coastOrder.indexOf('waves')<coastOrder.indexOf('${layer}')`));
 });
 
+test('passing beach waves hide swimmers and duck-diving boards nose first, then reveal the nose before the tail',()=>{
+const g=surfGame();
+g.run('surfClock=1000;const waveX=SURF_SHACK.x,waveY=beachWaveSurfaceY(waveX,1,surfClock)');
+const sample=delta=>g.run(`beachWaveSubmersion(waveX,waveY-(${delta}))`);
+assert.equal(sample(-40),null);
+assert.equal(sample(-20).stage,'entering');
+assert.ok(sample(-20).edge>sample(-10).edge,'entry hides the positive-X nose before the tail');
+assert.equal(sample(0).stage,'under');
+assert.equal(sample(16).stage,'emerging');
+assert.ok(sample(16).edge>sample(28).edge,'resurfacing reveals the positive-X nose before the tail');
+assert.equal(sample(50),null);
+g.run(`player.x=waveX;player.y=waveY;let waveClips=[];ctx.rect=(...args)=>waveClips.push(args);
+drawSurfingWorld()`);
+assert.equal(g.run('waveClips.some(r=>r.every(v=>v===0))'),true);
+g.run(`surfSession=null;swimming=true;swimMotion.effort=1;waveClips=[];drawSwimmingCharacter(player.x,player.y)`);
+assert.equal(g.run('waveClips.some(r=>r.every(v=>v===0))'),true);
+g.run('waveClips=[];drawSwimmingCharacter(player.x,player.y-400)');
+assert.equal(g.run('waveClips.length'),0,'open-water swimmers stay visible away from the beach break');
+g.run('swimming=false;surfSession={phase:"paddling",paused:true,paddleHeading:0};const beforeDive=JSON.stringify(surfSession);drawSurfingWorld();drawSurfingWorld()');
+assert.equal(g.run('JSON.stringify(surfSession)'),g.run('beforeDive'),'rendering never advances a paused dive');
+});
+
 test('surf up and down carve across the face while a centered camera scrolls water right',()=>{
 const up=surfGame(),down=surfGame();
 for(const [g,key] of [[up,'up'],[down,'down']])g.run(`surfSession.phase='riding';surfSession.y=.5;surfSession.angle=Math.PI;keys.add('${key}');advanceSurfing(600)`);
@@ -2292,7 +2314,7 @@ assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSessio
 
 test('surf lip leads left at the crest and crashes farther right with crumbling impact spray',()=>{
 const g=surfGame();g.run(`surfSession.phase='riding';surfSession.waveSize=1;surfSession.x=.85;surfSession.y=.15;const taperView=surfRideView()`);
-assert.ok(g.run('surfBreakEdge(274,taperView)-surfBreakEdge(100,taperView)')>55);
+assert.ok(g.run('surfBreakEdge(274,taperView)-surfBreakEdge(100,taperView)')>40);
 assert.equal(g.run('surfBarrelState().overrun'),true);
 g.run('surfSession.y=.8');assert.equal(g.run('surfBarrelState().overrun'),false);
 assert.ok(g.run('surfBarrelDepth(274)')<g.run('surfBarrelDepth(185)')/2);

@@ -3137,6 +3137,7 @@ const bodyVisibility=onBoard?1:Math.max(0,Math.min(1,(effort-.025)/.6));
 const kick=Math.sin(phase*2.8),roll=Math.sin(phase)*effort,bob=Math.sin(motion.time*.002)*.5;
 if(!onBoard)drawSwimmerWake();
 ctx.save();ctx.translate(x,y+bob);ctx.rotate(motion.heading);
+if(!onBoard)clipBeachWaveOccupant(x,y);
 if(bodyVisibility>0){
 // A long, low silhouette: legs and torso sit just beneath the water.
 if(!onBoard){ctx.globalAlpha=.35*bodyVisibility;ellipse(-2,1,17,6,'#467f82');}
