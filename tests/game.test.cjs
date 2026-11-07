@@ -1874,15 +1874,21 @@ g.run('fishingActive=true;pressTrim()');assert.equal(g.run('boatTrimLevel()'),1)
 g.run('fishingActive=false;boatAnchor={casting:true};pressTrim()');assert.equal(g.run('boatTrimLevel()'),1);
 g.run('resetBoatMotion()');assert.equal(g.run('boatTrimLevel()'),0);
 });
-test('raised motor trim modestly increases forward speed and records stronger wake spray',()=>{
+test('trim 4 is fastest, trim 5 loses propulsion, and lowering trim restores speed on both boats',()=>{
+for(const vessel of ['ferry','fishing']){
 const speeds=[];
-for(const trim of [0,3,5]){
-const g=game();g.run(`boating=true;activeVessel='fishing';player.x=1100;player.y=1400;resetBoatMotion();boatMotion.trimStep=${trim};driveBoat(3000,1,0)`);
+for(const trim of [0,3,4,5]){
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=1100;player.y=1400;resetBoatMotion();boatMotion.trimStep=${trim};driveBoat(3000,1,0);if(${trim}===5){player.x=-1100;player.y=900;driveBoat(8000,1,0)}`);
 speeds.push(g.run('boatMotion.velocity'));
 assert.equal(g.run(`boatMotion.wake.every(w=>w.trim===${trim})`),true);
-if(trim===5){g.run('cycleBoatTrim();driveBoat(40,1,0)');assert.ok(g.run('boatMotion.velocity')<speeds.at(-1));assert.ok(g.run('boatMotion.velocity')>140);}
 }
-assert.equal(speeds[0],140);assert.ok(speeds[1]>speeds[0]);assert.ok(Math.abs(speeds[2]-165.2)<1e-6);
+assert.equal(speeds[0],140);assert.ok(speeds[1]>speeds[0]);assert.ok(Math.abs(speeds[2]-165.2)<1e-6);assert.equal(speeds[3],105);
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=1100;player.y=1400;resetBoatMotion();boatMotion.trimStep=4;boatMotion.velocity=boatTopSpeed();cycleBoatTrim();driveBoat(40,1,0);updateWaterControls()`);
+assert.ok(g.run('boatMotion.velocity')<165.2);assert.ok(g.run('boatMotion.velocity')>105);
+g.run('driveBoat(1000,1,0);updateWaterControls()');assert.equal(g.run('boatMotion.velocity'),105);assert.equal(g.node('#boatSpeedValue').textContent,'64%');assert.equal(g.node('#boatTrimValue').textContent,'5 / 5');
+g.run('cycleBoatTrim();driveBoat(40,1,0)');assert.ok(g.run('boatMotion.velocity')>105);
+g.run('driveBoat(1000,1,0)');assert.ok(Math.abs(g.run('boatMotion.velocity')-165.2)<1e-6);
+}
 });
 test('outboard spray is ballistic, varies within the trim range, and grows with trim',()=>{
 for(const vessel of ['ferry','fishing'])for(const level of [1,3,5]){
@@ -1891,7 +1897,10 @@ const drops=JSON.parse(g.run('JSON.stringify(boatMotion.spray)'));
 assert.ok(drops.length>0);
 const distances=drops.map(p=>p.reach);assert.ok(Math.max(...distances)-Math.min(...distances)>5);
 for(const p of drops){
-assert.ok(p.reach>=20+level/5*40);assert.ok(p.reach<=32+level/5*62);
+const reachBoost=level===5?1.8:1;
+assert.ok(p.reach>=(20+level/5*80)*reachBoost);assert.ok(p.reach<=(32+level/5*114)*reachBoost);
+assert.ok(p.height>=(8+level/5*6)*.65*(level===5?1.6:1));
+assert.ok(p.height/p.reach<.3);
 assert.ok(Math.abs(p.vz*p.life-p.gravity*p.life*p.life/2)<1e-6);
 assert.ok(Math.abs(p.vz*p.life/2-p.gravity*(p.life/2)**2/2-p.height)<1e-6);
 }
@@ -1947,4 +1956,122 @@ test('ferry outboards are visibly larger than fishing outboards',()=>{
 const g=game();g.run('let scales=[];ctx.scale=(x,y)=>scales.push([x,y]);drawOutboardMotors("ferry",false)');
 assert.equal(g.run('scales.every(([x,y])=>x===1.4&&y===1.4)'),true);
 g.run('scales=[];drawOutboardMotors("fishing",false)');assert.equal(g.run('scales.every(([x,y])=>x===1&&y===1)'),true);
+});
+
+test('dragon fire ignites a touched tree, burns it down to ash, and does not restart it',()=>{
+const g=game();g.run('const target=burnableTrees.values().next().value;petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200,duration:850};advancePetDragonFire(16)');
+assert.equal(g.run('target.burnAge'),0);
+assert.equal(g.run('[...burnableTrees.values()].filter(t=>t.burnAge!==null).length'),1);
+g.run('advancePetDragonFire(1200);draw()');assert.equal(g.run('target.burnAge'),1200);
+g.run('advancePetDragonFire(TREE_BURN_DURATION);draw()');assert.equal(g.run('target.burnAge'),g.run('TREE_BURN_DURATION'));
+assert.equal(g.run('drawBurningTree(target.x,target.y)'),true);
+g.run('petDragonFire={elapsed:200,duration:850};checkTreeDragonFireHits()');assert.equal(g.run('target.burnAge'),g.run('TREE_BURN_DURATION'));
+});
+
+test('tree fire hits follow flight heading, mirrored sprite and altitude, and miss distant trees',()=>{
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+const g=game();g.run(`const target=burnableTrees.values().next().value;const heading=${heading};dragonFlight={stage:'flying',heading,altitude:30};player.x=target.x-Math.cos(heading)*55;player.y=target.y-8+30-Math.sin(heading)*55;petDragonFire={elapsed:200,duration:850};checkTreeDragonFireHits()`);
+assert.equal(g.run('target.burnAge'),0,`heading ${heading}`);
+}
+const g=game();g.run('const target=burnableTrees.values().next().value;petDragonPosition={x:target.x-150,y:target.y};petDragonFire={elapsed:200,duration:850};checkTreeDragonFireHits()');assert.equal(g.run('target.burnAge'),null);
+g.run('petDragonPosition={x:target.x-55,y:target.y+100};checkTreeDragonFireHits()');assert.equal(g.run('target.burnAge'),null);
+});
+
+test('burning trees pause for dialogs and clear on explorer or age reset; all tree types render ash',()=>{
+const g=game();g.run('const target=burnableTrees.values().next().value;target.burnAge=100');g.node('#challenge').open=true;
+g.run('advancePetDragonFire(500)');assert.equal(g.run('target.burnAge'),100);g.node('#challenge').open=false;
+g.run('advancePetDragonFire(500)');assert.equal(g.run('target.burnAge'),600);
+g.run('for(const t of burnableTrees.values())t.burnAge=1500;drawIslandTrees();drawBoatIslandDetails();for(const t of burnableTrees.values())t.burnAge=TREE_BURN_DURATION;drawIslandTrees();drawBoatIslandDetails()');
+g.run("switchAge('7-8')");assert.equal(g.run('[...burnableTrees.values()].every(t=>t.burnAge===null)'),true);
+});
+
+test('boat spray hits towel occupants along its path and they stand, dry off, and rest again',()=>{
+const g=game();
+g.run(`const sunbather=beachSunbathers()[0];
+boatMotion.spray=[{x:sunbather.x,y:sunbather.y-60,vx:0,vy:120,vz:45,gravity:180,life:.5,age:0}];
+advanceBoatSpray(500)`);
+assert.equal(g.run('sunbatherReactions.has(sunbather.i)'),true);
+assert.equal(g.run('sunbatherReactions.size'),1);
+for(const elapsed of [0,325,650,1400,3500,5700,6800])g.run(`sunbatherReactions.get(sunbather.i).elapsed=${elapsed};player.x=sunbather.x;player.y=sunbather.y;draw()`);
+g.run('sunbatherReactions.get(sunbather.i).elapsed=1200;advanceBoatSpray(10)');assert.equal(g.run('sunbatherReactions.get(sunbather.i).elapsed'),1200);
+g.node('#challenge').showModal();g.run('advanceSunbathers(500)');assert.equal(g.run('sunbatherReactions.get(sunbather.i).elapsed'),1200);g.node('#challenge').close();
+g.run('advanceSwimming(6000)');assert.equal(g.run('sunbatherReactions.size'),0);
+g.run('draw()');
+});
+
+test('spray misses towels when too far away or too high and beach reactions clear on player changes',()=>{
+const g=game();
+g.run(`const sunbather=beachSunbathers()[0];
+const drop={x:sunbather.x,y:sunbather.y-40,vx:0,vy:100,vz:150,gravity:180,life:1.6,age:0};
+boatMotion.spray=[{...drop},{...drop,x:sunbather.x+30,vz:45,life:.5}];advanceBoatSpray(500)`);
+assert.equal(g.run('sunbatherReactions.size'),0);
+g.run('sunbatherReactions.set(sunbather.i,{elapsed:900});switchAge("9-10")');assert.equal(g.run('sunbatherReactions.size'),0);
+g.run('sunbatherReactions.set(sunbather.i,{elapsed:900})');g.node('#profileName').value='Dry beachgoer';g.run('createProfile()');assert.equal(g.run('sunbatherReactions.size'),0);
+});
+
+test('boat instruments follow actual speed, reverse, trim cycling, and leaving either boat',()=>{
+for(const vessel of ['ferry','fishing']){
+const g=game();g.run('updateWaterControls()');assert.equal(g.node('#boatInstruments').hidden,true);
+g.run(`boating=true;activeVessel='${vessel}';player.x=1100;player.y=1400;resetBoatMotion();updateWaterControls()`);
+assert.equal(g.node('#boatInstruments').hidden,false);assert.equal(g.node('#boatSpeedValue').textContent,'0%');assert.equal(g.node('#boatTrimValue').textContent,'0 / 5');
+g.run('driveBoat(1000,1,0);updateWaterControls()');assert.ok(parseInt(g.node('#boatSpeedValue').textContent)>0);
+g.run('boatMotion.velocity=-65;updateWaterControls()');assert.equal(g.node('#boatSpeedValue').textContent,'REV 39%');assert.equal(g.node('#boatSpeedBar').style.width,'39%');
+for(const level of [1,2,3,4,5,4,3,2,1,0]){g.run('cycleBoatTrim()');assert.equal(g.node('#boatTrimValue').textContent,`${level} / 5`);assert.equal(g.node('#boatTrimBar').style.width,`${level*20}%`);}
+g.run('fishingActive=true;advanceBoatMotion(16);updateWaterControls()');assert.equal(g.node('#boatSpeedValue').textContent,'0%');
+g.run('boating=false;swimming=true;updateWaterControls()');assert.equal(g.node('#boatInstruments').hidden,true);
+}
+});
+
+
+test('maximum trim struggles to accelerate from rest, while trimming down restores grip',()=>{
+for(const vessel of ['ferry','fishing'])for(const direction of [1,-1]){
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=-1100;player.y=900;resetBoatMotion();boatMotion.trimStep=5;driveBoat(3000,${direction},0)`);
+const slow=Math.abs(g.run('boatMotion.velocity'));
+assert.ok(slow>15&&slow<30);
+g.run(`cycleBoatTrim();driveBoat(500,${direction},0)`);
+assert.ok(Math.abs(g.run('boatMotion.velocity'))>slow+20);
+}
+for(const step of [10,40,100]){
+const g=game();g.run(`boating=true;player.x=-1100;player.y=900;resetBoatMotion();boatMotion.trimStep=5;for(let elapsed=0;elapsed<11000;elapsed+=${step})driveBoat(${step},1,0)`);
+assert.equal(g.run('boatMotion.velocity'),105);
+}
+});
+
+
+test('maximum trim throws full-sized spray under throttle from rest and during slow acceleration',()=>{
+for(const vessel of ['ferry','fishing']){
+const bursts=[];
+for(const velocity of [0,2,105]){
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=-1100;player.y=900;resetBoatMotion();boatMotion.trimStep=5;boatMotion.velocity=${velocity};driveBoat(0,1,0);advanceBoatMotion(40)`);
+const drops=JSON.parse(g.run('JSON.stringify(boatMotion.spray)'));assert.ok(drops.length>0);
+assert.ok(drops.every(p=>p.reach>=180&&p.height>=14*.65*1.6));
+bursts.push(drops.map(p=>({reach:p.reach,height:p.height,size:p.size})));
+if(velocity===0){g.run('driveBoat(0,0,0);advanceBoatMotion(2000)');assert.equal(g.run('boatMotion.spray.length'),0);}
+}
+assert.deepEqual(bursts[0],bursts[1]);assert.deepEqual(bursts[0],bursts[2]);
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=-1100;player.y=900;resetBoatMotion();boatMotion.trimStep=5;driveBoat(40,1,0);advanceBoatMotion(40)`);
+assert.ok(g.run('boatMotion.velocity')<1);assert.ok(g.run('boatMotion.spray.length')>0);assert.ok(g.run('boatMotion.spray.every(p=>p.reach>=180)'));
+g.run('fishingActive=true;advanceBoatMotion(2000)');assert.equal(g.run('boatMotion.spray.length'),0);
+}
+});
+
+test('boat spray wets the pet dragon, then he shakes off visible water and dries',()=>{
+const g=game();g.run(`petDragonPosition={x:1100,y:1400};boatMotion.spray=[{x:1060,y:1400,vx:160,vy:0,vz:45,gravity:180,life:.5,age:0}];advanceBoatSpray(500)`);
+assert.equal(g.run('petDragonWet.elapsed'),0);
+g.run(`let waterBeads=0,shakeAngles=[];const originalWaterEllipse=ellipse;ellipse=(...a)=>{if(a[4]==='#a8e9f5'||a[4]==='#c5f4ff')waterBeads++;originalWaterEllipse(...a)};ctx.rotate=a=>shakeAngles.push(a);drawPetDragon()`);
+assert.ok(g.run('waterBeads')>=9);
+g.run('advancePetDragonWet(950);waterBeads=0;shakeAngles=[];drawPetDragon()');assert.ok(g.run('waterBeads')>9);assert.ok(g.run('shakeAngles.some(a=>Math.abs(a)>.01)'));
+g.run('advanceBoatSpray(10)');assert.equal(g.run('petDragonWet.elapsed'),950);
+g.node('#challenge').showModal();g.run('advancePetDragonWet(500)');assert.equal(g.run('petDragonWet.elapsed'),950);g.node('#challenge').close();
+g.run('advanceSwimming(1850);waterBeads=0;drawPetDragon()');assert.equal(g.run('petDragonWet'),null);assert.equal(g.run('waterBeads'),0);
+});
+
+test('dragon spray hits respect world position, heading, altitude, and explorer resets',()=>{
+const g=game();
+g.run(`petDragonPosition={x:1100,y:1400};const dragonDrop={x:1100,y:1400,vx:0,vy:0,vz:0,gravity:180,life:.5,age:.1};sprayPetDragon([{...dragonDrop,x:1200},{...dragonDrop,y:1420},{...dragonDrop,vz:300,dragonCheckedAge:.08}])`);assert.equal(g.run('petDragonWet'),null);
+g.run(`player.x=1100;player.y=1400;dragonFlight={stage:'flying',heading:Math.PI/2,altitude:30};sprayPetDragon([{...dragonDrop}])`);assert.equal(g.run('petDragonWet'),null);
+g.run(`sprayPetDragon([{...dragonDrop,y:1420,vz:400}])`);assert.equal(g.run('petDragonWet.elapsed'),0);
+g.run('resetPetDragon()');assert.equal(g.run('petDragonWet'),null);
+g.run('petDragonWet={elapsed:900};switchAge("9-10")');assert.equal(g.run('petDragonWet'),null);
+g.run('petDragonWet={elapsed:900}');g.node('#profileName').value='Dragon friend';g.run('createProfile()');assert.equal(g.run('petDragonWet'),null);
 });

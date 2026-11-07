@@ -217,3 +217,15 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 @media(max-width:600px){.map-hud{flex-wrap:wrap}.map-app .map-hud .hud-identity{width:100%;max-width:none;gap:12px;justify-content:space-between}.map-hud .hud-resources{flex-direction:row;gap:18px}.hud-explorer{min-width:0}.discovery-meter .power-heading{gap:6px}}
 
 .power-icon{display:block;width:32px;height:32px;image-rendering:auto}.hud-resources #powerSolve{filter:none}
+
+/* Boat instruments use the same floating icons, labels and segmented resource bars. */
+.map-hud{flex-wrap:wrap}
+.boat-instruments{display:flex;justify-content:flex-end;gap:24px;flex:0 0 100%;color:#fff5d6;text-shadow:-1px -1px #294537,1px -1px #294537,-1px 1px #294537,1px 1px #294537,2px 2px #294537}
+.map-app #boatInstruments[hidden]{display:none}
+.boat-instrument{display:flex;align-items:center;gap:8px;margin:0;padding:0;min-width:0}
+.instrument-icon{display:block;flex:0 0 32px;width:32px;height:32px}
+.trim-gauge{background:#654c2d;border-color:#654c2d}
+.trim-gauge>div{width:0;background:linear-gradient(#fff0a2 0 2px,#efc34f 2px 6px,#d6922d 6px)}
+.trim-gauge::after{background:repeating-linear-gradient(90deg,transparent 0 calc(20% - 2px),#654c2d calc(20% - 2px) 20%)}
+@media(max-width:600px){.boat-instruments{gap:18px}.boat-instrument{gap:6px}.boat-instrument .power-gauge{width:100px}.boat-instrument .power-heading{font-size:9px;gap:6px}.boat-instrument .power-heading strong{font-size:9px}}
+@media(max-width:360px){.boat-instruments{gap:12px}.boat-instrument .power-gauge{width:88px}.instrument-icon{flex-basis:28px;width:28px;height:28px}}

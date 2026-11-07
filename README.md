@@ -50,8 +50,10 @@ If a standing explorer is in the pet dragon’s visible fire plume, a small flam
 
 Boat driving: Up/W applies forward thrust, Down/S brakes before reversing, and Left/A or Right/D steers smoothly relative to the bow. Both vessels accelerate gradually, coast when released, and stop their momentum on collision.
 
-Press Space while driving either boat to trim the twin outboard motors: five separate presses raise trim from 0 to 5, then five lower it back to 0. Higher trim widens the spray and adds up to 18% forward speed. Full trim creates twin rooster tails while moving forward; spray fades as the boat slows. Holding Space does not repeat trim changes, and Space still casts while fishing.
+Press Space while driving either boat to trim the twin outboard motors: five separate presses raise trim from 0 to 5, then five lower it back to 0. Trim positions 1–4 widen the spray and add up to 18% forward speed, with position 4 the fastest. At position 5 the props are nearly out of the water: the boat slows to 75% of its untrimmed top speed while throwing larger twin rooster tails. Starting from rest at maximum trim takes about 11 seconds to reach its reduced forward top speed. The maximum-trim rooster tail stays full-sized under forward throttle even from a standstill. Lowering back to 4 restores propulsion; spray fades after releasing the throttle. Holding Space does not repeat trim changes, and Space still casts while fishing.
 
 Both boats display twin outboards with trim-adjusted lower units. Spray uses individual gravity-driven droplets carried by the boat’s motion, with varied launch speeds, fine mist, and small landing splashes.
 
 Outboards swivel together with steering, reverse their angle for reverse thrust, and direct spray with the engines. The ferry carries larger outboards. Boarding either boat starts the motors with a brief exhaust puff and a 0.55-second startup before propulsion engages.
+
+Dragon fire ignites trees touched by its plume, including pines and palms on outer islands. Burning trees flicker and smoke as they shrink to ash over 4.2 seconds. Hit detection follows the dragon’s flight heading and altitude. Tree fires pause for dialogs and reset with the dragon when changing explorers, age levels, or resetting the adventure; ash remains for the current session.
