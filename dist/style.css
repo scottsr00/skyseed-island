@@ -73,7 +73,7 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .map-app .text-button{background:transparent;box-shadow:none;border:0;text-underline-offset:4px}
 .map-app :is(input:not([type=range]),select,textarea){border:2px solid #70845c;background:#fffbea;color:var(--ink);box-shadow:inset 2px 2px 0 #d9dfbb;border-radius:0;font-size:14px}
 .map-app select{max-width:100%}
-.map-app :is(.tool,.hint-box,.completion,.trading-counter,.reward-balance,.reward-gain,.squishy-unlock,.fishing-feedback,#boatHarbourInfo,#characterPreview,.fish-badge,.stash-grid .squishy-item,.squishy-card,.quest-card,.fishing-card,.ferry-card,.upgrade-icon){
+.map-app :is(.tool,.hint-box,.completion,.trading-counter,.reward-balance,.reward-gain,.squishy-unlock,.fishing-feedback,:where(#boatHarbourInfo),:where(#characterPreview),.fish-badge,.stash-grid .squishy-item,.squishy-card,.quest-card,.fishing-card,.ferry-card,.upgrade-icon){
  border:2px solid #a7b58b;border-radius:0;background:#e8e9c8;box-shadow:inset 2px 2px 0 #fffbe7;
 }
 .map-app .hint-box{border-left:6px solid #b18c47;background:#eee0b7}
@@ -120,7 +120,7 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .map-hud .hud-identity,.map-hud .hud-resources{color:#fff5d6;text-shadow:-1px -1px #294537,1px -1px #294537,-1px 1px #294537,1px 1px #294537,2px 2px #294537}
 .map-hud .hud-resources{display:flex;align-items:flex-start;gap:24px;margin-left:auto;flex-shrink:0;color:#fff5d6;text-shadow:-1px -1px #294537,1px -1px #294537,-1px 1px #294537,1px 1px #294537,2px 2px #294537}
 .map-app .map-hud :is(.power-meter,.wallet){display:flex;align-items:center;gap:8px;min-width:0;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:inherit}
-.hud-resources .resource-icon{display:block;flex:0 0 32px;width:32px;height:32px;filter:drop-shadow(1px 2px 0 #244739);image-rendering:pixelated}
+.hud-resources .resource-icon{display:block;flex:0 0 32px;width:32px;height:32px;filter:none;image-rendering:auto}
 .map-app .hud-resources button.resource-icon{pointer-events:auto;box-sizing:content-box;margin:-6px;padding:6px;border:0;background:transparent;color:inherit;box-shadow:none;touch-action:manipulation}
 .hud-resources button.resource-icon:hover{transform:translateY(-2px)}
 .hud-resources button.resource-icon:active{transform:translateY(1px)}
@@ -138,13 +138,15 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 @media(max-width:600px){.map-hud .hud-resources{flex-direction:column;gap:10px}.power-gauge{width:116px}.power-heading{font-size:9px;gap:6px}.map-hud .hud-resources .wallet small{font-size:9px}.map-hud .hud-resources .wallet strong{font-size:24px}.map-hud .hud-identity{max-width:calc(100% - 172px);min-width:0}.hud-identity>div{min-width:0}.hud-identity :is(strong,#region,.profile-badge){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 
 /* Explorer details float on the map alongside the resource displays. */
-.map-app .map-hud .hud-identity{display:block;min-width:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.map-app .map-hud .hud-identity{display:flex;align-items:center;gap:24px;min-width:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
 .map-hud .hud-identity strong{font:700 10px/1.3 var(--pixel-font);letter-spacing:1px}
-.hud-profile-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.hud-profile-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
 .map-hud .hud-identity .profile-badge{display:block;min-width:0;max-width:240px;margin:0;font-size:14px;font-weight:700;color:inherit}
-.hud-profile-row .hud-discoveries{font-size:10px;line-height:1.4;font-weight:700}
+.profile-avatar{display:grid;place-items:center;flex:0 0 28px;width:28px;height:36px}.profile-avatar svg{display:block;width:28px;height:35px;image-rendering:auto}
+.discovery-meter{display:flex;align-items:center;gap:8px;flex-shrink:0;margin:0;padding:0}.discovery-icon{display:block;flex:0 0 32px;width:32px;height:32px;filter:none;image-rendering:auto}
+.discovery-gauge{background:#203f61;border-color:#203f61}.discovery-gauge>div{width:0;background:linear-gradient(#a1dcff 0 2px,#4ca9e8 2px 6px,#287ac1 6px)}.discovery-gauge::after{background:repeating-linear-gradient(90deg,transparent 0 12px,#203f61 12px 14px)}
 .map-hud .hud-identity #region{margin-top:5px;font-size:10px;color:inherit}
-@media(max-width:600px){.map-hud .hud-identity strong{font-size:9px}.hud-profile-row{gap:3px 8px}.map-hud .hud-identity .profile-badge{max-width:100%;font-size:12px}.hud-profile-row .hud-discoveries{font-size:9px}.map-hud .hud-identity #region{font-size:9px}}
+@media(max-width:600px){.map-hud .hud-identity strong{font-size:9px}.hud-profile-row{gap:3px 8px}.map-hud .hud-identity .profile-badge{max-width:100%;font-size:12px}.profile-avatar{flex-basis:24px;width:24px;height:30px}.profile-avatar svg{width:24px;height:30px}.map-hud .hud-identity #region{font-size:9px}}
 
 .map-app #powerMeter[hidden]{display:none}
 
@@ -158,3 +160,60 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .map-app #waterControls{display:none}
 
 .map-app .hud-identity #region{display:none}
+
+/* Nearby E actions already appear in the central interaction prompt. */
+.boat-map-actions :is(#mapSurfShack,#mapVolleyJoin,#mapBeachBoat,#mapWakeboardStart,#mapDragonMount,#mapBoatBoard){display:none}
+
+/* Keep all suggested actions together at the bottom center. */
+.map-suggestions{position:absolute;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(700px,calc(100% - 150px));display:flex;flex-direction:column;align-items:center;gap:8px;z-index:3;pointer-events:none}
+.map-app .map-stage .map-suggestions #interaction,.map-app .map-stage .map-suggestions .boat-map-actions{position:static;inset:auto;transform:none;max-width:100%;width:auto;pointer-events:auto}
+.map-suggestions .boat-map-actions{justify-content:center}
+.map-suggestions #interaction:empty,.map-suggestions .boat-map-actions:not(:has(button:not([hidden]))){display:none}
+.map-app .map-suggestions #interaction button{white-space:normal}
+@media(max-width:600px){.map-suggestions{bottom:max(12px,env(safe-area-inset-bottom));width:calc(100% - 120px)}}
+
+/* Every suggestion reads: action - button. */
+.map-app .map-suggestions :is(.boat-map-actions button,#interaction button){display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:6px 9px;border:0;background:#294e40;color:#fff5d6;box-shadow:none;font:12px/1.4 monospace;min-height:38px;text-align:center}
+.map-app .map-suggestions button[hidden]{display:none}
+.map-app .map-suggestions button:not(:disabled):hover{background:#365e43}
+.map-suggestions .suggestion-separator{color:#d5dfc1}
+.map-suggestions kbd{display:inline-block;flex-shrink:0;margin:0;padding:5px 9px;min-width:30px;border:2px solid #7f9872;background:#fff5d6;color:#254735;font:bold 12px monospace;box-shadow:2px 2px 0 #162f28;border-radius:0}
+.map-app .map-suggestions .boat-map-actions :is(#mapSurfShack,#mapVolleyJoin,#mapBeachBoat,#mapWakeboardStart,#mapDragonMount,#mapBoatBoard){display:none}
+
+/* Map menus close with Escape or their rail toggle, without a header row. */
+.map-app .map-control-panel>.modal-top{display:none}
+.map-app .rail-submenu .submenu-actions{margin-top:0}
+
+/* Second-level menus use the same parchment, square frames and stepped artwork. */
+.map-app .map-control-panel:not(.rail-submenu){background:var(--pixel-paper);border:3px solid var(--pixel-edge);border-radius:0;box-shadow:inset 3px 3px var(--pixel-light),inset -3px -3px var(--pixel-shade),5px 5px 0 #24473980}
+.map-app .map-control-panel :is(h2,h3){font-family:var(--pixel-font);font-weight:700;letter-spacing:0}
+.map-app .map-control-panel h2{font-size:18px;line-height:1.4;margin:0 0 16px}
+.map-app .map-control-panel h3{font-size:14px}
+.map-app .map-control-panel :is(p,label,small){color:var(--muted)}
+.map-app .map-control-panel :is(.anchor-card,.trading-counter,.squishy-card){border:2px solid var(--pixel-edge);border-radius:0;background:#e8e9c8;padding:14px;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #c3cca1}
+.map-app .map-control-panel .anchor-card{margin:16px 0}
+.map-app .map-control-panel .stash-button{padding:12px 10px;gap:12px;background:#e3e8c0;border:2px solid var(--pixel-edge);box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #a4b380,2px 2px #344f3b}
+.map-app .map-control-panel .stash-button strong{font:700 16px/1.4 var(--pixel-font)}
+.map-app .map-control-panel .stash-button small{margin:5px 0;font-size:10px}
+.map-app .map-control-panel .stash-invite{font-size:10px;color:#365e43}
+.map-app .map-control-panel .treasure-chest{width:64px;height:58px;filter:drop-shadow(2px 2px 0 #48634b66)}
+.map-app .map-control-panel .chest-lid{width:64px;height:28px;top:2px;border-radius:0;clip-path:polygon(0 8px,8px 8px,8px 0,56px 0,56px 8px,64px 8px,64px 100%,0 100%);background:linear-gradient(90deg,#b17c45 0 8px,#edc66e 8px 16px,#98623c 16px 48px,#edc66e 48px 56px,#b17c45 56px);border:3px solid #69482f;box-shadow:inset 0 3px #e0ad61}
+.map-app .map-control-panel .chest-base{width:64px;height:26px;top:30px;border-radius:0;border:3px solid #69482f;background:linear-gradient(90deg,#98623c 0 8px,#d5aa56 8px 16px,#ad7848 16px 48px,#d5aa56 48px 56px,#98623c 56px);box-shadow:inset 0 -3px #775035}
+.map-app .map-control-panel .chest-lock{left:25px;top:24px;width:14px;height:16px;padding:0;border-radius:0;text-align:center;font-size:10px;line-height:12px;box-shadow:1px 1px #69482f}
+.map-app .map-control-panel .stash-grid{gap:10px;margin:16px 0}
+.map-app .map-control-panel .stash-grid .squishy-item{padding:14px 8px;border:2px solid var(--pixel-edge);border-radius:0;background:#ece6cf;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #c3ba9a}
+.map-app .map-control-panel .squishy-art{border:2px solid #7c648e;border-radius:0;box-shadow:inset 2px 2px #fffbe780,inset -2px -2px #49385c33;line-height:1;clip-path:polygon(0 6px,6px 6px,6px 0,calc(100% - 6px) 0,calc(100% - 6px) 6px,100% 6px,100% calc(100% - 6px),calc(100% - 6px) calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,6px calc(100% - 6px),0 calc(100% - 6px))}
+.map-app .map-control-panel .squishy-art.mythic{border-color:#a48b4a;box-shadow:inset 2px 2px #fff3b4,inset -2px -2px #b8963e}
+.map-app .map-control-panel :is(.stash-next,.collection-catalog){border-top:2px solid var(--border);padding-top:14px}
+.map-app .map-control-panel .catalog-tier{border-color:#8c9b69}
+.map-app .map-control-panel .catalog-tier[data-tier="mythic"]{border-color:#b18c47}
+.map-app .map-control-panel .trade-fields{gap:10px;margin:14px 0}
+.map-app .map-control-panel :is(input,select){border:2px solid var(--pixel-edge);border-radius:0;background:var(--pixel-light);box-shadow:inset 2px 2px #d9dfbb;font:700 12px/1.5 var(--pixel-font);padding:10px;color:var(--ink)}
+.map-app .map-control-panel :is(.egg,.egg.hatched,.upgrade-icon,.badge){border:2px solid #7b9166;border-radius:0;background:#dce3b8;box-shadow:inset 2px 2px var(--pixel-light);color:var(--ink)}
+.map-app .map-control-panel .journal-row{margin:0 0 10px;padding:10px;gap:10px}
+.map-app .map-control-panel .journal-row small{line-height:1.5}
+@media(max-width:600px){.map-app .map-control-panel:not(.rail-submenu){padding:14px}.map-app .map-control-panel .stash-button{gap:10px}.map-app .map-control-panel .stash-button strong{font-size:14px}}
+
+@media(max-width:600px){.map-hud{flex-wrap:wrap}.map-app .map-hud .hud-identity{width:100%;max-width:none;gap:12px;justify-content:space-between}.map-hud .hud-resources{flex-direction:row;gap:18px}.hud-explorer{min-width:0}.discovery-meter .power-heading{gap:6px}}
+
+.power-icon{display:block;width:32px;height:32px;image-rendering:auto}.hud-resources #powerSolve{filter:none}
