@@ -229,3 +229,10 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .trim-gauge::after{background:repeating-linear-gradient(90deg,transparent 0 calc(20% - 2px),#654c2d calc(20% - 2px) 20%)}
 @media(max-width:600px){.boat-instruments{gap:18px}.boat-instrument{gap:6px}.boat-instrument .power-gauge{width:100px}.boat-instrument .power-heading{font-size:9px;gap:6px}.boat-instrument .power-heading strong{font-size:9px}}
 @media(max-width:360px){.boat-instruments{gap:12px}.boat-instrument .power-gauge{width:88px}.instrument-icon{flex-basis:28px;width:28px;height:28px}}
+
+/* Keep ride speed and barrel feedback visible beside the heat counters. */
+.surf-scoreboard{display:grid;grid-template-columns:repeat(4,auto);gap:6px 10px}
+#surfSpeed{grid-column:1 / 2;font-weight:bold;color:#326e68}
+#surfLine{grid-column:2 / -1;text-align:right;font-size:10px}
+.surf-message{top:82px}.surf-session-actions{top:142px}
+@media(max-width:600px){.surf-message{top:86px}.surf-session-actions{top:150px}#surfLine{font-size:9px}}

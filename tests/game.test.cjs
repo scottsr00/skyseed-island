@@ -2204,3 +2204,39 @@ assert.ok(slow.run('surfRideView().breakX')<slow.run('beforeChase.breakX'));
 assert.ok(fast.run('surfRideView().breakX')>fast.run('beforeChase.breakX'));
 slow.run("surfSession.x=.861;advanceSurfing(16)");assert.equal(slow.run('surfSession.phase'),'wipeout');assert.match(slow.run('surfSession.message'),/breaking wave caught/);
 });
+
+test('pumping keeps the lip behind the surfer while coasting is overrun and crest-holding cannot farm speed',()=>{
+const pumped=surfGame(),coast=surfGame();
+for(const g of [pumped,coast])g.run(`surfSession.phase='riding';surfSession.angle=Math.PI;surfSession.y=.45`);
+pumped.run(`let pumpKey='down';for(let t=0;t<12000&&surfSession.phase==='riding';t+=40){if(surfSession.y>.66)pumpKey='up';if(surfSession.y<.22)pumpKey='down';keys.clear();keys.add(pumpKey);advanceSurfing(40)}`);
+assert.equal(pumped.run('surfSession.phase'),'riding');assert.ok(pumped.run('surfSession.speed')>.65);
+coast.run(`for(let t=0;t<12000&&surfSession.phase==='riding';t+=40)advanceSurfing(40)`);
+assert.equal(coast.run('surfSession.phase'),'wipeout');assert.match(coast.run('surfSession.message'),/breaking wave caught/);
+const crest=surfGame();crest.run(`surfSession.phase='riding';surfSession.angle=Math.PI+.72;surfSession.y=.012;surfSession.speed=.5;keys.add('up');advanceSurfing(400)`);
+assert.ok(crest.run('surfSession.speed')<.5);assert.equal(crest.run('surfSession.phase'),'riding');
+});
+
+test('Space launches only on a fresh press at the crest and touch controls request the same air',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.speed=.7;surfSession.angle=Math.PI+.6;surfSession.y=.5;const airEvent={repeat:false,preventDefault(){}};handleSurfKey(' ',airEvent);advanceSurfing(300);surfSession.y=.025;handleSurfKey(' ',{...airEvent,repeat:true});advanceSurfing(16)`);
+assert.equal(g.run('surfSession.phase'),'riding');
+g.run(`handleSurfKey(' ',airEvent);advanceSurfing(16)`);assert.equal(g.run('surfSession.phase'),'airborne');
+const touch=surfGame();touch.run(`surfSession.phase='riding';surfSession.speed=.7;surfSession.angle=Math.PI+.6;surfSession.y=.025;updateSurfUI()`);
+assert.match(touch.node('#surfAction').textContent,/Air at crest/);
+touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});touch.run('advanceSurfing(16)');assert.equal(touch.run('surfSession.phase'),'airborne');
+const snapshot=touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])');
+touch.run(`surfSession.paused=true;keys.add('right');advanceSurfing(1000)`);assert.equal(touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])'),snapshot);
+});
+
+test('air landings accept the visible 6-to-9-o’clock sector, exclude horizontal, and boost speed',()=>{
+for(const degrees of [90,90.01,110,135,170,179.9])for(const turns of [-2,0,2]){
+const g=surfGame();g.run(`surfSession.phase='airborne';surfSession.y=.012;surfSession.x=.43;surfSession.speed=.5;surfSession.angle=0;surfSession.airSpin=${degrees}*Math.PI/180-Math.PI+${turns}*Math.PI*2;surfSession.airHeight=.001;surfSession.airV=-1;advanceSurfing(16)`);
+assert.equal(g.run('surfSession.phase'),'riding',`landing ${degrees}° with ${turns} extra turns`);
+assert.equal(g.run('surfSession.wipeouts'),0);assert.ok(g.run('surfSession.score')>=100);assert.ok(g.run('surfSession.speed')>.61);
+assert.ok(Math.abs(g.run('surfSession.angle')-degrees*Math.PI/180)<1e-6);assert.match(g.run('surfSession.message'),/SPEED BOOST/);
+}
+for(const degrees of [0,45,89.9,180,180.1,225,270,359.9]){
+const g=surfGame();g.run(`surfSession.phase='airborne';surfSession.y=.012;surfSession.speed=.5;surfSession.angle=Math.PI-.5;surfSession.airSpin=${degrees}*Math.PI/180-Math.PI;surfSession.airHeight=.001;surfSession.airV=-1;advanceSurfing(16)`);
+assert.equal(g.run('surfSession.phase'),'wipeout',`invalid landing ${degrees}°`);
+assert.equal(g.run('surfSession.score'),0);
+}
+});

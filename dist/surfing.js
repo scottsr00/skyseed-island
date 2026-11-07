@@ -72,21 +72,28 @@ const steer=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys
 const sharp=keys.has('carve'),rotation=steer*(s.phase==='airborne'?6.5:sharp?4:2.3)*seconds;
 const vertical=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0);
 if(s.phase==='riding')s.angle+=rotation;
-if(vertical){
+if(vertical&&s.phase==='riding'){
 const target=Math.PI-vertical*.72,delta=Math.atan2(Math.sin(target-s.angle),Math.cos(target-s.angle));
 s.angle+=delta*(1-Math.exp(-seconds*5.5));
 }
 s.scroll=(s.scroll||0)+Math.max(.08,-Math.cos(s.angle)*s.speed)*seconds*170;
 if(s.phase==='airborne'){
-s.airSpin+=rotation;s.airTurns=Math.abs(s.airSpin);s.airHeight+=s.airV*seconds;s.airV-=2.6*seconds;
+s.airSpin+=rotation;
+if(vertical&&!steer){
+const target=Math.PI-vertical*.72,heading=Math.PI+s.airSpin;
+const delta=Math.atan2(Math.sin(target-heading),Math.cos(target-heading));
+s.airSpin+=delta*(1-Math.exp(-seconds*5.5));
+}
+s.airTurns=Math.max(s.airTurns||0,Math.abs(s.airSpin));s.airHeight+=s.airV*seconds;s.airV-=2.6*seconds;
 s.x=Math.max(.12,s.x+(.23-s.speed*.55)*seconds);
 if(surfBarrelState(s).overrun){surfWipeout('The lip overran your air! Pump for more speed before taking off.');continue;}
 if(s.airHeight<=0&&s.airV<0){
-const down=Math.sin(s.angle),aligned=Math.cos(s.airSpin)>.6;
-if(down<.12||down>.96||Math.cos(s.angle)>=0||!aligned){surfWipeout('Wipeout! Finish your spin and hold Down to land travelling left down the face.');continue;}
-const spins=Math.floor((Math.abs(s.airSpin)+.15)/(Math.PI*2)),bonus=100+spins*400;
-s.score+=bonus;s.phase='riding';s.y=.08;s.airHeight=0;s.speed=Math.min(.85,s.speed+.06);s.pumpDirection=0;s.pumpDistance=0;
-s.message=spins?`${spins*360}° AERIAL · +${bonus}`:`CLEAN AIR · +${bonus}`;
+// Judge the nose direction actually drawn on screen, not the hidden riding angle.
+const landing=surfAirHeading(s);
+if(landing<Math.PI/2-1e-7||landing>=Math.PI-1e-7){surfWipeout('Wipeout! Land with the board pointing between 6 and 9 o’clock, not horizontal.');continue;}
+const spins=Math.floor(((s.airTurns||0)+.05)/(Math.PI*2)),bonus=100+spins*400;
+s.score+=bonus;s.phase='riding';s.y=.08;s.airHeight=0;s.angle=landing;s.speed=Math.min(.85,s.speed+.12+Math.sin(landing)*.04);s.pumpDirection=0;s.pumpDistance=0;
+s.message=spins?`${spins*360}° AERIAL · +${bonus} · SPEED BOOST`:`CLEAN AIR · +${bonus} · SPEED BOOST`;
 }
 continue;
 }
@@ -115,11 +122,15 @@ if(s.y>1.03){surfWipeout('Too low on the wave! Carve back up before reaching the
 if((s.airRequest||0)>0){
 if(s.y<=.075&&heading<-.2&&s.speed>=.48){
 s.phase='airborne';s.y=.012;s.airHeight=.01;s.airV=1.4+s.speed*.65;s.airSpin=0;s.airTurns=0;s.airRequest=0;
-s.message='AIR! Left / right spin. Finish the rotation and hold Down to land.';
+s.message='AIR! Left / right spin. Land pointing down to lower-left (6–9 o’clock).';
 }else s.airRequest=Math.max(0,s.airRequest-ms);
 }
 }
 updateSurfUI();
+}
+function surfAirHeading(s=surfSession){
+const heading=Math.PI+s.airSpin;
+return ((heading%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
 }
 function requestSurfAir(){
 const s=surfSession;if(!s||s.paused||s.phase!=='riding')return;
