@@ -82,7 +82,7 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .map-app .map-control-panel>:is(.quest-card,.companion-card,.fishing-card,.ferry-card){background:transparent;border:0;box-shadow:none}
 .map-app :is(.progress-track,.mini-track){border:1px solid #70845c;border-radius:0;height:8px;background:#d9dfbb}
 .map-app .fish-badge>span{border-radius:0;border:2px solid #a48b4a;background:#f3e1a1}
-.map-app :is(.hud-identity,.map-hud .wallet,.map-progress,.water-controls,#toast){border:2px solid var(--pixel-edge);border-radius:0;background:var(--pixel-paper);color:var(--ink);box-shadow:inset 2px 2px 0 #fffbe7,3px 3px 0 #24473966}
+.map-app :is(.map-progress,.water-controls,#toast){border:2px solid var(--pixel-edge);border-radius:0;background:var(--pixel-paper);color:var(--ink);box-shadow:inset 2px 2px 0 #fffbe7,3px 3px 0 #24473966}
 .map-app :is(.map-progress,.water-controls,#toast){background:#294e40;color:#fff5d6;border-color:#a7b58b;box-shadow:inset 2px 2px 0 #476d50,3px 3px 0 #24473966}
 .map-app .map-icon-rail .rail-label{border:2px solid var(--pixel-edge);border-radius:0;background:var(--pixel-paper);box-shadow:2px 2px 0 #24473966;font-family:var(--pixel-font);font-weight:700}
 .map-app kbd{border:1px solid #7b9166;border-radius:0;background:#e3e8c0;box-shadow:1px 1px 0 #70845c}
@@ -116,10 +116,35 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 
 .math-picture{padding:14px;border:2px solid #a7b58b;background:#fffbe7;font:700 23px/1.8 var(--pixel-font);text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#365e43}
 
-/* Swimming power stays visible beside the explorer and crystal displays. */
-.map-hud .power-meter{pointer-events:auto;flex:0 1 240px;min-width:190px;padding:9px 12px;border:2px solid var(--pixel-edge,#345345);background:var(--pixel-paper,#fff8df);box-shadow:inset 2px 2px 0 #fffbe7,3px 3px 0 #24473966;color:var(--ink)}
-.power-heading{display:flex;align-items:center;gap:10px;font-size:10px}.power-heading strong{letter-spacing:1.5px}.power-heading span{font-variant-numeric:tabular-nums;white-space:nowrap}.power-heading button{margin-left:auto;border:0;border-bottom:1px solid #587254;padding:2px 0;background:transparent;color:#28523e;font-size:10px;white-space:nowrap}.power-gauge{height:10px;margin:6px 0 4px;background:#d8dec9;border:1px solid #71836b;overflow:hidden}.power-gauge>div{height:100%;width:100%;background:repeating-linear-gradient(90deg,#68984d 0 12px,#90b46e 12px 14px);transition:width .2s linear}.power-meter small{display:block;font-size:9px;color:#536d54;line-height:1.3}.power-meter[data-level="low"] .power-gauge>div{background:#d7a94c}.power-meter[data-level="empty"] .power-gauge{background:#e3c1a7}.power-meter[data-level="empty"] small{color:#8c422c}
-@media(max-width:850px){.map-hud{flex-wrap:wrap}.map-hud .power-meter{order:3;flex:0 0 calc(100% - 64px);margin-left:64px;min-width:0;padding:6px 9px}.power-heading{font-size:9px}.power-gauge{height:8px;margin:4px 0 3px}.power-meter small{font-size:8px}.map-hud .wallet{margin-left:auto}}
+/* Floating pixel resources share one compact group above the map. */
+.map-hud .hud-identity,.map-hud .hud-resources{color:#fff5d6;text-shadow:-1px -1px #294537,1px -1px #294537,-1px 1px #294537,1px 1px #294537,2px 2px #294537}
+.map-hud .hud-resources{display:flex;align-items:flex-start;gap:24px;margin-left:auto;flex-shrink:0;color:#fff5d6;text-shadow:-1px -1px #294537,1px -1px #294537,-1px 1px #294537,1px 1px #294537,2px 2px #294537}
+.map-app .map-hud :is(.power-meter,.wallet){display:flex;align-items:center;gap:8px;min-width:0;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:inherit}
+.hud-resources .resource-icon{display:block;flex:0 0 32px;width:32px;height:32px;filter:drop-shadow(1px 2px 0 #244739);image-rendering:pixelated}
+.map-app .hud-resources button.resource-icon{pointer-events:auto;box-sizing:content-box;margin:-6px;padding:6px;border:0;background:transparent;color:inherit;box-shadow:none;touch-action:manipulation}
+.hud-resources button.resource-icon:hover{transform:translateY(-2px)}
+.hud-resources button.resource-icon:active{transform:translateY(1px)}
+.hud-resources .resource-details{min-width:0}
+.power-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:10px;line-height:1.3}
+.power-heading strong,.map-hud .hud-resources .wallet small{font:700 10px/1.3 var(--pixel-font);letter-spacing:1px;color:inherit;text-shadow:inherit}.power-heading span{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+.power-gauge{position:relative;width:144px;height:12px;margin:6px 0 0;background:#294537;border:2px solid #294537;box-shadow:1px 1px 0 #fff5d680;overflow:hidden}
+.power-gauge>div{height:100%;width:100%;background:linear-gradient(#a5ec79 0 2px,#54b64c 2px 6px,#358a3b 6px);transition:width .2s linear}
+.power-gauge::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0 12px,#294537 12px 14px)}
+.power-meter[data-level="empty"] .power-gauge{background:#294537}
+.map-app .map-hud .hud-resources .wallet,.hud-resources .wallet .resource-details,.hud-resources .wallet small{background:transparent;border:0;box-shadow:none}
+.map-hud .hud-resources .wallet .crystal-icon{flex:0 0 40px;width:40px;height:40px;image-rendering:auto;filter:none}
+.map-hud .hud-resources .wallet small{display:block}
+.map-hud .hud-resources .wallet strong{display:block;margin:3px 0 0;font:700 24px/1 var(--pixel-font);font-variant-numeric:tabular-nums;letter-spacing:0}
+@media(max-width:600px){.map-hud .hud-resources{flex-direction:column;gap:10px}.power-gauge{width:116px}.power-heading{font-size:9px;gap:6px}.map-hud .hud-resources .wallet small{font-size:9px}.map-hud .hud-resources .wallet strong{font-size:24px}.map-hud .hud-identity{max-width:calc(100% - 172px);min-width:0}.hud-identity>div{min-width:0}.hud-identity :is(strong,#region,.profile-badge){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+/* Explorer details float on the map alongside the resource displays. */
+.map-app .map-hud .hud-identity{display:block;min-width:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.map-hud .hud-identity strong{font:700 10px/1.3 var(--pixel-font);letter-spacing:1px}
+.hud-profile-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.map-hud .hud-identity .profile-badge{display:block;min-width:0;max-width:240px;margin:0;font-size:14px;font-weight:700;color:inherit}
+.hud-profile-row .hud-discoveries{font-size:10px;line-height:1.4;font-weight:700}
+.map-hud .hud-identity #region{margin-top:5px;font-size:10px;color:inherit}
+@media(max-width:600px){.map-hud .hud-identity strong{font-size:9px}.hud-profile-row{gap:3px 8px}.map-hud .hud-identity .profile-badge{max-width:100%;font-size:12px}.hud-profile-row .hud-discoveries{font-size:9px}.map-hud .hud-identity #region{font-size:9px}}
 
 .map-app #powerMeter[hidden]{display:none}
 
@@ -128,3 +153,8 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .surf-shop-actions{display:flex;gap:10px;flex-wrap:wrap}.surf-overlay{position:absolute;inset:0;pointer-events:none;z-index:9;color:#193f3c}.surf-overlay[hidden]{display:none}.surf-scoreboard{position:absolute;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(560px,calc(100% - 24px));display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 14px;background:#f8efd5ef;border:2px solid #4c6b57;box-shadow:3px 3px #24473955;font:11px monospace}.surf-scoreboard strong{color:#a46a45}.surf-message{position:absolute;top:58px;left:50%;transform:translateX(-50%);margin:0;width:min(560px,calc(100% - 24px));padding:8px 12px;background:#214c47e8;color:#fff0c8;font:11px/1.5 monospace;min-height:34px}.surf-session-actions{position:absolute;right:14px;top:112px;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:85%;pointer-events:auto}.surf-overlay button{border:2px solid #46644f;background:#f8efd5;color:#214c42;padding:10px 12px;font:11px monospace;box-shadow:2px 2px #24473955;touch-action:none}.surf-overlay button:active{background:#d9e8bf}.surf-touch-controls{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:6px;pointer-events:auto}.surf-touch-controls>div{display:flex;gap:7px;align-items:center}.surf-touch-controls button{min-height:44px;min-width:44px}.surf-touch-controls #surfAction{min-width:150px}.map-stage[data-surf-view="riding"] :is(.map-hud,.map-icon-rail,.map-progress,.water-controls,.boat-map-actions,#interaction,.touch-controls,.map-submenu){display:none!important}.map-stage[data-surf-view="paddling"] :is(.map-hud,.map-icon-rail,.map-progress,.water-controls,.boat-map-actions,#interaction,.touch-controls,.map-submenu){display:none!important}@media(max-width:600px){.surf-scoreboard{gap:7px;font-size:9px;padding:10px 8px;flex-wrap:wrap}.surf-message{top:68px;font-size:10px}.surf-session-actions{top:128px}.surf-overlay button{font-size:10px;padding:9px}.surf-touch-controls #surfAction{min-width:134px}}
 
 .map-app #frisbeeHud[hidden]{display:none}
+
+/* Keep travel instructions in Help instead of a persistent map banner. */
+.map-app #waterControls{display:none}
+
+.map-app .hud-identity #region{display:none}
