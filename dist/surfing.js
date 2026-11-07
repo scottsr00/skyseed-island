@@ -1,4 +1,6 @@
 'use strict';
+// Original canvas art and physics; control inspiration: Atari's California Games Lynx manual.
+// https://atariage.com/manual_html_page.php?SoftwareID=2413
 const SURF_RENTAL_COST=20,SURF_SHACK={x:1120,y:1762},SURF_HEAT_TIME=90000;
 let surfSession=null,surfClock=0;
 function nearSurfShack(){return !volleyball&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!beachTransfer&&!surfSession&&onMainlandBeach()&&Math.hypot(player.x-SURF_SHACK.x,player.y-SURF_SHACK.y)<72;}
@@ -38,7 +40,7 @@ s.phase='results';s.score=Math.floor(s.score);state.surfBest=Math.max(state.surf
 function stopSurfing(returnBoard=false,persist=true){
 if(surfSession){const safe=surfSession.safe;player.x=safe.x;player.y=safe.y;state.surfBest=Math.max(state.surfBest||0,Math.floor(surfSession.score));}
 surfSession=null;keys.clear();if(returnBoard)state.surfRental=false;
-updateSurfUI();if(persist)save();
+updateSurfUI();if(persist){save();canvas.focus({preventScroll:true});}
 }
 function resetSurfing(){stopSurfing(false,false);}
 function returnSurfboard(){if(!nearSurfShack())return;state.surfRental=false;updateSurfUI();save();toast('Surfboard returned. The surf settles back down.');}
@@ -141,9 +143,9 @@ function drawSurfOcean(){
 if(!state.surfRental||camera.y+WORLD.viewHeight<1330||camera.x>1420||camera.x+WORLD.viewWidth<820)return;
 ctx.save();
 for(let i=0;i<3;i++){
-ctx.strokeStyle=i%2?'#e9fff0cc':'#c5ece4cc';ctx.lineWidth=2.3;ctx.beginPath();
+ctx.strokeStyle='#55a4ad88';ctx.lineWidth=4;ctx.beginPath();
 for(let x=Math.max(820,Math.floor(camera.x/12)*12);x<=Math.min(1420,camera.x+WORLD.viewWidth+12);x+=12){const y=surfWaveY(x,i);if(x===Math.max(820,Math.floor(camera.x/12)*12))ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
-ctx.strokeStyle='#55a4ad88';ctx.lineWidth=4;ctx.stroke();
+ctx.strokeStyle=i%2?'#e9fff0cc':'#c5ece4cc';ctx.lineWidth=1.8;ctx.stroke();
 }
 for(const x of [850,1390]){const y=beachShoreY(x)-200;ellipse(x,y+2,5,2,'#dff4e688');rect(x-2,y-5,4,7,'#dc9b69');rect(x-1,y-8,2,4,'#f5e3b4');}
 ctx.restore();

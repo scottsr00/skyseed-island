@@ -1587,7 +1587,7 @@ toast('Anchor down! Your boat is safely moored while you visit the beach.');
 }
 function canReturnToAnchoredBoat(){
 const anchor=state.beachAnchor;
-return !!anchor&&!volleyball&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!beachTransfer&&onMainlandBeach()&&Math.hypot(player.x-anchor.landing.x,player.y-anchor.landing.y)<70;
+return !!anchor&&!surfSession&&!volleyball&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!beachTransfer&&onMainlandBeach()&&Math.hypot(player.x-anchor.landing.x,player.y-anchor.landing.y)<70;
 }
 function returnToAnchoredBoat(){
 if(!canReturnToAnchoredBoat())return;
@@ -2286,7 +2286,7 @@ if(toss.elapsed<180&&!swimming&&!boating&&!shoreRecovery){
 const reach=toss.elapsed/180,dx=toss.to.x-toss.from.x,dy=toss.to.y-(toss.from.y+16),length=Math.hypot(dx,dy)||1;
 ctx.strokeStyle='#e4bd88';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(player.x,player.y-10);ctx.lineTo(player.x+dx/length*(5+reach*5),player.y-13+dy/length*reach*5);ctx.stroke();
 }
-ctx.save();ctx.translate(x,y);ctx.rotate(t*Math.PI*3);ctx.scale(1-t*.25,1-t*.25);swimGoggles(0,0,false);ctx.restore();
+ctx.save();ctx.translate(x,y);ctx.rotate(t*Math.PI*3);ctx.scale(1-t*.25,1-t*.25);swimGoggles(0,0,true);ctx.restore();
 }else{
 const splash=(toss.elapsed-600)/700,r=3+splash*12;
 ctx.save();ctx.globalAlpha=(1-splash)*.8;ctx.strokeStyle='#e3f8ed';ctx.lineWidth=.8;
