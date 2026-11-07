@@ -738,7 +738,7 @@ test('a lucky swimmer catches and rides the dragon, with dragon controls and no 
 const g=game();const sighting='lochDragon={x:435,y:310,heading:0,age:1000,duration:18000}';
 g.run(`player.x=430;player.y=310;${sighting};latchLochDragon()`);assert.equal(g.run('sharkRide'),null);
 g.run('swimming=true;advanceSwimming(0)');assert.equal(g.run('sharkRide.kind'),'dragon');assert.equal(g.run('lochDragon'),null);
-assert.match(g.node('#waterControls').textContent,/LOCH NESS DRAGON/);assert.match(g.node('#mapSharkExit').textContent,/Hop off dragon/);
+assert.match(g.node('#waterControls').textContent,/LOCH NESS MONSTER/);assert.match(g.node('#mapSharkExit').textContent,/Hop off monster/);
 const start=g.run('player.x');g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')>start);
 assert.equal(g.run('sharkDiveDepth()'),0);
 const fins=g.run('sharkFins.length');g.node('#mapSharkExit').onclick();assert.equal(g.run('sharkRide'),null);
@@ -799,6 +799,25 @@ assert.equal(g.run('swimMotion.wake.length'),0);g.run('draw();dismountShark()');
 g.node('#profileName').value='Swim friend';g.run('createProfile()');assert.equal(g.run('swimMotion.effort'),0);assert.equal(g.run('swimMotion.wake.length'),0);
 });
 
+test('bridge and dock entrances animate one step up and step down without blocking walking',()=>{
+const g=game();g.run('const bridge=crossings[0];player.x=bridge.x-.5;player.y=bridge.y+bridge.h/2;moveExplorer(1,0)');
+assert.equal(g.run('timberStep.from'),0);assert.equal(g.run('timberStep.to'),3);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('const originalCharacter=character;let kneeLift=0;character=(x,y,pet,lift)=>{kneeLift=lift||0;originalCharacter(x,y,pet,lift)};advanceSwimming(140);drawWalkingExplorer()');
+assert.ok(g.run('kneeLift')>3.9);
+const before=g.run('player.x');g.run('moveExplorer(1,0)');assert.ok(g.run('player.x')>before);
+g.run('advanceSwimming(140);drawWalkingExplorer()');assert.equal(g.run('timberStep'),null);assert.equal(g.run('kneeLift'),0);
+g.run('moveExplorer(-3,0)');assert.equal(g.run('timberStep.from'),3);assert.equal(g.run('timberStep.to'),0);
+g.run('advanceSwimming(280);const pier=piers[0];player.x=pier.x+pier.w/2;player.y=pier.y-.5;moveExplorer(0,1)');
+assert.equal(g.run('timberStep.to'),3);g.run('advanceSwimming(140);draw()');assert.ok(g.run('kneeLift')>3.9);
+g.run('switchAge("9-10")');assert.equal(g.run('timberStep'),null);
+assert.equal(g.run('!!walkableTimberAt(woodlandBridge.x+woodlandBridge.w/2,woodlandBridge.y+woodlandBridge.h/2)'),false);
+g.run('state.upgrades=["bridge"]');assert.equal(g.run('!!walkableTimberAt(woodlandBridge.x+woodlandBridge.w/2,woodlandBridge.y+woodlandBridge.h/2)'),true);
+});
+test('single timber treads are drawn only at ends that connect to a beach',()=>{
+const g=game();g.run('const originalRect=rect;let treads=[];rect=(...args)=>{if(args[4]==="#d2b780")treads.push(args);originalRect(...args)};drawTimberEntranceSteps(crossings[0])');
+assert.equal(g.run('treads.length'),2);g.run('treads=[];drawTimberEntranceSteps(piers[0])');assert.equal(g.run('treads.length'),1);
+g.run('treads=[];drawTimberEntranceSteps({x:600,y:300,w:40,h:14})');assert.equal(g.run('treads.length'),0);
+});
 test('timber spans touch the beach without long inland overlaps and remain walkable',()=>{
 const g=game();g.run('state.ferryTicket=true;state.upgrades=["bridge"]');
 const spans=JSON.parse(g.run('JSON.stringify([...crossings,woodlandBridge,...piers])'));
