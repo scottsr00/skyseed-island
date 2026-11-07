@@ -3101,22 +3101,53 @@ ctx.moveTo(-length,spread);ctx.quadraticCurveTo(-length*.35,spread*.8,2,2);ctx.s
 ctx.globalAlpha*=.45;ellipse(-length*.5,0,1+t,Math.max(.4,.7-t*.3),'#e8fff3');ctx.restore();
 }
 }
-function drawSwimmingCharacter(x,y){
-const colors=characterColors(),motion=swimMotion,phase=motion.phase,effort=motion.effort;
-const bodyVisibility=Math.max(0,Math.min(1,(effort-.025)/.6));
+function drawSwimKickSplash(foot,spread,side,phase,effort,onBoard){
+if(effort<=.08)return;
+// Each foot throws a small fan of water on its downbeat, half a kick apart.
+const cycle=((phase*2.8+(side<0?Math.PI:0))%(Math.PI*2)+Math.PI*2)%(Math.PI*2);
+const age=cycle/(Math.PI*1.35);if(age>=1)return;
+const power=Math.min(1,(effort-.08)/.7),fade=(1-age)*(1-age)*power;
+const x=onBoard?Math.min(-20,foot-2):foot-2,y=spread;
+ctx.save();ctx.globalAlpha=fade*.7;ctx.strokeStyle='#e4f7e8';ctx.lineWidth=.85;ctx.lineCap='round';
+ctx.beginPath();ctx.ellipse(x-age*5,y+side*age*2,2+age*6,1+age*2.5,0,0,Math.PI*2);ctx.stroke();
+for(let i=0;i<4;i++){
+const travel=age*(4+i*2)*(.5+power*.5),lift=Math.sin(age*Math.PI)*(2+i*.7);
+const dx=x-travel-i*.7,dy=y+side*(1+travel*(.3+i*.12))-lift;
+ctx.globalAlpha=fade*(.9-i*.1);
+ellipse(dx,dy,.65+(1-age)*.5,.5+(1-age)*.3,'#f1fff5');
+}
+ctx.restore();
+}
+function drawSwimHandRipples(cycle,side,effort,visibility){
+if(effort<=.08||cycle>=Math.PI)return;
+ctx.save();ctx.strokeStyle='#e4f7e8';ctx.lineWidth=.7;
+// Expanding rings follow the hand from the forward catch through the backward pull.
+for(let i=0;i<3;i++){
+const previous=cycle-i*.22;if(previous<0)continue;
+const sweep=Math.sin(previous),x=2+Math.cos(previous)*(4+effort*9);
+const y=side*(5+sweep*(2+effort*5));
+ctx.globalAlpha=(.2+.5*sweep)*effort*visibility*(1-i*.27);
+ctx.beginPath();ctx.ellipse(x,y,2+i*1.5,1.2+i*.8,0,0,Math.PI*2);ctx.stroke();
+}
+ctx.restore();
+}
+function drawSwimmingCharacter(x,y,motion=swimMotion,onBoard=false){
+const colors=characterColors(),phase=motion.phase,effort=motion.effort;
+const bodyVisibility=onBoard?1:Math.max(0,Math.min(1,(effort-.025)/.6));
 const kick=Math.sin(phase*2.8),roll=Math.sin(phase)*effort,bob=Math.sin(motion.time*.002)*.5;
-drawSwimmerWake();
+if(!onBoard)drawSwimmerWake();
 ctx.save();ctx.translate(x,y+bob);ctx.rotate(motion.heading);
 if(bodyVisibility>0){
 // A long, low silhouette: legs and torso sit just beneath the water.
-ctx.globalAlpha=.35*bodyVisibility;ellipse(-2,1,17,6,'#467f82');
-ctx.globalAlpha=.65*bodyVisibility;
+if(!onBoard){ctx.globalAlpha=.35*bodyVisibility;ellipse(-2,1,17,6,'#467f82');}
+ctx.globalAlpha=(onBoard?1:.65)*bodyVisibility;
 for(const side of [-1,1]){
-const foot=-15+kick*side*(1+effort*2),spread=side*(2.5+Math.cos(phase*2.8)*side*effort);
+const foot=-15+kick*side*(onBoard ? .35+effort : 1+effort*2),spread=side*(2.5+Math.cos(phase*2.8)*side*effort*(onBoard ? .2 : 1));
 polygon([[-5,side*2],[-10,spread-1],[foot,spread-1],[foot-1,spread+1],[-10,spread+1],[-4,side*3]],'#3e5555');
 ellipse(foot-1,spread,2,1,'#d9b78d');
+drawSwimKickSplash(foot,spread,side,phase,effort,onBoard);
 }
-ctx.globalAlpha=.9*bodyVisibility;ellipse(-1,roll*.6,9,4,colors.shirt);
+ctx.globalAlpha=(onBoard?1:.9)*bodyVisibility;ellipse(-1,roll*.6,9,4,colors.shirt);
 ellipse(0,-.5+roll*.6,6,2,colors.accent);
 // Opposite arms cycle through forward recovery, catch, and underwater pull.
 for(const side of [-1,1]){
@@ -3126,7 +3157,7 @@ const elbowX=(handX+2)*.5-1,elbowY=side*(6+Math.max(0,sweep)*3);
 ctx.globalAlpha=(sweep>0?.55:.95)*bodyVisibility;ctx.strokeStyle='#e4bd88';ctx.lineWidth=2.5;ctx.lineCap='round';
 ctx.beginPath();ctx.moveTo(2,side*3);ctx.lineTo(elbowX,elbowY);ctx.lineTo(handX,handY);ctx.stroke();
 ellipse(handX,handY,1.6,1.2,'#f2c992');
-if(effort>.25&&Math.abs(sweep)<.22){ctx.globalAlpha=.45*effort*bodyVisibility;ctx.strokeStyle='#e4f7e8';ctx.lineWidth=.7;ctx.beginPath();ctx.ellipse(handX,handY,2.5,1.4,0,0,Math.PI);ctx.stroke();}
+drawSwimHandRipples(cycle,side,effort,bodyVisibility);
 }
 }
 ctx.globalAlpha=1;
@@ -3135,11 +3166,13 @@ ctx.save();ctx.translate(8*bodyVisibility-8,0);
 if(currentProfile().character==='girl'){polygon([[5,-3],[1,-4],[-2,-2],[3,0],[5,3]],colors.hair);}
 ellipse(8,0,4.5,3.5,'#f2c992');ellipse(6.5,0,2.5,3.7,colors.hair);
 // Goggles face the swimming direction; the breathing tube stays above water.
-ctx.save();ctx.translate(10,0);ctx.rotate(Math.PI/2);swimGoggles(0,0);ctx.restore();
+if(!onBoard){ctx.save();ctx.translate(10,0);ctx.rotate(Math.PI/2);swimGoggles(0,0);ctx.restore();}
 ctx.restore();
+if(!onBoard){
 const ripple=(motion.time%1600)/1600;
 ctx.globalAlpha=.25;ctx.strokeStyle='#d4efdf';ctx.lineWidth=.7;ctx.beginPath();ctx.ellipse(8*bodyVisibility,0,4+7*bodyVisibility,2+3*bodyVisibility,0,-1,1);ctx.stroke();
 if(bodyVisibility<1){ctx.globalAlpha=(1-bodyVisibility)*(1-ripple)*.3;ctx.beginPath();ctx.ellipse(8*bodyVisibility,1,5+ripple*5,2+ripple*2,0,0,Math.PI*2);ctx.stroke();}
+}
 ctx.restore();
 }
 function rollingCharacter(x,y,angle,tuck){

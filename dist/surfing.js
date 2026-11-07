@@ -61,6 +61,10 @@ s.vx+=(dx/length*.105-s.vx)*blend;s.vy+=(dy/length*.105-s.vy)*blend;
 const x=Math.max(SURF_SHACK.x-250,Math.min(SURF_SHACK.x+250,player.x+s.vx*ms));
 const y=Math.max(beachShoreY(x)-300,Math.min(beachShoreY(x)-10,player.y+s.vy*ms));
 if(sharkWater(x,y)){player.x=x;player.y=y;}
+const effort=dx||dy?1:0;
+s.paddleEffort=(s.paddleEffort||0)+(effort-(s.paddleEffort||0))*(1-Math.exp(-ms/160));
+s.paddlePhase=(s.paddlePhase||0)+seconds*Math.PI*2*(.18+.92*s.paddleEffort);
+if(Math.hypot(s.vx,s.vy)>.005)s.paddleHeading=Math.atan2(s.vy,s.vx);
 if(dx||dy)s.paddleTime+=ms;
 continue;
 }
@@ -244,29 +248,82 @@ rect(x+nx*(spread+3+grain*4),y+ny*(spread+3+grain*4),2,1,'#bce7dc');
 }
 function drawBeachWaveLip(x,y,height,collapse,time,seed){
 if(height<5||collapse>.8)return;
-const h=height,points=coords=>{
+// The rotated profile spans about 50 pixels; scale both axes to the local peak.
+const h=20,scale=height/50,points=coords=>{
 const curve=[];
 for(let i=0;i<coords.length;i++){
 const a=coords[(i+coords.length-1)%coords.length],b=coords[i],c=coords[(i+1)%coords.length],d=coords[(i+2)%coords.length];
 for(let step=0;step<5;step++){
 const t=step/5,t2=t*t,t3=t2*t;
 const value=k=>.5*((2*b[k])+(-a[k]+c[k])*t+(2*a[k]-5*b[k]+4*c[k]-d[k])*t2+(-a[k]+3*b[k]-3*c[k]+d[k])*t3);
-curve.push([x+value(0)*.62,y+value(1)*h]);
+// Turn the original curl through 270 degrees, with its spray following the lip.
+curve.push([x-value(1)*h*scale,y+value(0)*.62*scale]);
 }
 }
 return curve;
 };
-// A tapered hollow sits beneath a thin sheet pitching left, rather than a vertical wall.
+// Keep the rounded hollow, trimming only its bottom along a 30-degree line.
+const shadowSlope=Math.tan(Math.PI/6);
+ctx.save();ctx.beginPath();
+[[-30,-40],[35,-40],[35,8+35*shadowSlope],[-30,8-30*shadowSlope]].forEach(([dx,dy],i)=>{
+if(i)ctx.lineTo(x+dx*scale,y+dy*scale);else ctx.moveTo(x+dx*scale,y+dy*scale);
+});
+ctx.closePath();ctx.clip();
 surfContour(points([[-31,-.48],[-20,-.84],[0,-.93],[23,-.66],[31,-.19],[18,.08],[-8,.13],[-24,-.09]]),'#2c8293');
 surfContour(points([[-23,-.46],[-12,-.65],[3,-.66],[17,-.43],[19,-.12],[6,.04],[-13,-.03]]),'#4da8ad');
+ctx.restore();
 surfContour(points([[42,-.59],[23,-.9],[3,-1.05],[-16,-.98],[-30,-.73],[-37,-.36],[-33,.02],[-21,.24],[-8,.21],[-17,.04],[-23,-.15],[-23,-.41],[-15,-.64],[0,-.77],[19,-.69],[40,-.44]]),'#b5e8dc');
 surfContour(points([[32,-.84],[13,-1.02],[-7,-1.04],[-23,-.9],[-33,-.62],[-37,-.29],[-31,.04],[-22,.15],[-23,-.09],[-28,-.34],[-23,-.63],[-10,-.83],[9,-.88],[29,-.73]]),'#ecfcf0');
+// A rounded impact burst leaves progressively smaller, fainter foam behind the break.
+ctx.save();
+const impactX=x+25*scale,impactY=y+16*scale,foamAlpha=ctx.globalAlpha;
+// Broken foam follows the entire mouth, thickening where it meets the impact burst.
+const mouth=[[-4,-5],[-1,-11],[3,-14],[8,-14],[13,-9],[16,0],[15,12],[18,16],[25,16]];
+for(let i=0;i<=40;i++){
+const progress=i/40,segment=Math.min(mouth.length-2,Math.floor(progress*(mouth.length-1)));
+const blend=progress*(mouth.length-1)-segment,a=mouth[segment],b=mouth[segment+1];
+const grain=surfFoamNoise(seed*137+i+1700),pulse=Math.sin(time*.006+i*1.7+seed);
+const px=x+(a[0]+(b[0]-a[0])*blend)*scale,py=y+(a[1]+(b[1]-a[1])*blend)*scale;
+const radius=(1.8+grain*1.8+progress*1.6+pulse*.35)*scale,puff=[];
+for(let j=0;j<10;j++){
+const angle=j*Math.PI/5,r=radius*(.85+surfFoamNoise(i*11+j+seed*29)*.3);
+puff.push([px+Math.cos(angle)*r,py+Math.sin(angle)*r]);
+}
+ctx.globalAlpha=foamAlpha*(.65+grain*.3);
+surfContour(puff,i%3?'#e8fff0':'#bfe9de');
+const age=(time*.001+grain)%1;
+ctx.globalAlpha=foamAlpha*(1-age)*.6;
+rect(px+(2+age*6)*scale,py-Math.sin(age*Math.PI)*4*scale,Math.max(1,scale),Math.max(1,scale),'#f4fff3');
+}
+for(let i=20;i>=0;i--){
+const progress=i/20,strength=Math.pow(1-progress,1.1);
+const radius=(1.3+strength*12)*scale,puffX=impactX+progress*80*scale;
+const puffY=impactY+progress*5*scale+Math.sin(time*.005+i*2+seed)*strength*scale;
+ctx.globalAlpha=foamAlpha*(1-progress)*.8;
+const puff=[];
+for(let j=0;j<16;j++){
+const angle=j*Math.PI/8,r=radius*(.88+surfFoamNoise(i*17+j+seed*101)*.24);
+puff.push([puffX+Math.cos(angle)*r,puffY+Math.sin(angle)*r*.85]);
+}
+surfContour(puff,i%3?'#d8f3e7':'#effff3');
+ctx.globalAlpha=foamAlpha*(1-progress)*.65;
+rect(puffX-radius*.4,puffY-radius*.5,Math.max(1,radius*.7),Math.max(1,scale),'#f5fff4');
+}
+for(let i=0;i<36;i++){
+const grain=surfFoamNoise(seed*53+i+800),age=(time*.0008+grain)%1;
+const spread=surfFoamNoise(i+seed*37+900)-.5;
+const px=impactX+age*84*scale,py=impactY+age*5*scale+spread*(1-age)*26*scale-Math.sin(age*Math.PI)*8*scale;
+ctx.globalAlpha=foamAlpha*Math.pow(1-age,1.5)*.8;
+const size=Math.max(1,(1-age)*3.4*scale);
+rect(px,py,size,size,'#effff3');
+}
+ctx.restore();
 // Small drifting droplets and separated foam patches prevent a solid, blocky edge.
 for(let i=0;i<12;i++){
 const grain=surfFoamNoise(i+seed*53),age=(time*.00065+grain)%1;
 const dx=-24-age*(10+grain*18),dy=-h*.7-Math.sin(age*Math.PI)*(4+grain*7)+age*age*9;
 ctx.globalAlpha=(1-age)*.65;
-rect(x+dx,y+dy,grain>.7?2:1,1,'#eafff1');
+rect(x-dy*scale,y+dx*scale,1,grain>.7?2:1,'#eafff1');
 }
 }
 function drawBeachWaves(){
@@ -310,7 +367,8 @@ const front=beachWaveProfile(1100,i,time,rental).front;
 for(let section=Math.floor((start-front)/600);section<=Math.ceil((end-front)/600);section++){
 const x=front+section*600;if(x<start-65||x>end+65)continue;
 ctx.globalAlpha=fade*(.7+shallows*.2)*(1-collapse*.65);
-const height=20*waveSize*(1-collapse*.92);
+const peakHeight=18*.8*waveSize*(1-collapse*.92);
+const height=peakHeight*3;
 drawBeachWaveLip(x,waveY(x),height,collapse,time,i+section*3);
 }
 }
@@ -328,7 +386,10 @@ function surfRideView(s=surfSession){
 const riderX=224+Math.max(-10,Math.min(10,(.43-s.x)*28));
 return {riderX,breakX:riderX+(.86-s.x)*440,scroll:s.scroll||0};
 }
-function surfBreakEdge(y,wave){return wave.breakX+21-(y-94)*.22+Math.sin(y*.13+surfClock*.005)*3;}
+function surfBreakEdge(y,wave){
+// The lip peels ahead on the left; the falling curtain meets the trough farther right.
+return wave.breakX-22+(y-94)*.36+Math.sin(y*.13+surfClock*.005)*3;
+}
 function surfBarrelState(s=surfSession){
 const wave=surfRideView(s),y=surfBaseCrest(wave.riderX)+Math.max(0,Math.min(1,s.y))*(279-surfBaseCrest(wave.riderX));
 const edge=surfBreakEdge(y,wave),mouth=edge-32;
@@ -381,82 +442,272 @@ const strength=s?.carveStrength||0,lean=s?.carveLean||0,speed=(s?.speed||0)/.85;
 const air=s?.phase==='airborne',impact=(s?.landingSpray||0)/400;
 return {lean:lean*5,crouch:air?5:1+strength*5+speed*1.3+impact*4,reach:air?8:4+strength*6,speed,strength};
 }
-function surfBarrelDepth(y){const u=Math.max(0,Math.min(1,(y-94)/188));return 18+30*Math.pow(Math.sin(u*Math.PI),.8);}
+function surfBarrelDepth(y){const u=Math.max(0,Math.min(1,(y-94)/188));return 14+66*Math.pow(Math.sin(u*Math.PI),.65);}
+// The surfing water uses subpixel paths; island sprites retain their pixel contours.
+function surfWaterShape(points,color){
+ctx.fillStyle=color;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();
+}
+function surfWaterDrop(x,y,rx,ry,color){
+ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill();
+}
+function surfWaterGradient(top,bottom,stops,fallback){
+const gradient=ctx.createLinearGradient(0,top,0,bottom);
+if(!gradient?.addColorStop)return fallback;
+for(const [position,color] of stops)gradient.addColorStop(position,color);
+return gradient;
+}
+function surfFrothFlowPoint(anchor,progress,wave){
+const crown=surfBreakEdge(94,wave),near=Math.exp(-Math.abs(crown-anchor)/85);
+const theta=progress*2.14,crest=surfBaseCrest(anchor);
+// From this camera, water rises up the back then rolls forward/down in a clockwise curl.
+return {x:anchor-(24+near*25)*Math.sin(theta)+(14+near*15)*(1-Math.cos(theta)),y:279-(279-crest)*Math.sin(theta)};
+}
+function drawSurfFrothRibbon(anchor,from,to,wave,alpha,width){
+ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.beginPath();let open=false;
+for(let step=0;step<=24;step++){
+const progress=from+(to-from)*step/24,point=surfFrothFlowPoint(anchor,progress,wave);
+if(point.x>surfBreakEdge(point.y,wave)+3){open=false;continue;}
+if(!open){ctx.moveTo(point.x,point.y);open=true;}else ctx.lineTo(point.x,point.y);
+}
+ctx.stroke();
+}
+function drawSurfFaceFroth(wave){
+const time=surfClock*.001,scroll=wave.scroll,crown=surfBreakEdge(94,wave);
+ctx.save();ctx.lineCap='round';ctx.setLineDash([]);ctx.strokeStyle='#effff5';
+// All froth follows the same rolling cross-section; neighboring strands never converge on a point.
+for(let i=0;i<33;i++){
+const grain=surfFoamNoise(i+4100),phase=(time*(.32+grain*.07)+surfFoamNoise(i+4200))%1;
+const anchor=((i*27.71+scroll*.86)%550+550)%550-35;
+if(anchor>crown+25)continue;
+const tip=phase*.68,length=.07+grain*.09,from=Math.max(0,tip-length);
+const fade=Math.min(1,phase*9,(1-phase)*9);
+drawSurfFrothRibbon(anchor,from,tip,wave,(.2+grain*.22)*fade,.4+grain*.45);
+}
+// Around the pitching shoulder, longer visible arcs carry the foam over and down the lip.
+ctx.strokeStyle='#e7fff1';
+for(let i=0;i<3;i++){
+const grain=surfFoamNoise(i+4400),phase=(time*.38+grain)%1;
+const anchor=crown+5-i*22+(wave.scroll*.14)%10;
+const tip=.83+phase*.17,start=Math.max(.43,tip-.36-grain*.1);
+drawSurfFrothRibbon(anchor,start,tip,wave,.18+grain*.16,.45+grain*.35);
+}
+ctx.restore();
+}
 function drawSurfWaveFace(){
 const s=surfSession,wave=surfRideView(s),scroll=wave.scroll,size=surfRideScale(s);
 ctx.save();ctx.translate(0,279*(1-size));ctx.scale(1,size);
-// Look straight at the broad face. The chasing whitewater occupies the right edge.
-const crest=[];for(let x=0;x<=480;x+=4)crest.push([x,surfBaseCrest(x)]);
-surfContour([...crest,[480,284],[0,284]],'#319ca8');
-for(let band=0;band<14;band++){
-const top=[],bottom=[];
-for(let x=0;x<=480;x+=4){const y=surfBaseCrest(x)+8+band*13+Math.sin((x-scroll)*.025+band)*2;top.push([x,y]);bottom.unshift([x,y+7]);}
-surfContour([...top,...bottom],['#39a7ae','#43b2b5','#48b7b8','#3cabb2'][Math.floor(band/4)]);
+// Continuous depth and transmitted light make the face read as a curved sheet of water.
+const crest=[];for(let x=0;x<=480;x+=1.5)crest.push([x,surfBaseCrest(x)]);
+const faceLight=surfWaterGradient(92,285,[[0,'#47acb9'],[.13,'#297e9e'],[.48,'#1f648c'],[.78,'#297c9e'],[1,'#58bfc1']],'#287f9c');
+surfWaterShape([...crest,[480,285],[0,285]],faceLight);
+// Faint stretched reflections curve down the face instead of sitting on a square grid.
+ctx.lineWidth=.55;
+for(let i=0;i<90;i++){
+const grain=surfFoamNoise(i+40),x=((i*53.71+scroll)%540+540)%540-30,y=103+grain*170;
+if(x>surfBreakEdge(y,wave)-38)continue;
+ctx.globalAlpha=.055+Math.abs(grain-.5)*.16;ctx.strokeStyle=i%3?'#8de2d8':'#b5f0e3';
+ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-2,y+4,x+Math.sin(i)*4,y+9,x+2,y+12+grain*9);ctx.stroke();
 }
-// Every glint moves left to right as the surfer travels left through the scene.
-for(let i=0;i<110;i++){
-const grain=surfFoamNoise(i+17),x=((i*67+scroll)%540+540)%540-30,y=107+grain*164;
-rect(x,y,4+grain*14,1,i%4?'#77cbc5':'#a6e1d3');
+// Fine specular glints slide right with the surface current.
+for(let i=0;i<165;i++){
+const grain=surfFoamNoise(i+17),x=((i*67+scroll)%540+540)%540-30,y=104+grain*168;
+if(x>surfBreakEdge(y,wave)-35)continue;
+ctx.globalAlpha=.07+Math.abs(grain-.5)*.25;
+rect(x,y,1+grain*2,.5,i%4?'#77cbc5':'#a6e1d3');
 }
-const foam=[],inner=[];
-for(let y=88;y<=286;y+=4){const x=surfBreakEdge(y,wave);foam.push([x,y]);inner.push([x+15+Math.sin(y*.21+surfClock*.003)*4,y]);}
-// Several curved shadow layers reveal the hollow behind the falling lip.
-const shadow=[],middle=[],deep=[];
-for(const [x,y] of foam){const depth=surfBarrelDepth(y);shadow.push([x-depth-8,y]);middle.push([x-depth*.8,y]);deep.push([x-depth*.48,y]);}
-surfContour([...shadow,...foam.slice().reverse()],'#2c8a99');
-surfContour([...middle,...foam.slice().reverse()],'#226f83');
-surfContour([...deep,...foam.slice().reverse()],'#19576e');
-// Reflected turquoise light bends around the inside wall of the barrel.
+ctx.globalAlpha=1;
+const front=[],wetBack=[];
+for(let y=90;y<=286;y+=3){const edge=surfBreakEdge(y,wave);front.push([edge,y]);wetBack.push([edge+27+Math.sin(y*.12+surfClock*.002)*4,y]);}
+// A soft shadow extends into the face beneath the overhang instead of outlining a tube.
+for(let layer=15;layer>=0;layer--){
+const shade=front.map(([x,y])=>[x-12-surfBarrelDepth(y)*(layer+1)/15,y]);
+ctx.globalAlpha=.025+(15-layer)*.004;
+surfWaterShape([...shade,...front.slice().reverse()],'#103b60');
+}
+// A wider, dark inner wall gives the falling sheet a visibly hollow barrel behind it.
+const hollow=front.map(([x,y])=>[x-surfBarrelDepth(y)*.73,y]);
+ctx.globalAlpha=.44;
+surfWaterShape([...hollow,...front.slice().reverse()],surfWaterGradient(94,284,[[0,'#10334f'],[.45,'#133f5f'],[.8,'#20657d'],[1,'#58b5b7']],'#153f5e'));
+// Refracted light returns along the curved lower wall, separating it from the dark roof.
+ctx.strokeStyle='#76d8d0';ctx.lineWidth=.6;
 for(let band=0;band<3;band++){
-ctx.strokeStyle=['#409ba6','#338b9c','#26778b'][band];ctx.lineWidth=1;
-ctx.beginPath();for(let y=124;y<254;y+=3){const x=surfBreakEdge(y,wave)-surfBarrelDepth(y)+band*6+2;if(y===124)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
+ctx.globalAlpha=.09-band*.018;ctx.beginPath();
+for(let y=181;y<=274;y+=3){const x=surfBreakEdge(y,wave)-surfBarrelDepth(y)*(.85-band*.09);if(y===181)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
 }
-surfContour([...foam,[500,286],[500,88]],'#89d0c9');
-surfContour([...inner,[500,286],[500,88]],'#c2eadd');
-for(let i=0;i<140;i++){
-const grain=surfFoamNoise(i+200),y=99+surfFoamNoise(i+400)*182;
-const edge=surfBreakEdge(y,wave),x=((i*71+scroll*1.25)%550+550)%550-20;
-if(x<edge+10)continue;
-rect(x,y,3+grain*13,1+grain*3,i%3?'#e4f8e9':'#81c9c3');
+ctx.globalAlpha=1;
+drawSurfFaceFroth(wave);
+// Broken water retains blue gaps and turquoise sheets underneath the white foam.
+surfWaterShape([...front,[510,286],[510,90]],surfWaterGradient(94,286,[[0,'#31afc0'],[.45,'#49c4cb'],[1,'#a7e9db']],'#49bfc7'));
+surfWaterShape([...wetBack,[510,286],[510,90]],surfWaterGradient(94,286,[[0,'#53c6cf'],[.48,'#71d6d3'],[1,'#d1f5e9']],'#71d6d3'));
+// Low-contrast currents remain visible beneath the aerated surface.
+for(let i=0;i<44;i++){
+const grain=surfFoamNoise(i+3300),x=((i*47.3+scroll*1.12)%550+550)%550-20,y=112+grain*168;
+if(x<surfBreakEdge(y,wave)+24)continue;
+ctx.globalAlpha=.045+grain*.065;ctx.strokeStyle=i%3?'#e8fff0':'#258ba5';ctx.lineWidth=.8+grain*2;
+ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+7,y-4,x+15,y+5,x+20+grain*13,y+1);ctx.stroke();
 }
+// Fine connected flecks collect in irregular eddies rather than a field of large bubbles.
+for(let i=0;i<720;i++){
+const grain=surfFoamNoise(i+200),y=99+surfFoamNoise(i+400)*184;
+const x=((i*61.73+scroll*1.18)%550+550)%550-20,edge=surfBreakEdge(y,wave);
+if(x<edge+12)continue;
+const u=(y-99)/184,count=3+Math.floor(grain*6+u*3);
+ctx.globalAlpha=.25+grain*.3+u*.22;
+for(let fleck=0;fleck<count;fleck++){
+const f=surfFoamNoise(i*19+fleck+2300),a=f*Math.PI*2;
+const px=x+Math.cos(a)*(1+grain*3),py=y+Math.sin(a)*(1+grain*2);
+surfWaterDrop(px,py,.28+f*.65,.22+grain*.4,grain>.2?'#f1fff3':'#2f9fb6');
+}
+if(grain>.65){ctx.strokeStyle='#e5fff0';ctx.lineWidth=.4;ctx.beginPath();ctx.moveTo(x-2,y);ctx.quadraticCurveTo(x,y-2,x+3+grain*3,y+1);ctx.stroke();}
+}
+ctx.globalAlpha=1;
 ctx.restore();return wave;
 }
+function surfFoamTrailProfile(x,impact){
+const strength=.16+.84*Math.exp(-Math.max(0,x-impact)/105);
+return {strength,height:3+strength*15,alpha:.28+strength*.4};
+}
+function drawSurfFoamTrail(impact,wave,time){
+const top=[],bottom=[];
+for(let x=impact-4;x<=514;x+=4){
+const profile=surfFoamTrailProfile(x,impact),grain=surfFoamNoise(Math.floor((x-wave.scroll*1.12)/7)+6200);
+const rise=profile.height*(.48+grain*.35)+Math.sin(x*.17+time*4)*profile.strength*1.4;
+top.push([x,280-rise]);bottom.unshift([x,290]);
+}
+ctx.globalAlpha=.64;
+surfWaterShape([...top,...bottom],surfWaterGradient(262,290,[[0,'#e9fff0'],[.6,'#d6f5e6'],[1,'#a8e0d3']],'#dcf8e9'));
+// Older foam rides right with the current: lower and thinner, but continuous to the screen edge.
+for(let x=impact-4;x<513;x+=5){
+const profile=surfFoamTrailProfile(x,impact),grain=surfFoamNoise(Math.floor((x-wave.scroll*1.12)/5)+6400);
+const phase=(time*.85+grain)%1,y=279-profile.height*(.25+Math.sin(phase*Math.PI)*.35);
+ctx.globalAlpha=profile.alpha;
+surfWaterDrop(x,y,3+grain*4,1.5+profile.strength*(2+grain*2),'#effff3');
+ctx.globalAlpha=profile.alpha*.55;
+for(let i=0;i<3;i++){
+const f=surfFoamNoise(Math.floor(x*7)+i+6600);
+surfWaterDrop(x+f*5,279-profile.height*f,.3+f*.6,.25+grain*.4,i%2?'#76c9bf':'#f3fff4');
+}
+}
+}
+function surfLipSprayPoint(grain,age,crown){
+// Positive screen X carries spray forward; positive screen Y acceleration makes the arc clockwise.
+return {x:crown-18+grain*14+age*(28+grain*24),y:94-(70+grain*50)*age+(110+grain*45)*age*age};
+}
 function drawSurfWaveLip(wave){
-const size=surfRideScale();ctx.save();ctx.translate(0,279*(1-size));ctx.scale(1,size);
-// The pitched roof has a lit back, a shaded underside, and a rounded falling lip.
-const p=wave.breakX,roof=surfBaseCrest(p);
-surfContour([[p-86,roof+2],[p-59,roof-4],[p-31,roof-7],[p-8,roof-3],[p+13,roof+9],[p+9,roof+23],[p-2,roof+33],[p-13,roof+28],[p-17,roof+16],[p-35,roof+7],[p-61,roof+5]],'#5abbb9');
-surfContour([[p-56,roof+5],[p-30,roof+1],[p-12,roof+5],[p+3,roof+15],[p-2,roof+26],[p-11,roof+21],[p-18,roof+13],[p-37,roof+9]],'#26798b');
-surfContour([[p-77,roof],[p-53,roof-6],[p-29,roof-9],[p-7,roof-5],[p+12,roof+5],[p+17,roof+14],[p+10,roof+25],[p+2,roof+28],[p+5,roof+15],[p-10,roof+5],[p-32,roof-1],[p-55,roof-1]],'#d9f7e8');
-// A translucent hanging sheet can cover half the surfer at the barrel entrance.
-const sheet=[],back=[];
-for(let y=118;y<254;y+=4){const edge=surfBreakEdge(y,wave);sheet.push([edge-32,y]);back.unshift([edge-19+Math.sin(y*.06+surfClock*.002)*2,y]);}
-ctx.save();ctx.globalAlpha=.38;surfContour([...sheet,...back],'#a6e4d6');ctx.restore();
-// A spilling crest and an irregular curtain of whitewater, seen face on.
-for(let x=0;x<Math.min(480,wave.breakX+26);x+=3){
-const y=surfBaseCrest(x),grain=surfFoamNoise(Math.floor((x-wave.scroll)/3));
-rect(x,y-1,3,2,'#c9eee0');
-if(grain>.5)rect(x,y+2,3,1,'#91d7cf');
+const size=surfRideScale(),time=surfClock*.001;
+ctx.save();ctx.translate(0,279*(1-size));ctx.scale(1,size);
+// Light on the offshore crest stays thin until it reaches the falling sheet.
+const crown=surfBreakEdge(94,wave);
+ctx.strokeStyle='#d5f8ed';ctx.lineWidth=.85;ctx.beginPath();
+for(let x=0;x<crown;x+=1.5){const y=surfBaseCrest(x);if(!x)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
+for(let x=0;x<crown;x+=5){const grain=surfFoamNoise(Math.floor((x-wave.scroll)/5));if(grain>.65){ctx.globalAlpha=.4;surfWaterDrop(x,surfBaseCrest(x)+2,1.3,.45,'#a6eee2');}}
+ctx.globalAlpha=1;
+// Froth runs along the whole crest and builds into a thicker aerated edge at the break.
+const crestTop=[],crestBottom=[];
+for(let x=0;x<crown;x+=2){
+const near=Math.exp(-Math.max(0,crown-x)/80),grain=surfFoamNoise(Math.floor((x-wave.scroll)/4)+6800),y=surfBaseCrest(x);
+crestTop.push([x,y-.6-near*(1.5+grain*2)]);crestBottom.unshift([x,y+.8+near*(2+grain*3)]);
 }
-for(let y=92;y<282;y+=3){
-const edge=surfBreakEdge(y,wave),grain=surfFoamNoise(Math.floor(y/3)+900),phase=(surfClock*.0012+grain)%1;
-rect(edge-2,y,5+grain*7,3,'#effcf0');
-if(grain>.45)rect(edge-7-phase*9,y+phase*6,2,2,'#dcf5e7');
-rect(edge+7,y+1,4+grain*9,2,'#a9e0d4');
+if(crestTop.length){ctx.globalAlpha=.28;surfWaterShape([...crestTop,...crestBottom],'#edfff2');}
+for(let x=0;x<crown;x+=3){
+const near=Math.exp(-Math.max(0,crown-x)/80),grain=surfFoamNoise(Math.floor((x-wave.scroll)/3)+6900),y=surfBaseCrest(x);
+ctx.globalAlpha=.3+near*.5;
+for(let i=0;i<1+Math.floor(near*5);i++){
+const f=surfFoamNoise(Math.floor(x)+i*37+7000),phase=(time*.7+f)%1;
+surfWaterDrop(x+f*2,y+(phase-.4)*(1.3+near*7),.35+f*(.3+near*.65),.25+near*f*.8,'#f0fff3');
 }
+}
+ctx.globalAlpha=1;
+// A thick aerated curtain follows the entire slope, not a separate decorative hook.
+const lit=[],back=[],underside=[];
+for(let y=92;y<=281;y+=2){
+const edge=surfBreakEdge(y,wave),u=(y-92)/189;
+const rough=Math.sin(y*.25-time*6)*2+Math.sin(y*.47-time*4);
+lit.push([edge-5+rough,y]);
+back.unshift([edge+13+u*9+rough*.6,y]);
+underside.push([edge-25-Math.sin(u*Math.PI)*12,y]);
+}
+ctx.save();ctx.globalAlpha=.2;
+surfWaterShape([...underside,...lit.slice().reverse()],'#76d8d4');ctx.restore();
+ctx.save();ctx.globalAlpha=.73;surfWaterShape([...lit,...back],surfWaterGradient(94,281,[[0,'#5acdd3'],[.4,'#76dcd9'],[1,'#c6f8e7']],'#76dcd9'));ctx.restore();
+// Fine strands stretch under gravity, then separate into droplets.
+for(let i=0;i<420;i++){
+const grain=surfFoamNoise(i+500),phase=(time*(.65+grain*.5)+surfFoamNoise(i+700))%1;
+const y=94+surfFoamNoise(i+900)*181+phase*17;if(y>280)continue;
+const edge=surfBreakEdge(y,wave),x=edge-4+surfFoamNoise(i+1100)*24+phase*5;
+ctx.globalAlpha=.32+(1-phase)*.4;ctx.strokeStyle=grain>.22?'#f1fff3':'#b9f3e3';ctx.lineWidth=.35+grain*.65;
+ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+1.5,y+3,x+2+grain*2,y+2+grain*3);ctx.stroke();
+surfWaterDrop(x,y,.25+grain*.4,.3+grain*.5,'#eafff0');
+if(grain>.6){ctx.globalAlpha=.75;for(let f=0;f<3;f++)surfWaterDrop(x-2+f*1.4,y+f*1.8,.4,.55,'#f5fff5');}
+}
+// Wind tears a high plume from the crest where the wave first pitches forward.
+for(let i=0;i<250;i++){
+const grain=surfFoamNoise(i+1400),age=(time*(.5+grain*.5)+surfFoamNoise(i+1500))%1;
+const {x,y}=surfLipSprayPoint(grain,age,crown);
+ctx.globalAlpha=(1-age)*(.65+grain*.35);
+surfWaterDrop(x,y,.35+grain*1.05,.45+grain*1.35,grain>.3?'#f4fff4':'#a5eee3');
+if(grain>.7&&age>.06){
+const prior=surfLipSprayPoint(grain,age-.045,crown);
+ctx.strokeStyle='#eafff4';ctx.lineWidth=.3+grain*.3;ctx.globalAlpha=(1-age)*.4;
+ctx.beginPath();ctx.moveTo(prior.x,prior.y);ctx.lineTo(x,y);ctx.stroke();
+}
+if(grain>.5){ctx.globalAlpha=(1-age)*.11;surfWaterDrop(x+1,y+2,3+grain*2,2+grain,'#d7fff1');}
+}
+// The plunge at the trough boils into a wider, dense, low cloud of whitewater.
+const impact=surfBreakEdge(274,wave);
+drawSurfFoamTrail(impact,wave,time);
+// A compact, bright boiling core carries the force of the impact, beneath the flying spray.
 for(let i=0;i<30;i++){
-const grain=surfFoamNoise(i+800),age=(surfClock*.0006+grain)%1,x=wave.breakX-35+grain*100+wave.scroll*.15%24,y=273+grain*17;
-rect(x-age*14,y,4+grain*10,2,i%3?'#e1f6e6':'#a4dcd0');
+const grain=surfFoamNoise(i+4700),phase=(time*(.65+grain*.4)+surfFoamNoise(i+4800))%1;
+const x=impact-9+grain*43+Math.sin(phase*Math.PI*2)*4;
+const y=277-Math.abs(Math.sin(phase*Math.PI*2))*(4+grain*10);
+ctx.globalAlpha=.4+grain*.35;
+surfWaterDrop(x,y,5+grain*8,3+grain*5,i%4?'#effff3':'#b7eddf');
 }
+// Tiny blue-green pores keep the dense foam core textured rather than a solid white oval.
+for(let i=0;i<46;i++){
+const grain=surfFoamNoise(i+4900),phase=(time*.7+grain)%1;
+const x=impact-8+surfFoamNoise(i+5000)*44,y=263+surfFoamNoise(i+5100)*20;
+if(Math.pow((x-impact-13)/26,2)+Math.pow((y-276)/12,2)>1)continue;
+ctx.globalAlpha=.13+grain*.1;
+surfWaterDrop(x+Math.sin(phase*Math.PI*2)*2,y,.35+grain*.6,.25+grain*.4,'#65bfb9');
+}
+for(let i=0;i<260;i++){
+const grain=surfFoamNoise(i+800),age=(time*(.65+grain*.35)+surfFoamNoise(i+1700))%1;
+const side=i%4===0?-1:1,x=impact+grain*19+side*age*(22+grain*57);
+const y=278-Math.sin(age*Math.PI)*(8+grain*33)+age*age*8;
+ctx.globalAlpha=(1-age)*(.6+grain*.35);
+surfWaterDrop(x,y,.5+grain*1.5,.35+grain*.9,i%3?'#effcf0':'#bce8d9');
+if(grain>.6){ctx.globalAlpha=(1-age)*.18;surfWaterDrop(x+2,y+1,3+grain*3,1.5+grain,'#e3fff0');}
+}
+for(let i=0;i<34;i++){
+const grain=surfFoamNoise(i+1300),age=(time*.45+grain)%1;
+ctx.globalAlpha=(1-age)*.7;
+surfWaterDrop(impact-12+age*(31+grain*53),280+grain*8,1.5+grain*4.5,.4+grain*.6,i%3?'#d6f1e2':'#96d4c9');
+}
+ctx.restore();
+}
+function drawSurfShortboard(paddling){
+ctx.save();ctx.scale(1,paddling?1:.48);
+ellipse(-1,4,19,6,'#3c7e8055');
+// Pulled-in rails run from a squared squash tail to a sharp, rockered nose.
+ctx.beginPath();ctx.moveTo(21,0);ctx.bezierCurveTo(12,-7,-3,-8,-17,-4);
+ctx.lineTo(-18,-2.5);ctx.lineTo(-18,2.5);ctx.lineTo(-17,4);
+ctx.bezierCurveTo(-3,8,12,7,21,0);ctx.closePath();
+ctx.fillStyle='#f5f8df';ctx.fill();ctx.strokeStyle='#216376';ctx.lineWidth=.9;ctx.stroke();
+polygon([[-16,-3.5],[-5,-5.5],[15,-1],[-3,-1]],'#22c4c5');
+polygon([[-13,4],[-3,.5],[13,1],[-3,5.5]],'#fa694e');
+polygon([[0,-4],[7,-1],[2,0],[10,3],[-2,0],[3,-1]],'#f5d34f');
+polygon([[-16,-2.6],[-9,-3.5],[-8,3],[-16,2.6]],'#304e5b');
+ctx.strokeStyle='#b1c6bd';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(18,0);ctx.stroke();
 ctx.restore();
 }
 function drawSurfRider(x,y,rotation,paddling=false){
 const colors=characterColors(),s=surfSession;
 ctx.save();ctx.translate(x,y);ctx.rotate(rotation);if(!paddling)ctx.scale(-1,1);
-ellipse(1,3,paddling?20:15,paddling?5:3,'#3c7e8055');ellipse(0,0,paddling?20:15,paddling?4:2.5,'#e6b987');rect(-12,-.6,24,1.2,'#f6e6b7');
+drawSurfShortboard(paddling);
 if(paddling){
-ellipse(-1,-1,7,3,colors.shirt);ellipse(8,-1,3.5,3,'#f2c992');rect(6,-4,4,2,colors.hair);
-for(const side of [-1,1]){const stroke=Math.sin(surfClock*.012+side*1.7);ctx.strokeStyle='#f2c992';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(2,side*2);ctx.lineTo(5+stroke*4,side*8);ctx.stroke();}
+drawSwimmingCharacter(0,-.5,{phase:s?.paddlePhase||0,effort:s?.paddleEffort||0,time:surfClock,heading:0},true);
 }else{
 const pose=surfRiderPose(s),crouch=pose.crouch,hipX=pose.lean*.6,hipY=-12+crouch*.55;
 const shoulderX=hipX+pose.lean*.75+(s?.phase==='airborne'?0:1),shoulderY=hipY-8;
@@ -476,7 +727,7 @@ ctx.restore();
 }
 function drawSurfingWorld(){
 if(surfSession?.phase!=='paddling')return;
-const s=surfSession,heading=Math.hypot(s.vx,s.vy)>.005?Math.atan2(s.vy,s.vx):-Math.PI/2;
+const s=surfSession,heading=s.paddleHeading??-Math.PI/2;
 drawSurfRider(player.x,player.y,heading,true);
 }
 function drawSurfGame(){

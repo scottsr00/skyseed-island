@@ -2202,7 +2202,7 @@ assert.ok(Math.abs(g.run('surfRideView().riderX-beforeChase.riderX'))<5);
 }
 assert.ok(slow.run('surfRideView().breakX')<slow.run('beforeChase.breakX'));
 assert.ok(fast.run('surfRideView().breakX')>fast.run('beforeChase.breakX'));
-slow.run("surfSession.x=.861;advanceSurfing(16)");assert.equal(slow.run('surfSession.phase'),'wipeout');assert.match(slow.run('surfSession.message'),/breaking wave caught/);
+slow.run("surfSession.x=.91;advanceSurfing(16)");assert.equal(slow.run('surfSession.phase'),'wipeout');assert.match(slow.run('surfSession.message'),/breaking wave caught/);
 });
 
 test('pumping keeps the lip behind the surfer while coasting is overrun and crest-holding cannot farm speed',()=>{
@@ -2263,7 +2263,7 @@ assert.ok(heights[0]<heights[1]);assert.ok(heights[1]<heights[2]);
 for(const size of [.48,.7,1]){
 g.run(`surfSession.phase='riding';surfSession.waveSize=${size};surfSession.x=.80;surfSession.y=.4;draw()`);
 assert.equal(g.run('surfBarrelState().half'),true);
-g.run('surfSession.x=.87');assert.equal(g.run('surfBarrelState().overrun'),true);
+g.run('surfSession.x=.91');assert.equal(g.run('surfBarrelState().overrun'),true);
 }
 });
 
@@ -2288,4 +2288,37 @@ g.run('surfSession.paused=false;surfSession.phase="airborne";surfSession.y=.012;
 assert.equal(g.run('surfSession.wake.length'),0);
 g.run('surfSession.phase="paddling";surfSession.paddleTime=500;surfClock=1000;player.y=surfWaveY(player.x,1);catchSurfWave()');
 assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.wake.length'),0);assert.equal(g.run('surfSession.carveLean'),0);
+});
+
+test('surf lip leads left at the crest and crashes farther right with crumbling impact spray',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.waveSize=1;surfSession.x=.85;surfSession.y=.15;const taperView=surfRideView()`);
+assert.ok(g.run('surfBreakEdge(274,taperView)-surfBreakEdge(100,taperView)')>55);
+assert.equal(g.run('surfBarrelState().overrun'),true);
+g.run('surfSession.y=.8');assert.equal(g.run('surfBarrelState().overrun'),false);
+assert.ok(g.run('surfBarrelDepth(274)')<g.run('surfBarrelDepth(185)')/2);
+g.run(`const baseSpray=[];const taperDrop=surfWaterDrop;surfWaterDrop=(...args)=>{if(args[4]==='#effcf0')baseSpray.push(args);taperDrop(...args)};drawSurfWaveLip(taperView);const impactX=surfBreakEdge(274,taperView)`);
+assert.ok(g.run('baseSpray.length')>30);
+assert.ok(g.run('baseSpray.some(([x,y])=>x<impactX&&y<274)'));
+assert.ok(g.run('baseSpray.some(([x,y])=>x>impactX&&y<274)'));
+});
+
+test('face froth rises along the surface and rolls forward over the crest without converging',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';const flowView=surfRideView();const flowAnchor=surfBreakEdge(94,flowView)-30;const riseStart=surfFrothFlowPoint(flowAnchor,.15,flowView),riseMid=surfFrothFlowPoint(flowAnchor,.5,flowView),flowCrest=surfFrothFlowPoint(flowAnchor,Math.PI/2/2.14,flowView),rollEnd=surfFrothFlowPoint(flowAnchor,1,flowView)`);
+assert.ok(g.run('riseMid.y<riseStart.y&&riseMid.x<riseStart.x'));
+assert.ok(g.run('flowCrest.y<riseMid.y'));
+assert.ok(g.run('rollEnd.y>flowCrest.y&&rollEnd.x>flowCrest.x'));
+assert.ok(g.run('surfFrothFlowPoint(flowAnchor+20,.74,flowView).x-surfFrothFlowPoint(flowAnchor,.74,flowView).x')>8);
+});
+
+
+test('lip spray arcs clockwise from the back, forward and downward under gravity',()=>{
+const g=surfGame();
+for(const grain of [.1,.5,.9]){
+const points=g.run(`[0,.25,.5,.75,1].map(age=>surfLipSprayPoint(${grain},age,350))`);
+for(let i=1;i<points.length;i++)assert.ok(points[i].x>points[i-1].x);
+assert.ok(points[1].y<points[0].y);assert.ok(points[4].y>points[3].y);assert.ok(points[4].y>points[0].y);
+for(let i=1;i<points.length-1;i++)assert.ok(points[i+1].y-2*points[i].y+points[i-1].y>0);
+const early={x:points[1].x-points[0].x,y:points[1].y-points[0].y},late={x:points[4].x-points[3].x,y:points[4].y-points[3].y};
+assert.ok(early.x*late.y-early.y*late.x>0,'positive screen-space rotation is clockwise');
+}
 });
