@@ -907,3 +907,57 @@ g.run("blueMarlins=[{x:430,y:310,heading:0,age:600,duration:20000}];switchAge('5
 g.run('swimming=true;player.x=430;player.y=310;blueMarlins=[{x:435,y:310,heading:0,age:600,duration:20000}];latchBlueMarlin()');
 g.node('#profileName').value='Marlin rider';g.run('createProfile()');assert.equal(g.run('sharkRide'),null);assert.equal(g.run('blueMarlins.length'),0);
 });
+
+test('returning from a swim tosses goggles back into open water once, then splashes and fades',()=>{
+const g=game();g.run(`swimming=true;player.y=176;nextSharkFin=1e9;nextBlueMarlin=1e9;nextLochDragon=1e9;
+const shoreX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));
+player.x=shoreX-8;moveExplorer(2,0)`);
+assert.equal(g.run('goggleToss'),null);assert.equal(g.run('!!shoreClimb'),true);
+g.run('advanceSwimming(650);draw()');assert.equal(g.run('swimming'),false);assert.equal(g.run('!!goggleToss'),true);
+assert.equal(g.run('openSea(goggleToss.to.x,goggleToss.to.y)'),true);assert.ok(g.run('goggleToss.to.x')<g.run('player.x'));
+const target=JSON.parse(g.run('JSON.stringify(goggleToss.to)'));
+g.run('advanceSwimming(300);moveExplorer(1,0);draw()');assert.equal(g.run('goggleToss.elapsed'),300);
+assert.equal(g.run('goggleToss.to.x'),target.x);assert.equal(g.run('goggleToss.to.y'),target.y);
+g.run('advanceSwimming(300);draw()');assert.equal(g.run('goggleToss.elapsed'),600);
+g.run('advanceSwimming(700);draw()');assert.equal(g.run('goggleToss'),null);
+});
+
+test('goggles toss also accompanies mount landings and swimming returns, and clears on profile changes',()=>{
+const g=game();g.run(`swimming=true;player.y=176;
+const shoreX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));
+player.x=shoreX-28;sharkFins=[{x:player.x+2,y:176,vx:.02,vy:0,age:500,duration:4000}];latchShark();advanceSwimming(320);draw()`);
+assert.equal(g.run('!!shoreRecovery'),true);assert.equal(g.run('!!goggleToss'),true);assert.equal(g.run('openSea(goggleToss.to.x,goggleToss.to.y)'),true);
+g.run('shoreRecovery=null;swimming=true;player.x=430;player.y=310;returnBoat();draw()');assert.equal(g.run('!!goggleToss'),true);assert.equal(g.run('openSea(goggleToss.to.x,goggleToss.to.y)'),true);
+g.node('#profileName').value='Dry explorer';g.run('createProfile()');assert.equal(g.run('goggleToss'),null);
+});
+
+test('only correct problem answers restore power, including repeat practice and flash problems',()=>{
+const g=game();g.run('state.power=0;openQuestion(0)');g.node('#answer').value='-999';g.run('checkAnswer()');assert.equal(g.run('state.power'),0);
+g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),25);g.run('checkAnswer()');assert.equal(g.run('state.power'),25);
+g.run('openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),50);assert.equal(g.run('state.crystals'),5);
+g.run('state.power=90;openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),100);
+g.node('#challenge').close();g.run('state.power=0;startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');assert.equal(g.run('state.power'),25);g.node('#flashAnswer').value='-999';g.run('submitFlash()');assert.equal(g.run('state.power'),25);
+assert.equal(g.node('#powerValue').textContent,'25 / 100');assert.equal(g.node('#powerBar').style.width,'25%');
+});
+test('power drains only during active swimming or creature rides and pauses for problems',()=>{
+const g=game();g.run('state.power=10;advanceSwimming(10000)');assert.equal(g.run('state.power'),10);
+g.run('swimming=true;player.x=430;player.y=310;nextSharkFin=1e9;nextLochDragon=1e9;advanceSwimming(1000)');assert.ok(Math.abs(g.run('state.power')-9.35)<1e-9);
+g.node('#challenge').showModal();g.run('advanceSwimming(1000)');assert.ok(Math.abs(g.run('state.power')-9.35)<1e-9);g.node('#challenge').close();
+g.run('sharkFins=[{x:player.x+2,y:player.y,vx:.02,vy:0,age:500,duration:4000}];latchShark();advanceSwimming(1000)');assert.equal(g.run('!!sharkRide'),true);assert.ok(Math.abs(g.run('state.power')-8.7)<1e-9);
+});
+test('zero power returns swimmers to accessible land and blocks every new water entry',()=>{
+const g=game();g.run('state.power=.1;swimming=true;player.x=650;player.y=350;nextSharkFin=1e9;nextLochDragon=1e9;sharkRide={x:650,y:350,heading:0,distance:0,phase:0,diveElapsed:0};advanceSwimming(1000)');
+assert.equal(g.run('state.power'),0);assert.equal(g.run('swimming'),false);assert.equal(g.run('sharkRide'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('islandPolys.findIndex(p=>inside(player.x,player.y,p))===4'),false);
+assert.equal(g.node('#powerValue').textContent,'0 / 100');assert.match(g.node('#powerHelp').textContent,/Solve a problem/);
+g.run('startDive({x:600,y:350})');assert.equal(g.run('swimming'),false);assert.equal(g.run('diveAnimation'),null);
+g.run('state.catches={barracuda:5};launchBoat()');assert.equal(g.run('boating'),false);
+g.run('player.x=280;player.y=Array.from({length:300},(_,i)=>i).filter(y=>inside(280,y,mainPoly)).at(-1)');const y=g.run('player.y');g.run('moveExplorer(0,3)');assert.equal(g.run('player.y'),y);assert.equal(g.run('swimming'),false);assert.equal(g.run('shoreDiveTarget()'),null);
+g.run('moveExplorer(-1,0)');assert.equal(g.run('player.x'),279);
+});
+test('power persists per explorer across age changes, adventure resets, and reloads',()=>{
+const g=game({power:37,solved:[],upgrades:[]});assert.equal(g.run('state.power'),37);
+g.run('save();switchAge("9-10")');assert.equal(g.run('state.power'),37);g.run('state.power=0;save();switchAge("11-12")');assert.equal(g.run('state.power'),0);
+g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.power'),0);
+const restored=game(null,g.snapshot());assert.equal(restored.run('state.power'),0);
+g.node('#profileName').value='Power Explorer';g.run('createProfile()');assert.equal(g.run('state.power'),100);g.run('state.power=12;save();switchProfile("legacy")');assert.equal(g.run('state.power'),0);g.run('switchProfile("p1")');assert.equal(g.run('state.power'),12);
+});
