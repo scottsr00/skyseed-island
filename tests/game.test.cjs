@@ -444,18 +444,24 @@ assert.equal(g.run('underSharkBridge(woodlandBridge.x+woodlandBridge.w/2,woodlan
 g.run('state.upgrades=["bridge"]');assert.equal(g.run('underSharkBridge(woodlandBridge.x+woodlandBridge.w/2,woodlandBridge.y+woodlandBridge.h/2)'),true);
 });
 
-test('shark fades head first on descent and tail first on resurfacing in every heading',()=>{
+test('shark and marlin submerge and resurface head first in every heading',()=>{
 const g=game();
 for(const x of [-35,-15,0,15,25]){
 assert.equal(g.run(`sharkSegmentOpacity(${x},0)`),1);assert.equal(g.run(`sharkSegmentOpacity(${x},1)`),0);
 }
 assert.ok(g.run('sharkSegmentOpacity(-30,.5)>sharkSegmentOpacity(20,.5)'));
+assert.ok(g.run('sharkSegmentOpacity(20,.5,true)>sharkSegmentOpacity(-30,.5,true)'));
+for(const depth of [0,1])for(const x of [-35,0,25])assert.equal(g.run(`sharkSegmentOpacity(${x},${depth},true)`),1-depth);
 for(const x of [-30,0,20])assert.ok(g.run(`sharkSegmentOpacity(${x},.3)>=sharkSegmentOpacity(${x},.6)`));
-g.run('swimming=true;player.x=600;player.y=310;sharkRide={x:600,y:310,heading:0,phase:0,diveElapsed:5400};const originalBody=drawSharkBody;let slices=[];drawSharkBody=(phase,opacity)=>{slices.push(opacity);originalBody(phase,opacity)}');
-for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
-g.run(`sharkRide.heading=${heading};sharkRide.diveElapsed=5400;slices=[];drawSharkRide()`);
+g.run('swimming=true;player.x=600;player.y=310;sharkRide={x:600,y:310,heading:0,phase:0,diveElapsed:5400};const originalBody=drawSeaFishBody;let slices=[];drawSeaFishBody=(x,y,heading,phase,opacity,kind)=>{slices.push(opacity);originalBody(x,y,heading,phase,opacity,kind)}');
+for(const kind of ['shark','marlin'])for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+g.run(`sharkRide.kind='${kind}';sharkRide.heading=${heading};sharkRide.diveElapsed=5400;slices=[];drawSharkRide()`);
 const diving=g.run('JSON.stringify(slices)');assert.ok(g.run('slices.length>1&&slices.some(a=>a>0&&a<1)'));
-g.run('sharkRide.diveElapsed=8000;slices=[];drawSharkRide()');assert.equal(g.run('JSON.stringify(slices)'),diving);
+g.run('sharkRide.diveElapsed=8000;slices=[];drawSharkRide()');assert.notEqual(g.run('JSON.stringify(slices)'),diving);
+assert.ok(g.run('slices.length>1&&slices[0]<slices[slices.length-1]'));
+g.run('sharkRide.diveElapsed=5400;sharkRide.resurfacing=true;slices=[];drawSharkRide()');
+assert.ok(g.run('slices.length>1&&slices[0]<slices[slices.length-1]'));
+g.run('sharkRide.resurfacing=false');
 }
 });
 test('shark dives ease underwater periodically and resurface with only the snorkel visible at depth',()=>{
@@ -870,7 +876,7 @@ test('motorboat follows actual travel, trails a wake through turns, and stops ch
 const g=game();g.run('state.catches={barracuda:5};launchBoat();player.x=430;player.y=310;nextLochDragon=1e9');
 for(let i=0;i<8;i++)g.run('advanceSwimming(40);moveExplorer(5,0)');
 assert.equal(g.run('boatMotion.heading'),0);assert.ok(g.run('boatMotion.power')>.5);assert.ok(g.run('boatMotion.wake.length')>0);
-assert.equal(g.run('boatMotion.wake.every(w=>w.x<player.x&&w.y===310)'),true);
+assert.equal(g.run('boatMotion.wake.every(w=>w.x<player.x&&Math.abs(w.y-310)===6)'),true);
 const first=JSON.parse(g.run('JSON.stringify(boatMotion.wake[0])'));
 g.run('moveExplorer(0,8);advanceSwimming(40);draw()');assert.equal(g.run('boatMotion.heading'),Math.PI/2);
 assert.equal(g.run('boatMotion.wake[0].x'),first.x);assert.equal(g.run('boatMotion.wake[0].y'),first.y);
@@ -1066,7 +1072,7 @@ for(const g of [ferry,fishing]){
 g.run('player.x=3000;player.y=1500;keys.add("right")');for(let t=16;t<=160;t+=16)g.run(`tick(${t})`);
 g.run('keys.clear();keys.add("down")');for(let t=176;t<=320;t+=16)g.run(`tick(${t})`);
 }
-const motion='JSON.stringify({x:player.x,y:player.y,heading:boatMotion.heading,power:boatMotion.power,wake:boatMotion.wake})';assert.equal(ferry.run(motion),fishing.run(motion));assert.ok(ferry.run('boatMotion.wake.length')>0);
+const motion='JSON.stringify({x:player.x,y:player.y,heading:boatMotion.heading,power:boatMotion.power,wake:boatMotion.wake.map(w=>({heading:w.heading,age:w.age}))})';assert.equal(ferry.run(motion),fishing.run(motion));assert.ok(ferry.run('boatMotion.wake.length')>0);
 for(const g of [ferry,fishing]){const before=g.run('JSON.stringify([player.x,player.y])');g.run('keys.clear();advanceSwimming(1200)');assert.equal(g.run('JSON.stringify([player.x,player.y])'),before);assert.ok(g.run('boatMotion.power')<.01);g.run('player.x=188;player.y=170;moveExplorer(5,-10)');assert.equal(g.run('player.x'),188);}
 });
 test('the ferry is manually driven and supports casting and reeling without fishing sponsorship',()=>{
@@ -1726,5 +1732,100 @@ assert.equal(g.run('swimming'),true);
 assert.equal(g.run('shoreClimb'),null);
 }
 }
+}
+});
+
+
+test('twin inboard wakes originate at separate stern propellers in every heading',()=>{
+for(const vessel of ['ferry','fishing'])for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+const g=game();g.run(`boating=true;activeVessel=${JSON.stringify(vessel)};player.x=3000;player.y=1400;resetBoatMotion();const from={x:player.x,y:player.y};player.x+=Math.cos(${heading})*6;player.y+=Math.sin(${heading})*6;recordBoatMovement(from,${heading})`);
+const wake=JSON.parse(g.run('JSON.stringify(boatMotion.wake)'));
+assert.equal(wake.length,2);
+const spacing=vessel==='ferry'?8:6,stern=vessel==='ferry'?41:25;
+assert.ok(Math.abs(Math.hypot(wake[0].x-wake[1].x,wake[0].y-wake[1].y)-spacing*2)<1e-8);
+assert.ok(Math.abs((wake[0].x+wake[1].x)/2-(3000+Math.cos(heading)*(6-stern)))<1e-8);
+assert.ok(Math.abs((wake[0].y+wake[1].y)/2-(1400+Math.sin(heading)*(6-stern)))<1e-8);
+}
+});
+test('ferry pennant streams opposite actual travel, including reverse movement',()=>{
+const g=game();g.run("boating=true;activeVessel='ferry';let flagHeading;const originalFlag=cavernFlag;cavernFlag=(x,y,h,d)=>{flagHeading=d};player.x=3000;player.y=1400;resetBoatMotion();recordBoatMovement({x:3006,y:1400},0);ferryArt(player.x,player.y)");
+assert.equal(g.run('flagHeading'),Math.PI);
+g.run('cavernFlag=originalFlag;let flagPoints;polygon=(points,color)=>{if(color==="#8266aa")flagPoints=points}');
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+g.run(`cavernFlag(100,100,26,${heading})`);
+const points=JSON.parse(g.run('JSON.stringify(flagPoints)'));
+assert.ok(Math.abs((points[1][0]-points[0][0])-Math.cos(heading+Math.PI)*19)<1e-8);
+}
+});
+
+
+test('unridden sharks and marlins reveal and disappear head to tail in every heading',()=>{
+const g=game();
+g.run('swimming=true;let wildSlices=[];drawSeaFishBody=(x,y,heading,phase,opacity)=>wildSlices.push(opacity)');
+for(const kind of ['shark','marlin'])for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI,-Math.PI/2]){
+const rise=kind==='marlin'?2400:2000,fall=kind==='marlin'?3200:2600;
+const render=kind==='marlin'?'blueMarlins=[wildFish];drawBlueMarlins()':'sharkFins=[wildFish];drawSharkFins()';
+g.run(`var wildFish={x:600,y:350,heading:${heading},age:0,duration:10000,phase:1};wildSlices=[];${render}`);
+assert.equal(g.run('wildSlices.length'),0);
+g.run(`wildFish.age=${rise/2};wildSlices=[];${render}`);
+assert.ok(g.run('wildSlices.length>1&&wildSlices[0]<wildSlices[wildSlices.length-1]'),`${kind} head emerges first at ${heading}`);
+g.run(`wildFish.age=4000;wildSlices=[];${render}`);
+assert.equal(g.run('wildSlices.length'),1);
+g.run(`wildFish.age=${10000-fall/2};wildSlices=[];${render}`);
+assert.ok(g.run('wildSlices.length>1&&wildSlices[0]>wildSlices[wildSlices.length-1]'),`${kind} head disappears first at ${heading}`);
+g.run(`wildFish.age=10000;wildSlices=[];${render}`);
+assert.equal(g.run('wildSlices.length'),0);
+}
+});
+
+
+test('free sharks and marlins steer their full silhouettes around land, timber, and boat hulls',()=>{
+for(const kind of ['shark','marlin'])for(const obstacle of ['land','pier','boat']){
+const g=game();
+g.run(`state.upgrades=[];islandPolys.splice(0);piers.splice(0);crossings.splice(0);
+const obstacleHull=[[1000,960],[1040,960],[1040,1040],[1000,1040]];
+seaFishBoatObstacles=()=>${obstacle==='boat'?'[obstacleHull]':'[]'};
+${obstacle==='land'?'islandPolys.push(obstacleHull);':obstacle==='pier'?'piers.push({x:1000,y:960,w:40,h:80});':''}
+let avoidingFish={x:900,y:1000,heading:0,phase:0};let turned=false;let stoppedFrames=0;
+for(let frame=0;frame<600;frame++){
+const previous={x:avoidingFish.x,y:avoidingFish.y};
+advanceSeaFishCruise(avoidingFish,16,.028,'${kind}');
+if(Math.hypot(avoidingFish.x-previous.x,avoidingFish.y-previous.y)<.44)stoppedFrames++;
+if(!seaFishPoseClear(avoidingFish.x,avoidingFish.y,avoidingFish.heading,'${kind}'))throw Error('Fish hit ${obstacle}');
+if(Math.abs(avoidingFish.heading)>.1)turned=true;
+}`);
+assert.equal(g.run('turned'),true,`${kind} turns away from ${obstacle}`);
+assert.equal(g.run('stoppedFrames'),0,`${kind} keeps swimming around ${obstacle}`);
+assert.ok(g.run('Math.hypot(avoidingFish.x-900,avoidingFish.y-1000)>20'));
+// Fin clearance stays small, and the longer marlin bill participates in collisions.
+assert.equal(g.run(`seaFishPoseClear(960,1000,0,'marlin')`),false);
+assert.equal(g.run(`seaFishPoseClear(960,1000,0,'shark')`),true);
+}
+});
+test('fish obstacles use the active boat location and include ferry, fishing, and tow boats',()=>{
+const g=game();g.run("state.catches={shark:5};activeVessel='fishing';boatPosition={x:1500,y:1400};boatMotion.heading=Math.PI/2;fishingBoatPosition={x:900,y:1400}");
+assert.equal(g.run("seaFishBoatObstacles().length"),3);
+assert.equal(g.run("seaFishPoseClear(1500,1400,0,'shark')"),false);
+g.run("activeVessel='ferry';boatPosition={x:1800,y:1400};boatMotion.heading=0");
+assert.equal(g.run("seaFishPoseClear(1800,1400,0,'marlin')"),false);
+});
+
+test('trapped free sharks and marlins dive head first and leave after submerging',()=>{
+for(const kind of ['shark','marlin']){
+const g=game();
+g.run(`state.upgrades=[];islandPolys.splice(0);piers.splice(0);crossings.splice(0);seaFishBoatObstacles=()=>[];
+islandPolys.push([[1048,950],[1060,950],[1060,1050],[1048,1050]],[[940,950],[952,950],[952,1050],[940,1050]],[[940,1022],[1060,1022],[1060,1035],[940,1035]],[[940,965],[1060,965],[1060,978],[940,978]]);
+swimming=true;player.x=1000;player.y=1000;nextSharkFin=1e9;nextBlueMarlin=1e9;
+let trappedFish={x:1000,y:1000,heading:0,vx:.028,vy:0,age:3000,duration:20000,phase:0};
+${kind==='marlin'?'blueMarlins=[trappedFish];advanceBlueMarlin(16)':'sharkFins=[trappedFish];advanceSharkFins(16)'};
+`);
+assert.equal(g.run('!!trappedFish.escapeDive'),true,kind);
+assert.equal(g.run(`seaFishPoseClear(trappedFish.x,trappedFish.y,trappedFish.heading,'${kind}')`),true);
+g.run(`${kind==='marlin'?'latchBlueMarlin()':'latchShark()'}`);
+assert.equal(g.run('sharkRide'),null);
+g.run(`trappedFish.escapeDive.elapsed=trappedFish.escapeDive.duration/2;let diveSlices=[];drawSeaFishBody=(x,y,heading,phase,opacity)=>diveSlices.push(opacity);drawWildSeaFish(trappedFish,'${kind}')`);
+assert.ok(g.run('diveSlices.length>1&&diveSlices[0]>diveSlices[diveSlices.length-1]'));
+g.run(`trappedFish.escapeDive.elapsed=trappedFish.escapeDive.duration-8;${kind==='marlin'?'advanceBlueMarlin(16)':'advanceSharkFins(16)'}`);
+assert.equal(g.run(kind==='marlin'?'blueMarlins.length':'sharkFins.length'),0);
 }
 });
