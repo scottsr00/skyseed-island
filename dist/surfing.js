@@ -3,7 +3,7 @@
 // https://atariage.com/manual_html_page.php?SoftwareID=2413
 const SURF_RENTAL_COST=20,SURF_SHACK={x:1120,y:1762},SURF_HEAT_TIME=90000;
 let surfSession=null,surfClock=0;
-function nearSurfShack(){return !volleyball&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!beachTransfer&&!surfSession&&onMainlandBeach()&&Math.hypot(player.x-SURF_SHACK.x,player.y-SURF_SHACK.y)<72;}
+function nearSurfShack(){return !frisbeeGame&&!volleyball&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!beachTransfer&&!surfSession&&onMainlandBeach()&&Math.hypot(player.x-SURF_SHACK.x,player.y-SURF_SHACK.y)<72;}
 function openSurfShack(){
 if(!nearSurfShack()){toast('Visit the surf rental shack on Mainland Beach.');return;}
 updateSurfUI();openMapPanel('surfShackPanel');

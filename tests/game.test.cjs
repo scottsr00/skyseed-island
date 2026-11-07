@@ -932,18 +932,17 @@ g.run('shoreRecovery=null;swimming=true;player.x=430;player.y=310;returnBoat();d
 g.node('#profileName').value='Dry explorer';g.run('createProfile()');assert.equal(g.run('goggleToss'),null);
 });
 
-test('disabled power hides the meter and leaves math rewards independent of power',()=>{
-const g=game();assert.equal(g.run('POWER_ENABLED'),false);assert.equal(g.node('#powerMeter').hidden,true);
-g.run('state.power=0;openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');
-assert.equal(g.run('state.power'),0);assert.equal(g.run('state.crystals'),5);
-g.node('#challenge').close();g.run('startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');assert.equal(g.run('state.power'),0);
+test('enabled power shows the meter and correct discovery or flash answers restore it',()=>{
+const g=game();assert.equal(g.run('POWER_ENABLED'),true);assert.equal(g.node('#powerMeter').hidden,false);
+g.run('state.power=0;openQuestion(0)');g.node('#answer').value='-999';g.run('checkAnswer()');assert.equal(g.run('state.power'),0);
+g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),25);assert.equal(g.run('state.crystals'),5);g.run('checkAnswer()');assert.equal(g.run('state.power'),25);
+g.node('#challenge').close();g.run('startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');assert.equal(g.run('state.power'),50);
 });
-test('zero saved power permits swimming, creature rides, and boat launches without draining or forced returns',()=>{
-const g=game({power:0,solved:[],upgrades:[]});assert.equal(g.run('hasSwimPower()'),true);
-g.run('nextSharkFin=1e9;nextLochDragon=1e9;nextBlueMarlin=1e9;startDive({x:430,y:310});advanceSwimming(700);advanceSwimming(10000)');
-assert.equal(g.run('swimming'),true);assert.equal(g.run('state.power'),0);assert.equal(g.run('player.x'),430);
-g.run('sharkFins=[{x:player.x+2,y:player.y,vx:.02,vy:0,age:600,duration:4000}];latchShark();advanceSwimming(200)');assert.equal(g.run('!!sharkRide'),true);assert.equal(g.run('state.power'),0);
-g.run('returnBoat();state.catches={barracuda:5};launchBoat()');assert.equal(g.run('boating'),true);assert.equal(g.run('state.power'),0);
+test('power drains in water, returns exhausted swimmers to land, and blocks zero-power launches',()=>{
+const g=game({power:0,solved:[],upgrades:[]});assert.equal(g.run('hasSwimPower()'),false);
+g.run('startDive({x:430,y:310});state.catches={barracuda:5};launchBoat()');assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),false);
+g.run('state.power=1;swimming=true;player.x=600;player.y=350;nextSharkFin=1e9;nextLochDragon=1e9;nextBlueMarlin=1e9;advanceSwimming(1000)');assert.ok(Math.abs(g.run('state.power')-.35)<1e-9);assert.equal(g.run('swimming'),true);
+g.run('advanceSwimming(1000)');assert.equal(g.run('swimming'),false);assert.equal(g.run('state.power'),0);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.match(g.node('#powerHelp').textContent,/Solve a problem/);
 });
 test('legacy power values remain compatible across age changes, resets, and reloads',()=>{
 const g=game({power:37,solved:[],upgrades:[]});assert.equal(g.run('state.power'),37);
@@ -1063,7 +1062,7 @@ const g=game();g.run('mountPetDragon();advanceSwimming(650);player.x=430;player.
 g.node('#mapDragonLand').onclick();assert.equal(g.run('dragonFlight.stage'),'splashdown');
 g.run('advanceSwimming(500);draw()');assert.equal(g.run('dragonFlight.stage'),'swimming');assert.equal(g.run('dragonFlight.altitude'),0);
 assert.match(g.node('#mapDragonLand').textContent,/Take off/);assert.match(g.node('#waterControls').textContent,/DRAGON SWIM/);
-const x=g.run('player.x');g.run('moveExplorer(18,0);advanceSwimming(100);draw()');assert.ok(g.run('player.x')>x);assert.ok(g.run('dragonFlight.swimWake.length')>0);assert.equal(g.run('state.power'),100);
+const x=g.run('player.x');g.run('moveExplorer(18,0);advanceSwimming(100);draw()');assert.ok(g.run('player.x')>x);assert.ok(g.run('dragonFlight.swimWake.length')>0);assert.ok(g.run('state.power')<100);
 g.run('moveExplorer(0,8)');assert.equal(g.run('dragonFlight.heading'),Math.PI/2);
 g.node('#mapDragonLand').onclick();assert.equal(g.run('dragonFlight.stage'),'takeoff');g.run('advanceSwimming(650);draw()');assert.equal(g.run('dragonFlight.stage'),'flying');
 });
@@ -1076,11 +1075,11 @@ g.run("mountPetDragon();advanceSwimming(650);player.x=740;player.y=483;landPetDr
 g.run('player.x=boatIslands[0].x;player.y=boatIslands[0].y;landPetDragon()');assert.equal(g.run('dragonFlight.stage'),'flying');
 });
 
-test('swimming dragon works with zero saved power and keeps a safe takeoff save',()=>{
+test('dragon swimming requires power and exhaustion returns its rider safely to land',()=>{
 const g=game();const x=g.run('player.x'),y=g.run('player.y');
-g.run('mountPetDragon();advanceSwimming(650);player.x=430;player.y=310;state.power=0;landPetDragon()');assert.equal(g.run('dragonFlight.stage'),'splashdown');
-g.run('advanceSwimming(500);save()');assert.equal(g.run('state.x'),x);assert.equal(g.run('state.y'),y);
-g.run('advanceSwimming(10000);draw()');assert.equal(g.run('dragonFlight.stage'),'swimming');assert.equal(g.run('state.power'),0);
+g.run('mountPetDragon();advanceSwimming(650);player.x=430;player.y=310;state.power=0;landPetDragon()');assert.equal(g.run('dragonFlight.stage'),'flying');
+g.run('state.power=.1;landPetDragon();advanceSwimming(500);save()');assert.equal(g.run('state.x'),x);assert.equal(g.run('state.y'),y);
+g.run('advanceSwimming(1000);draw()');assert.equal(g.run('dragonFlight'),null);assert.equal(g.run('state.power'),0);assert.equal(g.run('canWalk(player.x,player.y)'),true);
 });
 test('wakeboard costs exactly 25 crystals, cannot be bought twice, and saves per explorer and age',()=>{
 const g=game();g.run('state.crystals=24;buyWakeboard()');assert.equal(g.run('state.wakeboard'),false);assert.equal(g.run('state.crystals'),24);
@@ -1101,17 +1100,15 @@ assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),false);asser
 g.run('draw()');
 });
 
-test('wakeboarding keeps the rider within tow-rope reach, stays in water while steering, and returns to the dock',()=>{
+test('wakeboarding follows the course, constrains the tow rope, and saves safe ground',()=>{
 const g=game();g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding()');assert.equal(g.run('!!wakeboardRide'),true);
 const start=g.run('wakeboardRide.boat.x');g.run('advanceSwimming(400);draw()');assert.ok(g.run('wakeboardRide.boat.x')>start);assert.ok(g.run('wakeboardRide.wake.length')>0);
-g.run('keys.add("down")');
-for(let i=0;i<150;i++){
-g.run('advanceSwimming(40)');assert.equal(g.run('wakeboardRigWater(wakeboardRide.boat.x,wakeboardRide.boat.y,wakeboardRide.heading,wakeboardRide.rider)'),true);
+for(let i=0;i<20;i++){
+g.run('advanceSwimming(40)');assert.equal(g.run('wakeboardHullClear(wakeboardRide.boat,wakeboardRide.heading)'),true);
 assert.ok(g.run('Math.hypot(player.x-wakeboardTowPoint(wakeboardRide.boat,wakeboardRide.heading).x,player.y-wakeboardTowPoint(wakeboardRide.boat,wakeboardRide.heading).y)')<=g.run('WAKEBOARD_ROPE+WAKEBOARD_HANDLE')+1e-6);
 }
-assert.ok(g.run('wakeboardRide.heading')>0);g.run('save()');
-const restored=game(null,g.snapshot());assert.equal(restored.run('wakeboardRide'),null);assert.equal(restored.run('state.wakeboard'),true);assert.equal(restored.run('canWalk(player.x,player.y)'),true);
-g.node('#mapWakeboardStop').onclick();assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('player.x'),g.run('WATERSPORTS_DOCK.x'));assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('save()');const restored=game(null,g.snapshot());assert.equal(restored.run('wakeboardRide'),null);assert.equal(restored.run('state.wakeboard'),true);assert.equal(restored.run('canWalk(player.x,player.y)'),true);
+g.node('#mapWakeboardStop').onclick();assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('!!wakeboardBoatTrip'),true);assert.equal(g.run('player.x'),g.run('WATERSPORTS_DOCK.x'));assert.equal(g.run('canWalk(player.x,player.y)'),true);
 });
 
 test('wakeboarding pauses for dialogs and clears on profile, age, or adventure reset',()=>{
@@ -1123,37 +1120,21 @@ g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding()');g.node(
 g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding()');g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('state.wakeboard'),false);
 });
 
-test('tow boat escapes shorelines, docks, bridges, and map edges instead of staying stuck',()=>{
-const scenarios=[
-{name:'shore',x:500,y:278,heading:-Math.PI/2,key:'up'},
-{name:'watersports dock',x:590,y:260,heading:Math.PI,key:'left'},
-{name:'bridge',x:615,y:205,heading:-Math.PI/2,key:'up'},
-{name:'ocean boundary',x:3140,y:800,heading:0,key:'right'}
-];
-for(const s of scenarios){
-const g=game();g.run(`state.wakeboard=true;visitWatersportsDock();startWakeboarding();wakeboardRide.boat={x:${s.x},y:${s.y}};wakeboardRide.heading=${s.heading};wakeboardRide.history=[];wakeboardRide.rider=null;syncWakeboardRider(wakeboardRide);keys.add('${s.key}')`);
-assert.equal(g.run('wakeboardRigWater(wakeboardRide.boat.x,wakeboardRide.boat.y,wakeboardRide.heading,wakeboardRide.rider)'),true,s.name);
-let stalled=0,maxStalled=0,traveled=0;
-for(let i=0;i<180;i++){
-const before=JSON.parse(g.run('JSON.stringify(wakeboardRide.boat)'));g.run('advanceSwimming(40)');const after=JSON.parse(g.run('JSON.stringify(wakeboardRide.boat)'));
-const distance=Math.hypot(after.x-before.x,after.y-before.y);traveled+=distance;stalled=distance<.05?stalled+40:0;maxStalled=Math.max(maxStalled,stalled);
-assert.equal(g.run('wakeboardRigWater(wakeboardRide.boat.x,wakeboardRide.boat.y,wakeboardRide.heading,wakeboardRide.rider)'),true,s.name);
+test('programmed tow course and docking approach keep the whole boat clear of islands and timber',()=>{
+const g=game();
+for(let distance=0;distance<g.run('WAKEBOARD_COURSE.length');distance+=3){
+assert.equal(g.run(`(()=>{const p=wakeboardCoursePose(${distance});return wakeboardHullClear(p,p.heading);})()`),true,`course distance ${distance}`);
 }
-assert.ok(maxStalled<400,`${s.name}: stalled ${maxStalled} ms`);assert.ok(traveled>300,`${s.name}: traveled only ${traveled}`);g.run('draw()');
-}
+for(let i=0;i<=20;i++)assert.equal(g.run(`wakeboardHullClear({x:590,y:299+(WATERSPORTS_DOCK.y+18-299)*${i}/20},-Math.PI/2*${i}/20)`),true);
 });
 
-test('tow wake persists in world space, spreads along turns, and expires',()=>{
+test('tow wake stays in world space and follows the unoccupied boat back after release',()=>{
 const g=game();g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding()');
-for(let i=0;i<30;i++)g.run('advanceSwimming(40)');
-assert.ok(g.run('wakeboardRide.wake.length')>10);
-const first=JSON.parse(g.run('JSON.stringify(wakeboardRide.wake[0])'));
-g.run('keys.add("down");advanceSwimming(240);draw()');
-assert.equal(g.run('wakeboardRide.wake[0].x'),first.x);assert.equal(g.run('wakeboardRide.wake[0].y'),first.y);assert.ok(g.run('wakeboardRide.wake[0].age')>first.age);
-g.run('advanceSwimming(400)');assert.equal(g.run('wakeboardRide.wake.some(w=>w.age>1500)'),true);
-g.run('keys.clear()');for(let i=0;i<70;i++)g.run('advanceSwimming(40)');
-assert.equal(g.run(`wakeboardRide.wake.some(w=>w.serial===${first.serial})`),false);
-assert.equal(g.run('wakeboardRide.wake.every(w=>w.age<3200)&&wakeboardRide.wake.length<=100'),true);
+for(let i=0;i<30;i++)g.run('advanceSwimming(40)');assert.ok(g.run('wakeboardRide.wake.length')>5);
+const first=JSON.parse(g.run('JSON.stringify(wakeboardRide.wake[0])'));g.run('finishWakeboarding();advanceSwimming(240);draw()');
+assert.equal(g.run('wakeboardBoatTrip.wake[0].x'),first.x);assert.equal(g.run('wakeboardBoatTrip.wake[0].y'),first.y);assert.ok(g.run('wakeboardBoatTrip.wake[0].age')>first.age);
+for(let i=0;i<90;i++)g.run('advanceSwimming(40)');
+assert.equal(g.run(`wakeboardBoatTrip.wake.some(w=>w.serial===${first.serial})`),false);assert.equal(g.run('wakeboardBoatTrip.wake.every(w=>w.age<3200)&&wakeboardBoatTrip.wake.length<=100'),true);
 });
 
 test('long tow rope attaches at the stern and constrains the handle without pushing a slack rider',()=>{
@@ -1341,4 +1322,128 @@ g.run('surfKey("ArrowLeft");surfKey(" ")');assert.equal(g.run('keys.has("arrowle
 });
 test('surf view renders face, aerial, wipeout, and results across portrait and landscape proportions',()=>{
 const g=surfGame();for(const [width,height] of [[480,300],[480,900],[800,300]])for(const phase of ['riding','airborne','wipeout','results'])g.run(`WORLD.viewWidth=${width};WORLD.viewHeight=${height};surfSession.phase='${phase}';surfSession.airHeight=.4;surfSession.airSpin=Math.PI;surfSession.wipeoutTime=600;draw()`);
+});
+
+test('walking gait follows distance at any movement pace and does not advance while rendering',()=>{
+const small=game(),large=game(),slower=game();for(const g of [small,large,slower])g.run('player.x=250;player.y=180');
+for(let i=0;i<10;i++)small.run('moveExplorer(1,0)');for(let i=0;i<5;i++){large.run('moveExplorer(2,0)');slower.run('moveExplorer(1,0)');}
+assert.ok(Math.abs(small.run('walkMotion.phase')-large.run('walkMotion.phase'))<1e-9);assert.ok(slower.run('walkMotion.phase')<small.run('walkMotion.phase'));assert.ok(small.run('walkingStep()')>0);
+const phase=small.run('walkMotion.phase');small.run('for(let i=0;i<25;i++)draw()');assert.equal(small.run('walkMotion.phase'),phase);small.run('moveExplorer(0,0)');assert.equal(small.run('walkingStep()'),0);assert.equal(small.run('walkMotion.phase'),phase);
+});
+test('blocked walking stops the gait while diagonal slides animate only the distance actually moved',()=>{
+const blocked=game(),free=game();for(const g of [blocked,free])g.run('player.x=250;player.y=180;moveExplorer(2,0)');const phase=blocked.run('walkMotion.phase');
+blocked.run('player.x=186;player.y=140;keys.add("arrowright");moveExplorer(4,0)');assert.equal(blocked.run('player.x'),186);assert.equal(blocked.run('walkMotion.phase'),phase);assert.equal(blocked.run('walkingStep()'),0);
+blocked.run('moveExplorer(4,3)');free.run('moveExplorer(0,3)');assert.equal(blocked.run('player.x'),186);assert.equal(blocked.run('player.y'),143);assert.ok(Math.abs(blocked.run('walkMotion.phase')-free.run('walkMotion.phase'))<1e-9);
+});
+test('walking phase stays still on boats and in water, and tracks court movement within bounds',()=>{
+const g=game();g.run('player.x=250;player.y=180;moveExplorer(2,0)');const phase=g.run('walkMotion.phase');
+g.run('state.catches={barracuda:5};launchBoat();moveExplorer(2,0)');assert.equal(g.run('walkMotion.phase'),phase);assert.equal(g.run('walkingStep()'),0);
+g.run('boating=false;swimming=true;player.x=600;player.y=310;moveExplorer(2,0)');assert.equal(g.run('walkMotion.phase'),phase);assert.equal(g.run('walkingStep()'),0);
+g.run('swimming=false;player.x=VOLLEYBALL_COURTS[0].x+50;player.y=VOLLEYBALL_COURTS[0].y+50;startVolleyball(0);moveExplorer(2,0)');assert.ok(g.run('walkMotion.phase')>phase);
+g.run('player.x=volleyball.court.x+volleyball.court.w-9;moveExplorer(5,0)');assert.equal(g.run('walkingStep()'),0);
+});
+
+test('three frisbee-holding beachgoers invite play with X without triggering a dive',()=>{
+const g=game();g.run('let frisbeePrevented=false;const frisbeeKey=(key,repeat=false)=>window.listeners.keydown.find(l=>!l.capture).handler({key,repeat,target:{tagName:"CANVAS"},preventDefault(){frisbeePrevented=true;}})');
+for(const host of [0,3,5]){
+g.run(`player.x=frisbeeHost(${host}).x;player.y=frisbeeHost(${host}).y+16;updateWaterControls();draw()`);
+assert.equal(g.run('nearbyFrisbeeHost()'),host);assert.equal(g.node('#mapFrisbeeAction').hidden,false);
+g.run('frisbeeKey("x",true)');assert.equal(g.run('frisbeeGame'),null);
+g.run('frisbeeKey("x")');assert.equal(g.run('frisbeeGame.hostIndex'),host);assert.equal(g.run('frisbeePrevented'),true);assert.equal(g.run('swimming'),false);assert.equal(g.run('diveAnimation'),null);
+assert.equal(g.node('#frisbeeHud').hidden,false);g.run('draw();frisbeeKey("Escape")');assert.equal(g.run('frisbeeGame'),null);assert.equal(g.node('#frisbeeHud').hidden,true);
+}
+});
+
+test('frisbee partner throws, player catches and throws back, and catch streak increases',()=>{
+const g=game();g.run('Math.random=()=>.5;player.x=frisbeeHost(0).x;player.y=1737;startFrisbee(0);advanceSwimming(650);draw()');
+assert.equal(g.run('frisbeeGame.phase'),'incoming');g.run('advanceSwimming(frisbeeGame.disc.duration*.85)');assert.equal(g.run('canCatchFrisbee()'),true);
+g.node('#mapFrisbeeAction').onclick();assert.equal(g.run('frisbeeGame.phase'),'holding');assert.equal(g.run('frisbeeGame.streak'),1);
+g.node('#mapFrisbeeAction').onclick();assert.equal(g.run('frisbeeGame.phase'),'outgoing');
+g.run('advanceSwimming(frisbeeGame.disc.duration+700);draw()');assert.equal(g.run('frisbeeGame.phase'),'incoming');
+g.run('advanceSwimming(frisbeeGame.disc.duration*.85);frisbeeAction();draw()');assert.equal(g.run('frisbeeGame.streak'),2);assert.equal(g.run('frisbeeGame.best'),2);assert.equal(g.run('state.crystals'),0);
+});
+
+test('missed frisbee lands on reachable sand, can be picked up, and dialogs pause flight',()=>{
+const g=game();g.run('Math.random=()=>.5;player.x=frisbeeHost(0).x;player.y=1737;startFrisbee(0);advanceSwimming(650);frisbeeGame.streak=2;frisbeeGame.best=2');
+const elapsed=g.run('frisbeeGame.disc.elapsed');g.node('#challenge').showModal();g.run('advanceSwimming(500)');assert.equal(g.run('frisbeeGame.disc.elapsed'),elapsed);g.node('#challenge').close();
+g.run('advanceSwimming(frisbeeGame.disc.duration+300);draw()');assert.equal(g.run('frisbeeGame.phase'),'missed');assert.equal(g.run('frisbeeGame.streak'),0);assert.equal(g.run('frisbeeGame.best'),2);
+g.run('moveExplorer(1000,-1000);frisbeeAction()');assert.equal(g.run('frisbeeGame.phase'),'missed');assert.match(g.node('#frisbeeStatus').textContent,/Walk up/);
+g.run('moveFrisbeePlayer(frisbeeGame.disc.to.x-player.x,frisbeeGame.disc.to.y-player.y);frisbeeAction();draw()');assert.equal(g.run('frisbeeGame.phase'),'holding');assert.equal(g.run('frisbeeGame.catches'),0);
+});
+
+test('frisbee sessions preserve anchored-boat access and clear on reload or player changes',()=>{
+const g=game();g.run('state.crystals=50;buyAnchor();state.ferryTicket=true;boardFerry();player.x=240;player.y=beachShoreY(240)-60;anchorBoatAtBeach();advanceSwimming(900);startFrisbee(0);draw()');
+assert.equal(g.run('!!frisbeeGame'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),false);
+const x=g.run('player.x');g.run('returnToAnchoredBoat();visit(0);openFerry();openFishing()');assert.equal(g.run('player.x'),x);
+g.run('save()');const restored=game(null,g.snapshot());assert.equal(restored.run('frisbeeGame'),null);assert.equal(restored.run('canReturnToAnchoredBoat()'),true);
+g.run('leaveFrisbee()');assert.equal(g.run('canReturnToAnchoredBoat()'),true);
+g.run('startFrisbee(0)');g.node('#profileName').value='Frisbee friend';g.run('createProfile()');assert.equal(g.run('frisbeeGame'),null);assert.equal(g.node('#frisbeeHud').hidden,true);
+});
+
+test('authenticated admin mode shows unlimited power without consuming or overwriting saved power',()=>{
+const g=game({power:0,solved:[],upgrades:[]});g.node('#adminPassword').value='wrong';g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),false);assert.equal(g.run('hasSwimPower()'),false);
+g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),true);assert.equal(g.run('hasSwimPower()'),true);assert.match(g.node('#powerValue').textContent,/Unlimited/);assert.equal(g.node('#powerBar').style.width,'100%');assert.equal(g.node('#exitAdminMode').hidden,false);
+g.run('startDive({x:600,y:350});advanceSwimming(700);advancePower(180000)');assert.equal(g.run('swimming'),true);assert.equal(g.run('state.power'),0);assert.equal(g.run('currentProfile().power'),0);
+g.run('returnBoat();state.catches={barracuda:5};launchBoat()');assert.equal(g.run('boating'),true);
+});
+test('exiting admin mode restores normal limits and safely lands a zero-power swimmer',()=>{
+const g=game({power:0,solved:[],upgrades:[]});g.node('#adminPassword').value='11111';g.run('applyAdminOverride();swimming=true;player.x=600;player.y=350');g.node('#exitAdminMode').onclick();assert.equal(g.run('adminMode'),false);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('hasSwimPower()'),false);assert.equal(g.node('#powerValue').textContent,'0 / 100');assert.equal(g.node('#exitAdminMode').hidden,true);
+});
+test('admin unlimited power ends on reload or changing players, levels, or adventure progress',()=>{
+const g=game({power:12,solved:[],upgrades:[]});const enable=()=>{g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');};
+enable();const restored=game(null,g.snapshot());assert.equal(restored.run('adminMode'),false);assert.equal(restored.run('state.power'),12);
+g.run('switchAge("9-10")');assert.equal(g.run('adminMode'),false);enable();g.node('#profileName').value='Normal Power Player';g.run('createProfile()');assert.equal(g.run('adminMode'),false);
+enable();g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('adminMode'),false);
+});
+
+test('dragon fire touching a standing player creates a small hair flame that follows the head',()=>{
+const g=game();g.run('player.x=PET_DRAGON_HOME.x+50;player.y=PET_DRAGON_HOME.y;state.power=37;petDragonFire={elapsed:200,duration:850};advancePetDragonFire(16)');assert.equal(g.run('!!playerHairEffect'),true);assert.equal(g.run('petDragonFire.hitPlayer'),true);assert.equal(g.run('state.power'),37);
+g.run('const originalPolygon=polygon;let flameShapes=[];polygon=(points,color,dy)=>{if(color==="#e88437")flameShapes.push(points);originalPolygon(points,color,dy)};drawPlayerHairEffect()');const before=g.run('JSON.stringify(flameShapes[0][0])');assert.notEqual(before,undefined);
+g.run('player.x+=8;player.y+=3;drawPlayerHairEffect()');assert.equal(g.run('flameShapes[1][0][0]-flameShapes[0][0][0]'),8);assert.equal(g.run('flameShapes[1][0][1]-flameShapes[0][0][1]'),3);
+g.run('advancePlayerHairEffect(100);advancePetDragonFire(16)');assert.equal(g.run('playerHairEffect.elapsed'),100);
+});
+test('hair flame becomes smoke and clears without retriggering during the same breath',()=>{
+const g=game();g.run('player.x=PET_DRAGON_HOME.x+50;player.y=PET_DRAGON_HOME.y;petDragonFire={elapsed:200,duration:850};checkPlayerDragonFireHit();const originalEllipse=ellipse,originalPolygon=polygon;let effects=[];ellipse=(...args)=>{effects.push(args[4]);originalEllipse(...args)};polygon=(points,color,dy)=>{effects.push(color);originalPolygon(points,color,dy)};drawPlayerHairEffect()');assert.equal(g.run('effects.includes("#e88437")'),true);assert.equal(g.run('effects.includes("#92938b")'),false);
+g.run('advancePlayerHairEffect(750);effects=[];drawPlayerHairEffect()');assert.equal(g.run('effects.includes("#e88437")'),false);assert.equal(g.run('effects.includes("#92938b")'),true);
+g.run('advancePlayerHairEffect(950);checkPlayerDragonFireHit()');assert.equal(g.run('playerHairEffect'),null);
+});
+test('dragon fire misses players outside the plume and never ignites its mounted rider',()=>{
+const g=game();for(const [dx,dy] of [[-40,0],[120,0],[50,-50],[50,50]]){g.run(`playerHairEffect=null;petDragonFire={elapsed:200,duration:850};player.x=PET_DRAGON_HOME.x+${dx};player.y=PET_DRAGON_HOME.y+${dy};checkPlayerDragonFireHit()`);assert.equal(g.run('playerHairEffect'),null);}
+g.run('player.x=PET_DRAGON_HOME.x+50;player.y=PET_DRAGON_HOME.y;dragonFlight={stage:"flying"};checkPlayerDragonFireHit()');assert.equal(g.run('playerHairEffect'),null);
+});
+test('hair fire pauses with dialogs and clears when changing math levels or explorers',()=>{
+const g=game();g.run('playerHairEffect={elapsed:250}');g.node('#challenge').showModal();g.run('advancePlayerHairEffect(1000)');assert.equal(g.run('playerHairEffect.elapsed'),250);g.node('#challenge').close();g.run('switchAge("9-10")');assert.equal(g.run('playerHairEffect'),null);
+g.run('playerHairEffect={elapsed:100}');g.node('#profileName').value='Smoke-free explorer';g.run('createProfile()');assert.equal(g.run('playerHairEffect'),null);
+});
+
+test('wakeboard controls carve the rider while the tow boat follows identical programmed positions',()=>{
+const a=game(),b=game();
+for(const g of [a,b])g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding()');
+a.run('keys.add("up")');b.run('keys.add("down")');
+for(let i=0;i<10;i++){a.run('advanceSwimming(20)');b.run('advanceSwimming(20)');}
+assert.equal(a.run('JSON.stringify(wakeboardRide.boat)'),b.run('JSON.stringify(wakeboardRide.boat)'));
+assert.ok(b.run('player.y')-a.run('player.y')>6);assert.equal(a.run('wakeboardRide.heading'),b.run('wakeboardRide.heading'));
+});
+
+test('rider collisions release the tow rope, splash into swimming, and send the boat around its course to dock',()=>{
+const g=game();g.run(`state.wakeboard=true;visitWatersportsDock();startWakeboarding();
+const from={x:550,y:290,vx:0,vy:-180},to={x:550,y:284,vx:0,vy:-180};
+const hit=wakeboardRiderContact(wakeboardRide,from,to);if(hit?.kind!=='timber')throw Error('Expected a piling collision');crashWakeboarder(wakeboardRide,hit,from,to);draw()`);
+assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('wakeboardCrash.kind'),'water');assert.equal(g.run('!!wakeboardBoatTrip'),true);
+const x=g.run('wakeboardBoatTrip.boat.x');g.run('advanceSwimming(450);draw()');assert.equal(g.run('wakeboardCrash'),null);assert.equal(g.run('swimming'),true);assert.notEqual(g.run('wakeboardBoatTrip.boat.x'),x);
+assert.equal(g.run('state.wakeboard'),true);g.run('nextSharkFin=1e9;nextBlueMarlin=1e9;nextLochDragon=1e9');
+for(let i=0;i<800&&g.run('!!wakeboardBoatTrip');i++){g.run('advanceSwimming(40)');if(g.run('wakeboardBoatTrip'))assert.equal(g.run('wakeboardHullClear(wakeboardBoatTrip.boat,wakeboardBoatTrip.heading)'),true);}
+assert.equal(g.run('wakeboardBoatTrip'),null);g.run('swimming=false;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;startWakeboarding()');assert.equal(g.run('!!wakeboardRide'),true);
+});
+
+test('wakeboard land collisions use the shark tumble, prone pause, head shake, and get-up sequence',()=>{
+const g=game();g.run(`state.wakeboard=true;visitWatersportsDock();startWakeboarding();
+const shoreX=Array.from({length:500},(_,i)=>i).filter(x=>inside(x,470,islandPolys[3])).at(-1);
+const from={x:shoreX+19,y:470,vx:-180,vy:0},to={x:shoreX+12,y:470,vx:-180,vy:0};
+const hit=wakeboardRiderContact(wakeboardRide,from,to);if(hit?.kind!=='land')throw Error('Expected a land collision');crashWakeboarder(wakeboardRide,hit,from,to);draw()`);
+assert.equal(g.run('wakeboardCrash.kind'),'land');assert.equal(g.run('wakeboardCrash.duration'),280);assert.equal(g.run('wakeboardRide'),null);
+g.run('advanceSwimming(280);draw()');assert.equal(g.run('wakeboardCrash'),null);assert.equal(g.run('swimming'),false);assert.equal(g.run('!!shoreRecovery'),true);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('!!goggleToss'),true);
+const x=g.run('player.x');g.run('moveExplorer(10,0);advanceSwimming(999);draw()');assert.equal(g.run('player.x'),x);assert.match(g.node('#waterControls').textContent,/Catching your breath/);
+g.run('advanceSwimming(1);draw()');assert.match(g.node('#waterControls').textContent,/Shaking it off/);g.run('advanceSwimming(450);draw()');assert.match(g.node('#waterControls').textContent,/Getting back up/);
+g.run('advanceSwimming(450)');assert.equal(g.run('shoreRecovery'),null);assert.equal(g.run('state.wakeboard'),true);
 });
