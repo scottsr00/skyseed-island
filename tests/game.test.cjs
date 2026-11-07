@@ -2163,7 +2163,7 @@ assert.ok(Math.abs((first-later)-22)<.001);
 g.run(`surfClock=1400`);
 assert.equal(g.run(`beachWaveProfile(1100,${i},surfClock,true).y`),g.run(`surfWaveY(1100,${i})`));
 const front=g.run(`beachWaveProfile(1100,${i},surfClock,true).front`);
-assert.ok(g.run(`beachWaveProfile(${front},${i},surfClock,true).height`)>g.run(`beachWaveProfile(${front-160},${i},surfClock,true).height`)+15);
+assert.ok(g.run(`beachWaveProfile(${front},${i},surfClock,true).height`)>g.run(`beachWaveProfile(${front-160},${i},surfClock,true).height`)+12*g.run(`surfWaveSize(surfWaveDistance(${i},surfClock))`));
 }
 g.run('camera.y=1500;state.surfRental=false;drawBeachWaves();state.surfRental=true;surfClock=12000;drawBeachWaves()');
 });
@@ -2239,4 +2239,53 @@ const g=surfGame();g.run(`surfSession.phase='airborne';surfSession.y=.012;surfSe
 assert.equal(g.run('surfSession.phase'),'wipeout',`invalid landing ${degrees}°`);
 assert.equal(g.run('surfSession.score'),0);
 }
+});
+
+test('paddling farther out catches progressively bigger waves and preserves the original outer wave',()=>{
+let lastSize=0,lastFace=0;
+for(const distance of [65,110,170,230,280]){
+const g=surfGame();g.run(`player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-${distance};surfClock=(335-${distance})/.026;surfSession.paddleTime=500;updateSurfUI()`);
+assert.match(g.node('#surfLine').textContent,/PADDLE OUT FOR BIGGER/);
+assert.equal(g.run('catchSurfWave()'),true);
+const size=g.run('surfSession.waveSize'),face=g.run('279-surfRideCrest(surfRideView().riderX)');
+assert.ok(size>lastSize);assert.ok(face>lastFace);
+assert.equal(size,g.run(`surfWaveSize(${distance})`));
+if(distance<280)assert.ok(size<1);else {assert.equal(size,1);assert.ok(Math.abs(g.run('surfRideCrest(224)-surfBaseCrest(224)'))<1e-9);}
+g.run('advanceSurfing(100);draw()');assert.equal(g.run('surfSession.waveSize'),size);
+lastSize=size;lastFace=face;
+}
+});
+
+test('map swells shrink toward shore and each riding size keeps its barrel collision aligned',()=>{
+const g=surfGame();
+const heights=[70,150,280].map(distance=>g.run(`beachWaveProfile(beachWaveProfile(1100,0,(335-${distance})/.026,true).front,0,(335-${distance})/.026,true).height`));
+assert.ok(heights[0]<heights[1]);assert.ok(heights[1]<heights[2]);
+for(const size of [.48,.7,1]){
+g.run(`surfSession.phase='riding';surfSession.waveSize=${size};surfSession.x=.80;surfSession.y=.4;draw()`);
+assert.equal(g.run('surfBarrelState().half'),true);
+g.run('surfSession.x=.87');assert.equal(g.run('surfBarrelState().overrun'),true);
+}
+});
+
+test('fast carving flexes the surfer and throws more spray than slow straight riding',()=>{
+const slow=surfGame(),fast=surfGame();
+for(const [g,speed] of [[slow,.22],[fast,.7]])g.run(`surfSession.phase='riding';surfSession.waveSize=1;surfSession.angle=Math.PI;surfSession.speed=${speed};surfSession.y=.5`);
+slow.run('advanceSurfing(600)');fast.run(`keys.add('down');advanceSurfing(300);keys.clear();keys.add('up');advanceSurfing(300)`);
+assert.ok(fast.run('surfRiderPose().crouch')>slow.run('surfRiderPose().crouch'));
+assert.ok(Math.abs(fast.run('surfRiderPose().lean'))>Math.abs(slow.run('surfRiderPose().lean')));
+for(const g of [slow,fast])g.run(`let sprayCount=0;const wakeRect=rect;rect=(...args)=>{if(args[4]==='#f0fff1'||args[4]==='#b5e7db')sprayCount++;wakeRect(...args)};drawSurfBoardWake()`);
+assert.ok(fast.run('sprayCount')>slow.run('sprayCount'));
+assert.ok(fast.run('surfSession.wake.some(mark=>mark.strength>.4)'));
+assert.ok(fast.run('surfSession.wake.at(-1).y!==surfSession.wake[0].y'));
+});
+
+test('surf trails freeze when paused, survive render calls, fade during an air, and reset on a new wave',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.speed=.65;surfSession.angle=Math.PI;advanceSurfing(400)`);
+assert.ok(g.run('surfSession.wake.length')>0);
+const trails=g.run('JSON.stringify([surfSession.wake,surfSession.carveLean,surfSession.carveStrength])');
+g.run('draw();draw();surfSession.paused=true;advanceSurfing(500)');assert.equal(g.run('JSON.stringify([surfSession.wake,surfSession.carveLean,surfSession.carveStrength])'),trails);
+g.run('surfSession.paused=false;surfSession.phase="airborne";surfSession.y=.012;surfSession.airHeight=2;surfSession.airV=2;surfSession.airSpin=0;advanceSurfing(1400)');
+assert.equal(g.run('surfSession.wake.length'),0);
+g.run('surfSession.phase="paddling";surfSession.paddleTime=500;surfClock=1000;player.y=surfWaveY(player.x,1);catchSurfWave()');
+assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.wake.length'),0);assert.equal(g.run('surfSession.carveLean'),0);
 });
