@@ -1307,18 +1307,33 @@ const g=surfGame();assert.equal(g.run('surfSession.phase'),'paddling');assert.eq
 const start=g.run('player.y');g.run('keys.add("up");advanceSurfing(1000);draw()');assert.ok(g.run('player.y')<start-65);assert.ok(g.run('surfSession.vy')<0);
 assert.equal(g.run('catchSurfWave()'),true);assert.equal(g.run('surfSession.phase'),'riding');g.run('draw()');assert.equal(g.run('nearby()'),-1);
 });
-test('surf carves turn faster but cost speed, and tube rides score more than open-face cruising',()=>{
-const normal=surfGame(),sharp=surfGame();
-for(const [g,carve] of [[normal,false],[sharp,true]])g.run(`surfSession.phase='riding';surfSession.angle=Math.PI/2;surfSession.y=.3;keys.add('right');${carve?"keys.add(' ');":''}advanceSurfing(100)`);
-assert.ok(sharp.run('surfSession.angle')>normal.run('surfSession.angle'));assert.ok(sharp.run('surfSession.speed')<normal.run('surfSession.speed'));
-const tube=surfGame(),open=surfGame();for(const [g,x] of [[tube,.73],[open,.35]])g.run(`surfSession.phase='riding';surfSession.x=${x};surfSession.y=.4;surfSession.angle=Math.PI;advanceSurfing(400)`);
-assert.ok(tube.run('surfSession.score')>open.run('surfSession.score')+20);
-const cut=surfGame();cut.run('surfSession.phase="riding";surfSession.y=.08;surfSession.speed=.5;surfSession.angle=Math.PI;keys.add("left");keys.add(" ");advanceSurfing(1000)');assert.ok(cut.run('surfSession.score')>150);
+test('linked up and down carves build speed and half-barrel rides earn the highest line points',()=>{
+const pumped=surfGame(),coast=surfGame();
+for(const g of [pumped,coast])g.run(`surfSession.phase='riding';surfSession.angle=Math.PI;surfSession.y=.45;surfSession.bands=[0,1,2,3]`);
+for(const key of ['down','up','down','up'])pumped.run(`keys.clear();keys.add('${key}');advanceSurfing(750)`);
+coast.run('advanceSurfing(3000)');
+assert.equal(pumped.run('surfSession.phase'),'riding');
+assert.ok(pumped.run('surfSession.speed')>coast.run('surfSession.speed')+.2);
+assert.ok(pumped.run('surfSession.score')>coast.run('surfSession.score')+35);
+const half=surfGame(),inside=surfGame(),open=surfGame();
+for(const [g,x] of [[half,.80],[inside,.835],[open,.35]])g.run(`surfSession.phase='riding';surfSession.x=${x};surfSession.y=.4;surfSession.speed=.55;surfSession.angle=Math.PI;surfSession.bands=[0,1,2,3]`);
+assert.equal(half.run('surfBarrelState().half'),true);assert.ok(inside.run('surfBarrelState().coverage')>.75);
+for(const g of [half,inside,open])g.run('advanceSurfing(100)');
+assert.ok(half.run('surfSession.score')>inside.run('surfSession.score'));
+assert.ok(inside.run('surfSession.score')>open.run('surfSession.score'));
+assert.match(half.node('#surfLine').textContent,/4×/);
 });
-test('surf aerials launch from the crest and require a down-face landing to bank spin points',()=>{
-const g=surfGame();g.run('surfSession.phase="riding";surfSession.y=.002;surfSession.angle=Math.PI+.6;surfSession.speed=.65;advanceSurfing(32)');assert.equal(g.run('surfSession.phase'),'airborne');
-g.run('surfSession.airHeight=.01;surfSession.airV=-1;surfSession.airTurns=Math.PI*2;surfSession.airSpin=Math.PI*2;surfSession.angle=.5;advanceSurfing(16);draw()');assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>=500);assert.match(g.node('#surfMessage').textContent,/360/);
-g.run('surfSession.phase="airborne";surfSession.airHeight=.001;surfSession.airV=-1;surfSession.angle=Math.PI;advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),'wipeout');assert.equal(g.run('surfSession.wipeouts'),1);
+test('surf airs require Space, climbing at the crest, and enough speed; spins bank on a clean landing',()=>{
+for(const [y,speed,angle,space] of [[.002,.65,Math.PI+.6,false],[.5,.65,Math.PI+.6,true],[.002,.3,Math.PI+.6,true],[.002,.65,Math.PI-.6,true]]){
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.y=${y};surfSession.angle=${angle};surfSession.speed=${speed};${space?"requestSurfAir();":''}advanceSurfing(32)`);
+assert.equal(g.run('surfSession.phase'),'riding');
+}
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.y=.025;surfSession.angle=Math.PI+.6;surfSession.speed=.7;requestSurfAir();advanceSurfing(16)`);
+assert.equal(g.run('surfSession.phase'),'airborne');
+g.run(`keys.add('right');keys.add('down');advanceSurfing(1000*Math.PI*2/6.5);keys.delete('right');advanceSurfing(600);draw()`);
+assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>=500);assert.match(g.run('surfSession.message'),/360/);
+g.run('surfSession.phase="airborne";surfSession.airHeight=.001;surfSession.airV=-1;surfSession.airSpin=Math.PI;surfSession.angle=Math.PI-.5;advanceSurfing(16)');
+assert.equal(g.run('surfSession.phase'),'wipeout');assert.equal(g.run('surfSession.wipeouts'),1);
 });
 test('three surf wipeouts or 90 seconds finish a heat, save a best score, and retain the rental',()=>{
 const g=surfGame();for(let i=0;i<3;i++){
@@ -2074,4 +2089,118 @@ g.run(`sprayPetDragon([{...dragonDrop,y:1420,vz:400}])`);assert.equal(g.run('pet
 g.run('resetPetDragon()');assert.equal(g.run('petDragonWet'),null);
 g.run('petDragonWet={elapsed:900};switchAge("9-10")');assert.equal(g.run('petDragonWet'),null);
 g.run('petDragonWet={elapsed:900}');g.node('#profileName').value='Dragon friend';g.run('createProfile()');assert.equal(g.run('petDragonWet'),null);
+});
+
+test('igniting each tree type preserves its original sprite geometry',()=>{
+const g=game();
+for(const kind of ['tree','pine','palm']){
+g.run(`{
+const t=[...burnableTrees.values()].find(t=>t.kind==='${kind}');
+const originalRect=rect,originalEllipse=ellipse,originalPolygon=polygon,originalFlame=drawDragonFlame;
+let geometry=[];rect=(...a)=>geometry.push(['rect',...a]);ellipse=(...a)=>geometry.push(['ellipse',...a]);polygon=(...a)=>geometry.push(['polygon',...a]);drawDragonFlame=()=>{};
+const sprite=t.kind==='pine'?drawPineSprite:t.kind==='palm'?drawPalmSprite:drawTreeSprite;
+sprite(t.x,t.y,t.scale);const before=JSON.stringify(geometry);geometry=[];
+t.burnAge=0;drawBurningTree(t.x,t.y);const after=JSON.stringify(geometry);
+rect=originalRect;ellipse=originalEllipse;polygon=originalPolygon;drawDragonFlame=originalFlame;
+if(before!==after)throw new Error('Ignition changed ${kind} geometry');
+}`);
+}
+});
+
+test('burning trees use the same flame renderer as dragon breath and stop flames at ash',()=>{
+const g=game();g.run('const originalFlame=drawDragonFlame;let flames=[];drawDragonFlame=(...args)=>{flames.push(args);originalFlame(...args)};petDragonFire={elapsed:200,duration:850};drawPetDragonFire()');assert.equal(g.run('flames.length'),1);
+g.run('flames=[];const target=burnableTrees.values().next().value;target.burnAge=900;drawBurningTree(target.x,target.y)');assert.equal(g.run('flames.length'),4);assert.equal(g.run('flames.every(f=>f[3]===-Math.PI/2)'),true);
+g.run('flames=[];target.burnAge=TREE_BURN_DURATION;drawBurningTree(target.x,target.y)');assert.equal(g.run('flames.length'),0);
+});
+
+test('sprayed volleyballers throw toward the boat and fetch their floating ball before returning to court',()=>{
+const g=game();
+g.run(`boating=true;player.x=520;player.y=1600;const sprayed=ambientVolleyPlayers(0)[0];sprayVolleyballers([{x:sprayed.x,y:sprayed.y,vx:0,vy:0,vz:0,gravity:180,life:.5,age:.1}]);`);
+assert.equal(g.run('volleySprayReactions.size'),1);
+assert.equal(g.run('volleySprayReactions.get(0).phase'),'windup');
+g.run('advanceVolleySprayReactions(600)');
+assert.equal(g.run('volleySprayReactions.get(0).phase'),'throw');
+assert.equal(g.run('volleySprayReactions.get(0).ball.target.x'),520);
+assert.equal(g.run('volleySprayReactions.get(0).ball.target.y'),1600);
+g.run('player.x=700;advanceVolleySprayReactions(2200);draw()');
+assert.equal(g.run('volleySprayReactions.get(0).phase'),'fetch');
+assert.equal(g.run('volleySprayReactions.get(0).ball.x'),520);
+g.run(`let fetchedSwimming=false,carriedHome=false;for(let i=0;i<1000&&volleySprayReactions.size;i++){advanceVolleySprayReactions(20);const r=volleySprayReactions.get(0);if(r?.swimming)fetchedSwimming=true;if(r?.phase==='return')carriedHome=true;drawVolleySprayReactions();}`);
+assert.equal(g.run('fetchedSwimming'),true);
+assert.equal(g.run('carriedHome'),true);
+assert.equal(g.run('volleySprayReactions.size'),0);
+});
+
+test('volleyball spray sweeps fast drops, ignores high misses, pauses and resets, and keeps busy courts unavailable',()=>{
+const g=game();
+g.run(`boating=true;player.x=520;player.y=1700;const npc=ambientVolleyPlayers(0)[0];sprayVolleyballers([{x:npc.x,y:npc.y,vx:0,vy:0,vz:300,gravity:180,life:1,age:.2,volleyCheckedAge:.19}])`);
+assert.equal(g.run('volleySprayReactions.size'),0);
+g.run(`const volleyDrop={x:npc.x-30,y:npc.y,vx:600,vy:0,vz:0,gravity:180,life:.1,age:.1};sprayVolleyballers([volleyDrop]);advanceVolleySprayReactions(200);sprayVolleyballers([{...volleyDrop,volleyCheckedAge:0}])`);
+assert.equal(g.run('volleySprayReactions.get(0).elapsed'),200);
+g.node('#challenge').showModal();g.run('advanceVolleySprayReactions(1000)');assert.equal(g.run('volleySprayReactions.get(0).elapsed'),200);g.node('#challenge').close();
+g.run('boating=false;player.x=npc.x;player.y=npc.y');assert.equal(g.run('nearbyVolleyballCourt()'),-1);
+g.run('resetVolleyball()');assert.equal(g.run('volleySprayReactions.size'),0);assert.equal(g.run('nearbyVolleyballCourt()'),0);
+g.run(`boating=true;boatMotion.spray=[{...volleyDrop,age:0,volleyCheckedAge:0}];advanceBoatSpray(100)`);assert.equal(g.run('volleySprayReactions.size'),1);
+g.run("switchAge('9-10')");assert.equal(g.run('volleySprayReactions.size'),0);
+});
+
+test('low spray draws over a low dragon and beneath a dragon flying above it, without duplicate particles',()=>{
+const g=game();g.run(`petDragonPosition={x:1100,y:1400};activeVessel='fishing';boatMotion.spray=[{x:1100,y:1400,vx:0,vy:0,vz:45,gravity:180,life:.5,age:.25,trim:1,size:1}];let sprayMarks=0;const oldSprayEllipse=ellipse;ellipse=(...a)=>{if(a[4]==='#f5fffc')sprayMarks++;oldSprayEllipse(...a)};drawBoatTrimSpray(0,0,0,'fishing');`);
+assert.equal(g.run('sprayMarks'),0);
+g.run("drawBoatTrimSpray(0,0,0,'fishing',true)");assert.equal(g.run('sprayMarks'),1);
+g.run(`dragonFlight={stage:'flying',altitude:50,heading:0};player.x=1100;player.y=1400;sprayMarks=0;drawBoatTrimSpray(0,0,0,'fishing');drawBoatTrimSpray(0,0,0,'fishing',true)`);assert.equal(g.run('sprayMarks'),1);
+g.run(`dragonFlight=null;const renderOrder=[];drawPetDragon=()=>renderOrder.push('dragon');drawBoatTrimSpray=(x,y,h,v,front)=>{if(front)renderOrder.push('spray')};draw()`);
+assert.ok(g.run("renderOrder.indexOf('spray')>renderOrder.indexOf('dragon')"));
+});
+
+test('beach breaks peel right to left and their visible crests match catchable waves',()=>{
+const g=game();
+for(const i of [0,1,2]){
+const first=g.run(`beachWaveProfile(1100,${i},1000,true).front`);
+const later=g.run(`beachWaveProfile(1100,${i},1400,true).front`);
+assert.ok(later<first,`wave ${i} must peel left`);
+assert.ok(Math.abs((first-later)-22)<.001);
+g.run(`surfClock=1400`);
+assert.equal(g.run(`beachWaveProfile(1100,${i},surfClock,true).y`),g.run(`surfWaveY(1100,${i})`));
+const front=g.run(`beachWaveProfile(1100,${i},surfClock,true).front`);
+assert.ok(g.run(`beachWaveProfile(${front},${i},surfClock,true).height`)>g.run(`beachWaveProfile(${front-160},${i},surfClock,true).height`)+15);
+}
+g.run('camera.y=1500;state.surfRental=false;drawBeachWaves();state.surfRental=true;surfClock=12000;drawBeachWaves()');
+});
+
+test('coastal waves mask every land polygon and render beneath islands and water occupants',()=>{
+const g=game();
+g.run(`const waterMask={holes:0,rule:null};ctx.moveTo=()=>waterMask.holes++;ctx.clip=rule=>waterMask.rule=rule;clipBeachWaveWater()`);
+assert.equal(g.run('waterMask.holes'),g.run('islandPolys.length'));
+assert.equal(g.run('waterMask.rule'),'evenodd');
+g.run(`const coastOrder=[];drawBeachWaves=()=>coastOrder.push('waves');const coastPolygon=polygon;polygon=(...args)=>{coastOrder.push('land');coastPolygon(...args)};drawLochDragon=()=>coastOrder.push('swimmer');drawMainlandBeach=()=>coastOrder.push('beach');draw()`);
+assert.equal(g.run("coastOrder.filter(x=>x==='waves').length"),1);
+for(const layer of ['land','swimmer','beach'])assert.ok(g.run(`coastOrder.indexOf('waves')<coastOrder.indexOf('${layer}')`));
+});
+
+test('surf up and down carve across the face while a centered camera scrolls water right',()=>{
+const up=surfGame(),down=surfGame();
+for(const [g,key] of [[up,'up'],[down,'down']])g.run(`surfSession.phase='riding';surfSession.y=.5;surfSession.angle=Math.PI;keys.add('${key}');advanceSurfing(600)`);
+assert.ok(up.run('surfSession.y')<.45);assert.ok(down.run('surfSession.y')>.55);
+assert.ok(down.run('surfSession.speed')>up.run('surfSession.speed'));
+for(const g of [up,down]){
+assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.scroll')>20);
+assert.ok(Math.abs(g.run('surfRideView().riderX')-224)<11);
+assert.equal(g.node('#surfUp').hidden,false);assert.equal(g.node('#surfDown').hidden,false);
+}
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.angle=Math.PI;const glints=[];const scrollRect=rect;rect=(x,y,w,h,color)=>{if(color==='#77cbc5')glints.push(x);scrollRect(x,y,w,h,color)};drawSurfWaveFace();const glintStart=glints[0];glints.length=0;advanceSurfing(200);drawSurfWaveFace()`);
+assert.ok(g.run('glints[0]')>g.run('glintStart'));
+const scroll=g.run('surfSession.scroll');g.run('draw();draw()');assert.equal(g.run('surfSession.scroll'),scroll);
+g.run('surfSession.paused=true;advanceSurfing(1000)');assert.equal(g.run('surfSession.scroll'),scroll);
+});
+
+test('breaking whitewater chases from the right when slow and recedes when the surfer gains speed',()=>{
+const slow=surfGame(),fast=surfGame();
+for(const [g,speed] of [[slow,.14],[fast,.68]]){
+g.run(`surfSession.phase='riding';surfSession.angle=Math.PI;surfSession.speed=${speed};const beforeChase=surfRideView();advanceSurfing(500)`);
+assert.ok(Math.abs(g.run('surfRideView().riderX-beforeChase.riderX'))<5);
+}
+assert.ok(slow.run('surfRideView().breakX')<slow.run('beforeChase.breakX'));
+assert.ok(fast.run('surfRideView().breakX')>fast.run('beforeChase.breakX'));
+slow.run("surfSession.x=.861;advanceSurfing(16)");assert.equal(slow.run('surfSession.phase'),'wipeout');assert.match(slow.run('surfSession.message'),/breaking wave caught/);
 });
