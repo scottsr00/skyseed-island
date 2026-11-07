@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "python3 -m http.server 5173 --directory dist",
-    "check": "node --check dist/app.js",
+    "check": "node --check dist/app.js && node --check dist/surfing.js",
     "test": "node --test tests/game.test.cjs"
   }
 }
