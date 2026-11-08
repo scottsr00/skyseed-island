@@ -1,4 +1,30 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
+test('discovery results lead with the headline and answer, then reward and keyboard actions',()=>{
+const g=game();g.run('openQuestion(0)');
+g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');
+const html=g.node('#challengeBody').innerHTML;
+assert.ok(html.indexOf('Discovery made!')<html.indexOf('discovery-answer'));
+assert.ok(html.indexOf('discovery-answer')<html.indexOf('crystal-reward'));
+assert.ok(html.indexOf('crystal-reward')<html.indexOf('discovery-actions'));
+assert.match(html,/Next discovery<\/span><kbd>Enter<\/kbd>/);
+assert.match(html,/Keep exploring<\/span><kbd>Esc<\/kbd>/);
+let prevented=0;const press=(key,repeat=false,target={tagName:'BUTTON',id:'nextQuestion'})=>g.node('#challenge').onkeydown({key,repeat,target,preventDefault(){prevented++;}});
+press('Enter',true);assert.equal(g.run('active'),0);
+press('Enter',false,{tagName:'BUTTON',id:'backIsland'});assert.equal(g.run('active'),0);
+press('Enter');assert.equal(g.run('active'),1);assert.equal(g.run('answerComplete'),false);
+press('Enter');assert.equal(g.run('active'),1);
+g.node('#answer').value=g.run('String(questions[1].answer)');g.run('checkAnswer()');
+press('Escape');assert.equal(g.node('#challenge').open,false);assert.ok(prevented>=2);
+});
+test('next discovery stays on the current island after its last unsolved question',()=>{
+const g=game();g.run('state.solved=locations[0].ids.slice(0,-1);openQuestion(locations[0].ids.at(-1))');
+g.node('#answer').value=g.run('String(questions[active].answer)');g.run('checkAnswer()');
+g.node('#nextQuestion').onclick();assert.equal(g.run('active'),g.run('locations[0].ids[0]'));assert.equal(g.node('#challenge').open,true);
+g.node('#answer').value=g.run('String(questions[active].answer)');g.run('checkAnswer()');
+assert.match(g.node('#challengeBody').innerHTML,/Practice complete!/);
+assert.doesNotMatch(g.node('#challengeBody').innerHTML,/reward-gain/);
+g.node('#backIsland').onclick();assert.equal(g.node('#challenge').open,false);
+});
 function game(saved,stored,renderTools=false){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:(target,key)=>target[key]??(()=>{})});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{listeners:{},addEventListener(type,handler,options){(this.listeners[type]??=[]).push({handler,capture:!!options?.capture});}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/surfing.js','utf8'),c);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);if(!renderTools)vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
 test('all 100 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<100;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),100);assert.equal(g.run('state.crystals'),500);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),505);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),445);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),445);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
@@ -711,7 +737,8 @@ assert.equal(restored.run('ageLevel'),'7-8');assert.equal(restored.run('state.cr
 restored.run("switchProfile('legacy')");assert.equal(restored.run('ageLevel'),'5-6');assert.equal(restored.run('state.crystals'),25);
 restored.run("switchAge('7-8')");assert.equal(restored.run('state.crystals'),26);
 const html=fs.readFileSync('dist/index.html','utf8');
-for(const level of ['5-6','7-8','9-10','11-12'])assert.ok(html.includes(`<option value="${level}">`));
+for(const level of ['5-6','7-8'])assert.ok(html.includes(`<option value="${level}" disabled>`));
+for(const level of ['9-10','11-12'])assert.ok(html.includes(`<option value="${level}">`));
 });
 
 test('new age brackets use suitable flash arithmetic and keep permanent ferry access',()=>{
@@ -979,6 +1006,18 @@ g.run('startDive({x:430,y:310});state.catches={barracuda:5};launchBoat()');asser
 g.run('state.power=1;swimming=true;player.x=600;player.y=350;nextSharkFin=1e9;nextLochDragon=1e9;nextBlueMarlin=1e9;advanceSwimming(1000)');assert.ok(Math.abs(g.run('state.power')-.35)<1e-9);assert.equal(g.run('swimming'),true);
 g.run('advanceSwimming(1000)');assert.equal(g.run('swimming'),false);assert.equal(g.run('state.power'),0);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.match(g.node('#powerHelp').textContent,/Solve a problem/);
 });
+test('swimming uses twice the energy of fish and swimming dragon rides',()=>{
+const g=game();
+for(const ride of ['null',"{kind:'shark'}","{kind:'marlin'}","{kind:'dragon'}"]){
+g.run(`state.power=100;swimming=true;sharkRide=${ride};advancePower(10000)`);
+assert.ok(Math.abs(g.run('state.power')-(ride==='null'?93.5:96.75))<1e-9);
+}
+g.run("sharkRide=null;swimming=false;dragonFlight={stage:'swimming',safe:{x:230,y:176}};state.power=100;advancePower(10000)");
+assert.ok(Math.abs(g.run('state.power')-96.75)<1e-9);
+g.run("dragonFlight.stage='flying';advancePower(10000)");assert.ok(Math.abs(g.run('state.power')-96.75)<1e-9);
+g.run("dragonFlight=null;swimming=true;advancePower(10000)");assert.ok(Math.abs(g.run('state.power')-90.25)<1e-9);
+});
+
 test('legacy power values remain compatible across age changes, resets, and reloads',()=>{
 const g=game({power:37,solved:[],upgrades:[]});assert.equal(g.run('state.power'),37);
 g.run('save();switchAge("9-10")');assert.equal(g.run('state.power'),37);g.run('state.power=0;save();switchAge("11-12")');assert.equal(g.run('state.power'),0);
@@ -2178,22 +2217,28 @@ assert.equal(g.run("coastOrder.filter(x=>x==='waves').length"),1);
 for(const layer of ['land','swimmer','beach'])assert.ok(g.run(`coastOrder.indexOf('waves')<coastOrder.indexOf('${layer}')`));
 });
 
-test('passing beach waves hide swimmers and duck-diving boards nose first, then reveal the nose before the tail',()=>{
+test('whitewater alone covers swimmers and duck-diving boards, with nose-first entry and resurfacing',()=>{
 const g=surfGame();
-g.run('surfClock=1000;const waveX=SURF_SHACK.x,waveY=beachWaveSurfaceY(waveX,1,surfClock)');
-const sample=delta=>g.run(`beachWaveSubmersion(waveX,waveY-(${delta}))`);
-assert.equal(sample(-40),null);
-assert.equal(sample(-20).stage,'entering');
-assert.ok(sample(-20).edge>sample(-10).edge,'entry hides the positive-X nose before the tail');
-assert.equal(sample(0).stage,'under');
-assert.equal(sample(16).stage,'emerging');
-assert.ok(sample(16).edge>sample(28).edge,'resurfacing reveals the positive-X nose before the tail');
-assert.equal(sample(50),null);
-g.run(`player.x=waveX;player.y=waveY;let waveClips=[];ctx.rect=(...args)=>waveClips.push(args);
+g.run(`surfClock=1000;const lipX=beachWaveProfile(1100,1,surfClock,true).front;
+const waveX=lipX+50,foam=beachWaveWhitewaterProfile(waveX,1,surfClock);
+const foamY=t=>foam.y+foam.bottom-t*(foam.bottom-foam.top)`);
+const sample=t=>g.run(`beachWaveSubmersion(waveX,foamY(${t}))`);
+assert.equal(sample(-.1),null,'visible before reaching the foam');
+assert.equal(sample(.1).stage,'entering');
+assert.ok(sample(.1).edge>sample(.3).edge,'entry hides the positive-X nose before the tail');
+assert.equal(sample(.5).stage,'under');
+assert.equal(sample(.7).stage,'emerging');
+assert.ok(sample(.7).edge>sample(.9).edge,'resurfacing reveals the positive-X nose before the tail');
+assert.equal(sample(1.1),null,'visible after leaving the foam');
+assert.equal(g.run('beachWaveSubmersion(lipX-40,beachWaveSurfaceY(lipX-40,1,surfClock))'),null,'unbroken face ahead of the lip never hides the character');
+g.run(`player.x=waveX;player.y=foamY(.5);let waveClips=[],foregroundFoam=0;
+ctx.rect=(...args)=>waveClips.push(args);drawBeachWaveWhitewater=()=>foregroundFoam++;
 drawSurfingWorld()`);
 assert.equal(g.run('waveClips.some(r=>r.every(v=>v===0))'),true);
-g.run(`surfSession=null;swimming=true;swimMotion.effort=1;waveClips=[];drawSwimmingCharacter(player.x,player.y)`);
+assert.ok(g.run('foregroundFoam')>0,'whitewater renders over the board at the transition');
+g.run(`surfSession=null;swimming=true;swimMotion.effort=1;waveClips=[];foregroundFoam=0;swimmerArt()`);
 assert.equal(g.run('waveClips.some(r=>r.every(v=>v===0))'),true);
+assert.ok(g.run('foregroundFoam')>0,'whitewater renders over the swimmer at the transition');
 g.run('waveClips=[];drawSwimmingCharacter(player.x,player.y-400)');
 assert.equal(g.run('waveClips.length'),0,'open-water swimmers stay visible away from the beach break');
 g.run('swimming=false;surfSession={phase:"paddling",paused:true,paddleHeading:0};const beforeDive=JSON.stringify(surfSession);drawSurfingWorld();drawSurfingWorld()');
@@ -2324,14 +2369,13 @@ assert.ok(g.run('baseSpray.some(([x,y])=>x<impactX&&y<274)'));
 assert.ok(g.run('baseSpray.some(([x,y])=>x>impactX&&y<274)'));
 });
 
-test('face froth rises along the surface and rolls forward over the crest without converging',()=>{
-const g=surfGame();g.run(`surfSession.phase='riding';const flowView=surfRideView();const flowAnchor=surfBreakEdge(94,flowView)-30;const riseStart=surfFrothFlowPoint(flowAnchor,.15,flowView),riseMid=surfFrothFlowPoint(flowAnchor,.5,flowView),flowCrest=surfFrothFlowPoint(flowAnchor,Math.PI/2/2.14,flowView),rollEnd=surfFrothFlowPoint(flowAnchor,1,flowView)`);
-assert.ok(g.run('riseMid.y<riseStart.y&&riseMid.x<riseStart.x'));
-assert.ok(g.run('flowCrest.y<riseMid.y'));
-assert.ok(g.run('rollEnd.y>flowCrest.y&&rollEnd.x>flowCrest.x'));
-assert.ok(g.run('surfFrothFlowPoint(flowAnchor+20,.74,flowView).x-surfFrothFlowPoint(flowAnchor,.74,flowView).x')>8);
-});
+test('open-face streaks only rise, while barrel streaks follow the clockwise curl',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';const flowView=surfRideView();const flowAnchor=surfLipCrown(flowView)-30;const facePath=[0,.25,.5,.75,1].map(p=>surfFrothFlowPoint(flowAnchor,p,flowView))`);
+assert.ok(g.run('facePath.every((p,i,points)=>!i||p.y<points[i-1].y)'));
+g.run(`const barrelTop=surfBarrelFrothFlowPoint(flowAnchor,Math.PI/2/2.14,flowView),barrelDown=surfBarrelFrothFlowPoint(flowAnchor,1,flowView)`);
+assert.ok(g.run('barrelDown.y>barrelTop.y&&barrelDown.x>barrelTop.x'));
 
+});
 
 test('lip spray arcs clockwise from the back, forward and downward under gravity',()=>{
 const g=surfGame();
@@ -2343,4 +2387,29 @@ for(let i=1;i<points.length-1;i++)assert.ok(points[i+1].y-2*points[i].y+points[i
 const early={x:points[1].x-points[0].x,y:points[1].y-points[0].y},late={x:points[4].x-points[3].x,y:points[4].y-points[3].y};
 assert.ok(early.x*late.y-early.y*late.x>0,'positive screen-space rotation is clockwise');
 }
+});
+
+test('waterskis cost 100 crystals once and persist independently per explorer and age',()=>{
+const g=game();g.run('state.crystals=99;buyWaterskis()');assert.equal(g.run('state.waterskis'),false);assert.equal(g.run('state.crystals'),99);
+g.run('state.crystals=125;buyWaterskis();buyWaterskis()');assert.equal(g.run('state.crystals'),25);assert.equal(g.run('state.waterskis'),true);
+const restored=game(null,g.snapshot());assert.equal(restored.run('state.waterskis'),true);assert.equal(restored.run('state.crystals'),25);
+g.run("switchAge('7-8')");assert.equal(g.run('state.waterskis'),false);g.run("switchAge('11-12')");assert.equal(g.run('state.waterskis'),true);
+g.node('#profileName').value='Skier';g.run('createProfile()');assert.equal(g.run('state.waterskis'),false);
+});
+
+test('dock asks owners of both to choose equipment and launches either selection',()=>{
+for(const equipment of ['wakeboard','waterskis']){
+const g=game();g.run('state.wakeboard=true;state.waterskis=true;visitWatersportsDock();near=101;interact()');
+assert.equal(g.run('wakeboardRide'),null);assert.equal(g.node('#watersportsPanel').hidden,false);assert.equal(g.node('#watersportsChoice').hidden,false);
+g.node(equipment==='waterskis'?'#startWaterskis':'#startWakeboard').onclick();assert.equal(g.run('wakeboardRide.equipment'),equipment);
+g.run('advanceSwimming(400);draw();save()');assert.equal(g.run('!!wakeboardRide'),true);assert.equal(g.run('canWalk(state.x,state.y)'),true);
+g.run('finishWakeboarding();advanceSwimming(350);draw();advanceSwimming(350)');assert.equal(g.run('swimming'),true);
+}
+});
+
+test('waterskis alone can launch from the dock and map action, and unowned gear cannot launch',()=>{
+const g=game();g.run("visitWatersportsDock();startWakeboarding('waterskis')");assert.equal(g.run('wakeboardRide'),null);
+g.run('state.waterskis=true;updateWakeboardUI()');assert.equal(g.node('#mapWakeboardStart').hidden,false);
+g.node('#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide.equipment'),'waterskis');assert.match(g.node('#waterControls').textContent,/WATERSKIS/);
+const h=game();h.run('state.waterskis=true;visitWatersportsDock();near=101;interact()');assert.equal(h.run('wakeboardRide.equipment'),'waterskis');
 });

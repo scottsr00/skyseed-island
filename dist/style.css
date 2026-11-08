@@ -3,12 +3,12 @@
 
 /* Five earned crystals arrive in sequence, in step with the reward counter. */
 .crystal-reward{margin:0 auto 24px;max-width:280px}
-.crystal-shower{height:100px;position:relative;overflow:hidden}
-.reward-crystal{position:absolute;left:calc(50% - 17px);top:48px;font-size:38px;line-height:1;color:#9474bd;text-shadow:2px 3px #ddd0ed;opacity:0;animation:crystal-collect 600ms cubic-bezier(.22,.7,.35,1) both;animation-delay:calc(var(--i)*180ms)}
+.crystal-shower{height:112px;position:relative;overflow:hidden}
+.reward-crystal{position:absolute;left:calc(50% - 17px);top:40px;font-size:38px;line-height:1;color:#9474bd;text-shadow:2px 3px #ddd0ed;opacity:0;animation:crystal-collect 600ms cubic-bezier(.22,.7,.35,1) both;animation-delay:calc(var(--i)*180ms)}
 .reward-balance{display:flex;align-items:center;justify-content:center;gap:7px;background:#eee8f5;border:1px solid #d8c9e8;border-radius:14px;padding:14px 18px;font-size:13px;color:#6d548b}
 .reward-balance strong{font-size:30px;font-variant-numeric:tabular-nums;color:var(--ink);min-width:2ch}
 .reward-gain{margin-left:8px;border-radius:20px;padding:5px 9px;background:#dbe9cb;color:#406333;animation:reward-pop 450ms 1.15s both}
-@keyframes crystal-collect{0%{opacity:0;transform:translate(calc((var(--i) - 2)*36px),-65px) rotate(-25deg) scale(.5)}25%{opacity:1}65%{opacity:1;transform:translate(0,0) rotate(8deg) scale(1.1)}100%{opacity:0;transform:translate(0,50px) rotate(0) scale(.4)}}
+@keyframes crystal-collect{0%{opacity:0;transform:translate(calc((var(--i) - 2)*36px),var(--crystal-rise,-35px)) rotate(-25deg) scale(.5)}25%{opacity:1}65%{opacity:1;transform:translate(0,0) rotate(8deg) scale(1.1)}100%{opacity:0;transform:translate(0,var(--crystal-fall,40px)) rotate(0) scale(.4)}}
 @keyframes reward-pop{from{opacity:0;transform:scale(.6)}70%{transform:scale(1.15)}to{opacity:1;transform:scale(1)}}
 @media(prefers-reduced-motion:reduce){.reward-crystal{animation:none;opacity:1;transform:translateX(calc((var(--i) - 2)*42px));top:30px}.reward-gain{animation:none}}
 
@@ -236,3 +236,73 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 #surfLine{grid-column:2 / -1;text-align:right;font-size:10px}
 .surf-message{top:82px}.surf-session-actions{top:142px}
 @media(max-width:600px){.surf-message{top:86px}.surf-session-actions{top:150px}#surfLine{font-size:9px}}
+
+/* Discoveries use the same field-journal parchment and pixel controls as map menus. */
+.map-app #challenge{width:min(620px,calc(100% - 28px));max-height:calc(100dvh - 28px);padding:22px;overflow-y:auto;overflow-wrap:anywhere}
+.map-app #challenge .modal-top{align-items:flex-start;margin-bottom:18px;padding-bottom:0;border:0;box-shadow:none}
+.map-app #challenge .close{border:0;background:transparent;box-shadow:none;color:var(--muted)}
+.map-app #challengeCategory{align-self:center;font-size:10px;letter-spacing:.5px}
+.map-app #challengeBody h2{margin:0 0 12px;font-size:16px;letter-spacing:0;color:var(--muted)}
+.map-app #challenge .question{margin:0 0 24px;padding:0;border:0;background:transparent;box-shadow:none;font-size:20px;font-weight:700;line-height:1.6;color:var(--ink)}
+.map-app #challenge .tool{margin:0 0 24px;padding:0;border:0;background:transparent;box-shadow:none}
+.map-app #challenge .tool-title{margin-bottom:10px;padding:0;border:0;font-size:10px;font-weight:400;line-height:1.6;letter-spacing:.5px;color:var(--muted)}
+.map-app #challenge .visual-result{margin:12px 0 0;font-size:12px;line-height:1.7;color:var(--muted)}
+.map-app #challenge .math-picture{padding:8px 0;border:0;background:transparent;font-size:21px}
+.map-app #challenge .tiles{gap:8px}
+.map-app #challenge .tile{min-width:44px;min-height:44px;padding:10px;font-size:12px}
+.map-app #challenge .fraction-grid{gap:8px}
+.map-app #challenge .fraction-grid button{min-height:38px}
+.map-app #challenge .tile.selected{background:var(--green);color:var(--pixel-light);box-shadow:inset 2px 2px #244332,inset -2px -2px #70905c}
+.map-app #challenge .step-row{gap:10px;font-size:20px}
+.map-app #challenge input[type=range]{appearance:none;height:12px;margin:14px 0;border:2px solid var(--pixel-edge);background:#cbd5aa;box-shadow:inset 2px 2px #a4b380;border-radius:0;cursor:pointer}
+.map-app #challenge input[type=range]::-webkit-slider-thumb{appearance:none;width:22px;height:26px;border:2px solid var(--pixel-edge);border-radius:0;background:#e3e8c0;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #a4b380}
+.map-app #challenge input[type=range]::-moz-range-thumb{width:18px;height:22px;border:2px solid var(--pixel-edge);border-radius:0;background:#e3e8c0;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #a4b380}
+.map-app #challenge .answer-form{display:flex;flex-wrap:nowrap;align-items:stretch;gap:10px;margin:0}
+.map-app #challenge .answer-form input{flex:1;min-width:0;min-height:54px;padding:14px;border-color:var(--pixel-edge);background:var(--pixel-light);box-shadow:none;font-size:18px}
+.map-app #challenge .answer-form input::placeholder{color:#657354;font-size:12px;opacity:1}
+.map-app #challenge .primary{min-height:44px;padding:12px 16px;font-size:12px;line-height:1.5}
+.map-app #challenge .answer-form button{width:auto;flex-shrink:0}
+.map-app #challenge .feedback{min-height:0;margin:14px 0 0;font-size:12px}
+.map-app #challenge .feedback:empty{display:none}
+.map-app #challenge .feedback.error{padding:0;border:0;background:transparent;color:#794b2f;box-shadow:none}
+.map-app #challenge .text-button{min-height:44px;margin-top:8px;padding:10px 0;font-size:12px;color:var(--green)}
+.map-app #challenge .text-button:not(:disabled):hover{background:transparent;color:#254735}
+.map-app #challenge .hint-box{margin-top:8px;padding:4px 0 4px 12px;border:0;border-left:3px solid #b18c47;background:transparent;box-shadow:none;font-size:12px}
+.map-app #challenge .celebration{padding:4px 0 0}
+.map-app #challenge .celebration h2{font-size:22px;color:var(--ink)}
+.map-app #challenge .celebration>.eyebrow{margin:0 0 12px}
+.map-app #challenge .celebration>p{font-size:13px}
+.map-app #challenge .crystal-reward{margin-bottom:20px}
+.map-app #challenge .reward-balance{border-color:#7c648e;box-shadow:inset 2px 2px #fffbe7,inset -2px -2px #c5b5cf}
+.map-app #challenge .reward-gain{font-size:12px}
+.map-app #challenge .squishy-unlock{padding:16px;border-color:#7c648e;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #c5b5cf}
+.map-app #challenge .squishy-unlock .squishy-art{border:2px solid #7c648e;border-radius:0;box-shadow:inset 2px 2px #fffbe780,inset -2px -2px #49385c33}
+.map-app #challenge .squishy-unlock h3{font-size:20px}
+.map-app #challenge .completion{font-size:12px}
+.map-app #challenge:has(.discovery-result){width:min(520px,calc(100% - 28px));padding:18px}
+.map-app #challenge:has(.discovery-result) .modal-top{margin-bottom:10px}
+.map-app #challenge .discovery-result{padding:0}
+.map-app #challenge .discovery-result h2{margin:0 0 10px;font-size:24px}
+.map-app #challenge .discovery-answer{margin:0 auto 8px;max-width:46ch;font-size:16px;line-height:1.6;color:var(--ink)}
+.map-app #challenge .discovery-result .crystal-reward{max-width:300px;margin:0 auto 10px}
+.map-app #challenge .discovery-result .crystal-shower{height:68px;--crystal-rise:-18px;--crystal-fall:20px}
+.map-app #challenge .discovery-result .reward-crystal{top:22px;left:calc(50% - 14px);font-size:28px}
+.map-app #challenge .discovery-result .reward-balance{gap:18px;padding:4px 0;border:0;background:transparent;box-shadow:none}
+.map-app #challenge .discovery-result .reward-gain{margin:0;padding:0;border:0;background:transparent;box-shadow:none;font-size:20px;color:var(--green)}
+.map-app #challenge .reward-total{font-size:12px;color:var(--muted)}
+.map-app #challenge .reward-total strong{font-size:18px;color:var(--ink)}
+.map-app #challenge .practice-note{font-size:12px;color:var(--muted);margin:0 0 10px}
+.map-app #challenge .discovery-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.map-app #challenge .discovery-actions button{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;min-height:44px;padding:10px;font-size:12px}
+.map-app #challenge .discovery-actions kbd{margin:0;padding:2px 5px;border:1px solid currentColor;background:transparent;box-shadow:none;font:700 10px/1.4 var(--pixel-font);color:inherit;opacity:.8}
+@media(max-width:600px){
+ .map-app #challenge{padding:16px}
+ .map-app #challengeBody h2{font-size:15px}
+ .map-app #challenge .question{font-size:18px}
+ .map-app #challenge .answer-form{flex-direction:column}
+ .map-app #challenge .answer-form button{width:100%}
+ .map-app #challenge .math-picture{font-size:18px}
+ .map-app #challenge .discovery-result h2{font-size:23px}
+ .map-app #challenge .discovery-answer{font-size:16px}
+}
+@media(max-width:380px){.map-app #challenge .discovery-actions{grid-template-columns:1fr}}

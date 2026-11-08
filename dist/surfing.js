@@ -214,19 +214,47 @@ const distance=surfWaveDistance(index,time),collapse=Math.max(0,1-distance/45);
 const shoreDistance=distance<60?Math.max(0,(distance-11)*60/49):distance;
 return beachShoreY(x)-shoreDistance+Math.sin(x*.018+time*.0014)*3*(1-collapse);
 }
+function beachWaveWhitewaterProfile(x,index,time){
+const distance=surfWaveDistance(index,time),collapse=Math.max(0,1-distance/45);
+const height=43.2*surfWaveSize(distance)*(1-collapse*.92),scale=height/50;
+if(height<5||collapse>.8||distance>325)return null;
+const front=beachWaveProfile(1100,index,time,state.surfRental).front;
+const section=Math.floor((x-front)/600),lipX=front+section*600,offset=x-lipX;
+// The unbroken face ahead of the mouth never covers a water occupant.
+if(offset<8*scale)return null;
+const progress=Math.max(0,(offset-25*scale)/(600-25*scale));
+if(progress>.85)return null;
+const taper=Math.pow(1-progress,.7),radius=1.3+Math.pow(1-progress,1.1)*12;
+const y=beachWaveSurfaceY(lipX,index,time)+beachShoreY(x)-beachShoreY(lipX);
+return {lipX,section,height,y,top:-14*scale*taper,bottom:(16*(1-progress)+5*progress+radius*.85)*scale};
+}
 function beachWaveSubmersion(x,y,time=state.surfRental?surfClock:frame*16.667){
 if(y<beachShoreY(x)-370||y>beachShoreY(x)-15)return null;
 for(let i=0;i<3;i++){
-const distance=surfWaveDistance(i,time);
-if(distance<25||distance>325)continue;
-const delta=beachWaveSurfaceY(x,i,time)-y,reach=18+12*surfWaveSize(distance);
-if(delta<=-reach||delta>=reach+12)continue;
+const foam=beachWaveWhitewaterProfile(x,i,time);if(!foam)continue;
+const offset=y-foam.y;
+if(offset<=foam.top||offset>=foam.bottom)continue;
+const progress=(foam.bottom-offset)/(foam.bottom-foam.top);
 // Sweep from nose (+X) to tail (-X) on both entry and resurfacing.
-if(delta<-5)return {stage:'entering',edge:24-48*(delta+reach)/(reach-5)};
-if(delta<=8)return {stage:'under',edge:-24};
-return {stage:'emerging',edge:24-48*(delta-8)/(reach+4)};
+if(progress<.35)return {stage:'entering',edge:24-48*progress/.35};
+if(progress<=.65)return {stage:'under',edge:-24};
+return {stage:'emerging',edge:24-48*(progress-.65)/.35};
 }
 return null;
+}
+function drawBeachWaveOccupantFoam(x,y){
+if(y<beachShoreY(x)-370||y>beachShoreY(x)-15)return;
+const time=state.surfRental?surfClock:frame*16.667;
+ctx.save();ctx.beginPath();ctx.rect(x-36,y-30,72,60);ctx.clip();clipBeachWaveWater();
+for(let i=0;i<3;i++){
+const foam=beachWaveWhitewaterProfile(x,i,time);if(!foam)continue;
+const offset=y-foam.y;
+if(offset<foam.top-24||offset>foam.bottom+24)continue;
+const distance=surfWaveDistance(i,time),collapse=Math.max(0,1-distance/45),shallows=Math.max(0,1-distance/110);
+ctx.globalAlpha=Math.min(1,(335-distance)/30)*(.7+shallows*.2)*(1-collapse*.65);
+drawBeachWaveWhitewater(foam.lipX,beachWaveSurfaceY(foam.lipX,i,time),foam.height,time,i+foam.section*3);
+}
+ctx.restore();
 }
 function clipBeachWaveOccupant(x,y){
 const dive=beachWaveSubmersion(x,y);if(!dive)return;
@@ -301,6 +329,10 @@ surfContour(points([[-23,-.46],[-12,-.65],[3,-.66],[17,-.43],[19,-.12],[6,.04],[
 ctx.restore();
 surfContour(points([[42,-.59],[23,-.9],[3,-1.05],[-16,-.98],[-30,-.73],[-37,-.36],[-33,.02],[-21,.24],[-8,.21],[-17,.04],[-23,-.15],[-23,-.41],[-15,-.64],[0,-.77],[19,-.69],[40,-.44]]),'#b5e8dc');
 surfContour(points([[32,-.84],[13,-1.02],[-7,-1.04],[-23,-.9],[-33,-.62],[-37,-.29],[-31,.04],[-22,.15],[-23,-.09],[-28,-.34],[-23,-.63],[-10,-.83],[9,-.88],[29,-.73]]),'#ecfcf0');
+drawBeachWaveWhitewater(x,y,height,time,seed);
+}
+function drawBeachWaveWhitewater(x,y,height,time,seed){
+const h=20,scale=height/50;
 const trailStart=x+25*scale,trailEnd=Math.min(x+600,WORLD.right),trailLength=Math.max(1,trailEnd-trailStart);
 // Foam ribbons span the trailing wave, narrowing and fading toward its far end.
 ctx.save();
@@ -527,16 +559,22 @@ for(const [position,color] of stops)gradient.addColorStop(position,color);
 return gradient;
 }
 function surfFrothFlowPoint(anchor,progress,wave){
+const rise=Math.max(0,Math.min(1,progress)),top=surfFaceCrest(anchor-6,wave)+2;
+// Open-face streaks rise to the surface and fade out, without turning back down.
+return {x:anchor-6*rise,y:279-(279-top)*rise};
+}
+function surfBarrelFrothFlowPoint(anchor,progress,wave){
 const crown=surfLipCrown(wave),near=Math.exp(-Math.abs(crown-anchor)/85);
 const theta=progress*2.14,crest=surfBaseCrest(anchor);
-// From this camera, water rises up the back then rolls forward/down in a clockwise curl.
 return {x:anchor-(24+near*25)*Math.sin(theta)+(14+near*15)*(1-Math.cos(theta)),y:279-(279-crest)*Math.sin(theta)};
 }
-function drawSurfFrothRibbon(anchor,from,to,wave,alpha,width){
+function drawSurfFrothRibbon(anchor,from,to,wave,alpha,width,barrel=false){
 ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.beginPath();let open=false;
 for(let step=0;step<=24;step++){
-const progress=from+(to-from)*step/24,point=surfFrothFlowPoint(anchor,progress,wave);
-if(point.x>surfBreakEdge(point.y,wave)+3){open=false;continue;}
+const progress=from+(to-from)*step/24;
+const point=barrel?surfBarrelFrothFlowPoint(anchor,progress,wave):surfFrothFlowPoint(anchor,progress,wave);
+const edge=surfBreakEdge(point.y,wave),inside=point.x>=edge-surfBarrelDepth(point.y)-12;
+if(point.x>edge+3||inside!==barrel||(!barrel&&point.y<surfFaceCrest(point.x,wave)+1)){open=false;continue;}
 if(!open){ctx.moveTo(point.x,point.y);open=true;}else ctx.lineTo(point.x,point.y);
 }
 ctx.stroke();
@@ -544,28 +582,42 @@ ctx.stroke();
 function drawSurfFaceFroth(wave){
 const time=surfClock*.001,scroll=wave.scroll,crown=surfLipCrown(wave);
 ctx.save();ctx.lineCap='round';ctx.setLineDash([]);ctx.strokeStyle='#effff5';
-// All froth follows the same rolling cross-section; neighboring strands never converge on a point.
+// The exposed face carries straight rising streaks up to its crest.
 for(let i=0;i<33;i++){
 const grain=surfFoamNoise(i+4100),phase=(time*(.32+grain*.07)+surfFoamNoise(i+4200))%1;
 const anchor=((i*27.71+scroll*.86)%550+550)%550-35;
 if(anchor>crown+25)continue;
-const tip=phase*.68,length=.07+grain*.09,from=Math.max(0,tip-length);
+const tip=phase*.98,length=.08+grain*.08,from=Math.max(0,tip-length);
 const fade=Math.min(1,phase*9,(1-phase)*9);
 drawSurfFrothRibbon(anchor,from,tip,wave,(.2+grain*.22)*fade,.4+grain*.45);
 }
-// Around the pitching shoulder, longer visible arcs carry the foam over and down the lip.
+// Curling paths are clipped to the shaded interior of the barrel.
 ctx.strokeStyle='#e7fff1';
 for(let i=0;i<3;i++){
 const grain=surfFoamNoise(i+4400),phase=(time*.38+grain)%1;
 const anchor=crown+5-i*22+(wave.scroll*.14)%10;
 const tip=.83+phase*.17,start=Math.max(.43,tip-.36-grain*.1);
-drawSurfFrothRibbon(anchor,start,tip,wave,.18+grain*.16,.45+grain*.35);
+drawSurfFrothRibbon(anchor,start,tip,wave,.18+grain*.16,.45+grain*.35,true);
 }
 ctx.restore();
 }
 function surfBrokenCrestY(x,sprayPeak){
 const distance=Math.max(0,x-sprayPeak.x);
 return sprayPeak.y+40*(1-Math.exp(-distance/170))+Math.sin(distance*.035)*Math.min(1,distance/24)*.8;
+}
+function drawSurfPostLipFroth(wave,sprayPeak){
+const time=surfClock*.001;ctx.save();ctx.lineCap='round';ctx.strokeStyle='#f0fff4';
+for(let i=0;i<50;i++){
+const grain=surfFoamNoise(i+8100),phase=(time*(.4+grain*.16)+surfFoamNoise(i+8200))%1;
+const x=((i*29.71+wave.scroll*1.04)%550+550)%550-20;
+const crest=surfBrokenCrestY(x,sprayPeak),y=crest+5+phase*(276-crest);
+if(x<surfBreakEdge(y,wave)+18||x<sprayPeak.x)continue;
+const endY=Math.min(282,y+11+grain*14),sweep=2+grain*4;
+ctx.globalAlpha=(.18+grain*.26)*Math.min(1,phase*8,(1-phase)*8);ctx.lineWidth=.4+grain*.4;
+ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+1,y+4,x+sweep*.5,endY-4,x+sweep,endY);ctx.stroke();
+surfWaterDrop(x+sweep*.6,endY-2,.35+grain*.3,.3,'#edfff2');
+}
+ctx.restore();
 }
 function drawSurfWaveFace(){
 const s=surfSession,wave=surfRideView(s),scroll=wave.scroll,size=surfRideScale(s);
@@ -654,6 +706,7 @@ surfWaterDrop(px,py,.28+f*.65,.22+grain*.4,grain>.2?'#f1fff3':'#2f9fb6');
 if(grain>.65){ctx.strokeStyle='#e5fff0';ctx.lineWidth=.4;ctx.beginPath();ctx.moveTo(x-2,y);ctx.quadraticCurveTo(x,y-2,x+3+grain*3,y+1);ctx.stroke();}
 }
 ctx.globalAlpha=1;
+drawSurfPostLipFroth(wave,sprayPeak);
 ctx.restore();return wave;
 }
 function surfFoamTrailProfile(x,impact){
@@ -832,6 +885,7 @@ function drawSurfingWorld(){
 if(surfSession?.phase!=='paddling')return;
 const s=surfSession,heading=s.paddleHeading??-Math.PI/2;
 drawSurfRider(player.x,player.y,heading,true);
+drawBeachWaveOccupantFoam(player.x,player.y);
 }
 function drawSurfGame(){
 const s=surfSession;if(!s)return;

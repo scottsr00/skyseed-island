@@ -3,8 +3,8 @@ const $=s=>document.querySelector(s), QUESTION_COUNT=100;
 const MAIN_DOCK={x:232,y:285},BOAT_MOORING={x:MAIN_DOCK.x+43,y:MAIN_DOCK.y+15};
 // Island shores span x=48…3008. Equal ocean margins center them in the expanded map.
 const WORLD={left:-1672,right:4728,width:6400,height:1800,viewWidth:480,viewHeight:300};
-const POWER_ENABLED=true,POWER_MAX=100,POWER_PER_ANSWER=25,POWER_DRAIN_PER_SECOND=.65;
-const defaults={surfRental:false,surfBest:0,anchor:false,wakeboard:false,power:POWER_MAX,boatIsland:null,boatIslandsVisited:[],parkedBoat:null,crystals:0,earnedCrystals:0,solved:[],upgrades:[],x:230,y:176,sound:false,ferryTicket:false,bait:0,fishingLure:false,sponsorshipAnnounced:false,catches:{},tradingTickets:0,squishyInventory:null,squishyClaims:0};
+const POWER_ENABLED=true,POWER_MAX=100,POWER_PER_ANSWER=25,POWER_DRAIN_PER_SECOND=.65,RIDING_ENERGY_DRAIN_PER_SECOND=.325;
+const defaults={surfRental:false,surfBest:0,anchor:false,wakeboard:false,waterskis:false,power:POWER_MAX,boatIsland:null,boatIslandsVisited:[],parkedBoat:null,crystals:0,earnedCrystals:0,solved:[],upgrades:[],x:230,y:176,sound:false,ferryTicket:false,bait:0,fishingLure:false,sponsorshipAnnounced:false,catches:{},tradingTickets:0,squishyInventory:null,squishyClaims:0};
 const PROFILE_KEY='skyseed-profiles-v1';
 const AGE_LEVELS=['5-6','7-8','9-10','11-12'];
 const normalizeAge=age=>AGE_LEVELS.includes(age)?age:'11-12';
@@ -38,11 +38,11 @@ const password=$('#adminPassword').value;$('#adminPassword').value='';
 const feedback=$('#adminFeedback');
 if(password!=='11111'){feedback.className='feedback error';feedback.textContent='Incorrect password. No crystals were added.';return;}
 adminMode=true;state.power=POWER_MAX;state.crystals+=1000;update();chime();
-feedback.className='feedback success';feedback.textContent=`Added 1,000 crystals to ${currentProfile().name} (ages ${ageLevel.replace('-','–')}). Admin mode now has unlimited power.`;
+feedback.className='feedback success';feedback.textContent=`Added 1,000 crystals to ${currentProfile().name} (ages ${ageLevel.replace('-','–')}). Admin mode now has unlimited energy.`;
 }
 $('#adminOverrideForm').onsubmit=e=>{e.preventDefault();applyAdminOverride();};
 function updateAdminModeUI(){
-$('#adminModeStatus').textContent=adminMode?'Admin mode active · unlimited power':'Admin mode inactive';
+$('#adminModeStatus').textContent=adminMode?'Admin mode active · unlimited energy':'Admin mode inactive';
 $('#exitAdminMode').hidden=!adminMode;
 }
 function exitAdminMode(){
@@ -91,6 +91,7 @@ let loaded={...defaults,solved:[],upgrades:[]};
 try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.solved)&&Array.isArray(s.upgrades))loaded={...defaults,...s,solved:[...new Set(s.solved.filter(n=>Number.isInteger(n)&&n>=0&&n<QUESTION_COUNT))],upgrades:[...new Set(s.upgrades.filter(n=>['cottage','garden','bridge'].includes(n)))],crystals:Math.max(0,Number(s.crystals)||0)};}catch{storageOK=false;}
 loaded.surfRental=loaded.surfRental===true;loaded.surfBest=Number.isFinite(loaded.surfBest)?Math.max(0,Math.floor(loaded.surfBest)):0;
 loaded.wakeboard=loaded.wakeboard===true;
+loaded.waterskis=loaded.waterskis===true;
 loaded.power=Number.isFinite(currentProfile().power)?currentProfile().power:(Number.isFinite(loaded.power)?Math.max(0,Math.min(POWER_MAX,loaded.power)):POWER_MAX);
 currentProfile().power=loaded.power;
 loaded.earnedCrystals=Math.max(loaded.solved.length*5,Math.floor(Number(loaded.earnedCrystals)||0));
@@ -125,16 +126,16 @@ function updatePowerMeter(){
 $('#powerMeter').hidden=!POWER_ENABLED;if(!POWER_ENABLED)return;
 if(adminMode){
 $('#powerValue').textContent='∞ Unlimited';$('#powerBar').style.width='100%';
-$('#powerGauge').setAttribute('aria-valuenow','100');$('#powerGauge').setAttribute('aria-valuetext','Unlimited power while admin mode is active.');
-$('#powerMeter').setAttribute('data-level','ready');$('#powerHelp').textContent='Admin mode · unlimited power';return;
+$('#powerGauge').setAttribute('aria-valuenow','100');$('#powerGauge').setAttribute('aria-valuetext','Unlimited energy while admin mode is active.');
+$('#powerMeter').setAttribute('data-level','ready');$('#powerHelp').textContent='Admin mode · unlimited energy';return;
 }
 const value=Math.max(0,Math.min(POWER_MAX,state.power)),shown=Math.ceil(value);
 $('#powerValue').textContent=`${shown} / ${POWER_MAX}`;
 $('#powerBar').style.width=`${value}%`;
 $('#powerGauge').setAttribute('aria-valuenow',String(shown));
-$('#powerGauge').setAttribute('aria-valuetext',value>0?`${shown} power. Correct answers restore 25 power.`:'No power. Solve a problem before swimming.');
+$('#powerGauge').setAttribute('aria-valuetext',value>0?`${shown} energy. Correct answers restore 25 energy.`:'No energy. Solve a problem before swimming.');
 $('#powerMeter').setAttribute('data-level',value===0?'empty':value<=25?'low':'ready');
-$('#powerHelp').textContent=value===0?'Solve a problem to swim again':'Correct answer: +25 power';
+$('#powerHelp').textContent=value===0?'Solve a problem to swim again':'Correct answer: +25 energy';
 }
 function restorePower(){if(!POWER_ENABLED)return;state.power=Math.min(POWER_MAX,state.power+POWER_PER_ANSWER);currentProfile().power=state.power;updatePowerMeter();}
 function nearestPoweredShore(){
@@ -154,12 +155,13 @@ function returnToShoreWithoutPower(){
 const shore=nearestPoweredShore();if(dragonFlight?.stage==='swimming'){dragonFlight=null;petDragonPosition={...shore};}stopFishing();clearSharkRide();resetSwimMotion();
 swimming=false;boating=false;diveAnimation=null;shoreClimb=null;shoreRecovery=null;timberStep=null;beachTransfer=null;goggleToss=null;
 player.x=shore.x;player.y=shore.y;keys.clear();save();updateFishing();
-toast('Out of power! You are safely back on land. Solve a problem to swim again.');
+toast('Out of energy! You are safely back on land. Solve a problem to swim again.');
 }
 function advancePower(dt){
 if(!POWER_ENABLED||adminMode)return;
 if((!swimming&&dragonFlight?.stage!=='swimming')||dt<=0||document.querySelector('dialog[open]'))return;
-const before=state.power;state.power=Math.max(0,state.power-dt/1000*POWER_DRAIN_PER_SECOND);
+const drainRate=sharkRide||dragonFlight?.stage==='swimming'?RIDING_ENERGY_DRAIN_PER_SECOND:POWER_DRAIN_PER_SECOND;
+const before=state.power;state.power=Math.max(0,state.power-dt/1000*drainRate);
 currentProfile().power=state.power;
 if(Math.ceil(before)!==Math.ceil(state.power)){updatePowerMeter();save();}
 if(!hasSwimPower())returnToShoreWithoutPower();
@@ -502,7 +504,7 @@ $('#timesTableGrid').innerHTML='<caption>Multiplication reference · 1 × 1 thro
 $('#timesTables').showModal();
 }
 $('#timesTablesBtn').onclick=openTimesTables;
-let active=0,hintStep=0,work={},answerComplete=false;function openQuestion(i){closeMapPanel();answerComplete=false;active=i;hintStep=0;work={};const q=questions[i];$('#challengeCategory').textContent=`${locations.find(l=>l.ids.includes(i)).name} / ${q.skill}`;$('#challengeBody').innerHTML=`<h2>${q.title}</h2><p class="question">${q.q}</p><div class="tool"><div class="tool-title">Your explorer’s workbench · try it out</div><div id="workbench"></div></div><form class="answer-form" id="answerForm"><label class="sr-only" for="answer" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Your answer</label><input id="answer" autocomplete="off" placeholder="${Array.isArray(q.answer)?'Area, perimeter':q.kind==='compare'?'Select a value above':['5-6','7-8'].includes(ageLevel)?'Your answer':'Your answer (fractions welcome)'}" required><button class="primary" type="submit">Check answer ↗</button></form><div id="feedback" class="feedback" aria-live="polite"></div><button id="hintBtn" class="text-button">A little hint?</button><div id="hint"></div>`;renderTool(q);$('#answerForm').onsubmit=e=>{e.preventDefault();checkAnswer();};$('#hintBtn').onclick=()=>{$('#hint').innerHTML=`<div class="hint-box">${q.hint[0]}</div>`;$('#hintBtn').disabled=true;$('#hintBtn').textContent='Hint shown';};if(!$('#challenge').open)$('#challenge').showModal();}
+let active=0,hintStep=0,work={},answerComplete=false;function openQuestion(i){closeMapPanel();answerComplete=false;active=i;hintStep=0;work={};const q=questions[i];$('#challengeCategory').textContent=`${locations.find(l=>l.ids.includes(i)).name} / ${q.skill}`;$('#challengeBody').innerHTML=`<h2>${q.title}</h2><p class="question">${q.q}</p><div class="tool"><div class="tool-title">Your explorer’s workbench · try it out</div><div id="workbench"></div></div><form class="answer-form" id="answerForm"><label class="sr-only" for="answer" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Your answer</label><input id="answer" autocomplete="off" placeholder="${Array.isArray(q.answer)?'Area, perimeter':q.kind==='compare'?'Select a value above':['5-6','7-8'].includes(ageLevel)?'Your answer':'Your answer (fractions welcome)'}" required><button class="primary" type="submit">Check answer ↗</button></form><div id="feedback" class="feedback" aria-live="polite"></div><button id="hintBtn" class="text-button">A little hint?</button><div id="hint"></div>`;renderTool(q);$('#answerForm').onsubmit=e=>{e.preventDefault();checkAnswer();};$('#hintBtn').onclick=()=>{$('#hint').innerHTML=`<div class="hint-box">${q.hint[0]}</div>`;$('#hintBtn').disabled=true;$('#hintBtn').textContent='Hint shown';};if(!$('#challenge').open)$('#challenge').showModal();$('#answer').focus();}
 function setAnswer(v){$('#answer').value=v;}
 function renderTool(q){const w=$('#workbench');const button=(label,fn)=>{const b=document.createElement('button');b.className='tile';b.textContent=label;b.onclick=fn;return b;};
 if(q.kind==='guided'){w.innerHTML=(q.visual?`<div class="math-picture">${escapeHTML(q.visual)}</div>`:'')+'<div class="visual-result">Work through the problem, then enter your answer below. Use a hint if you need a starting point.</div>';}
@@ -530,7 +532,27 @@ if($('#rewardTotal')!==counter||!$('#challenge').open)return;
 counter.textContent=total-5+i;
 },400+(i-1)*180);
 }
-function checkAnswer(){if(answerComplete)return;const q=questions[active],raw=$('#answer').value;let correct;if(Array.isArray(q.answer)){const a=raw.split(/[,;]/).map(parseNumber);correct=a.length===2&&a.every((n,i)=>Math.abs(n-q.answer[i])<.00001);}else correct=Math.abs(parseNumber(raw)-q.answer)<.00001;if(!correct){$('#feedback').className='feedback error';$('#feedback').textContent='Keep exploring! Adjust your workbench or ask for a hint, then try again.';return;}answerComplete=true;restorePower();const first=!state.solved.includes(active),rewarded=first||state.solved.length===questions.length,previousSquishies=earnedSquishies();if(first)state.solved.push(active);if(rewarded){state.crystals+=5;state.earnedCrystals+=5;}const unlocked=earnedSquishies()>previousSquishies?squishies[previousSquishies]:null;update();chime();const loc=locations.find(l=>l.ids.includes(active)),next=loc.ids.find(i=>!state.solved.includes(i));$('#challengeBody').innerHTML=`<div class="celebration">${rewarded?`<div class="crystal-reward" role="status" aria-label="5 crystals collected. Your total is ${state.crystals} crystals."><div class="crystal-shower" aria-hidden="true">${Array.from({length:5},(_,i)=>`<span class="reward-crystal" style="--i:${i}">◆</span>`).join('')}</div><div class="reward-balance" aria-hidden="true"><span class="gem">◆</span> <strong id="rewardTotal">${state.crystals-5}</strong><span> crystals</span><b class="reward-gain">+5</b></div></div>`:'<div class="big-gem">◆</div>'}<div class="eyebrow">${first?'DISCOVERY MADE · +5 CRYSTALS':rewarded?'PRACTICE COMPLETE · +5 CRYSTALS':'PRACTICE COMPLETE'}</div><h2>You’ve got it, explorer.</h2>${unlocked?`<div class="squishy-unlock" role="status">${squishyArt(unlocked)}<div class="eyebrow">NEW SQUISHY · ${earnedSquishies()*50} CRYSTALS EARNED</div><h3>${unlocked.name}</h3>${unlocked.detail?`<p>${unlocked.detail}</p>`:""}<p>Tucked safely into your secret stash!</p></div>`:""}<p>${q.explain}</p>${state.solved.length===8&&first?'<div class="completion">Your egg hatched! Sprout will now follow you around the island.</div>':''}${state.solved.length===questions.length?`<div class="completion">All ${questions.length} discoveries made! Your journal is full of new ideas. Revisit any challenge to earn 5 more crystals!</div>`:''}<button class="primary" id="nextQuestion">${next!==undefined?'Next discovery ↗':'Back to the island ↗'}</button><br><button class="text-button" id="backIsland">Take a little exploring break</button></div>`;if(rewarded)animateCrystalReward(state.crystals);$('#nextQuestion').onclick=()=>next!==undefined?openQuestion(next):$('#challenge').close();$('#backIsland').onclick=()=>$('#challenge').close();}
+function checkAnswer(){if(answerComplete)return;const q=questions[active],raw=$('#answer').value;let correct;if(Array.isArray(q.answer)){const a=raw.split(/[,;]/).map(parseNumber);correct=a.length===2&&a.every((n,i)=>Math.abs(n-q.answer[i])<.00001);}else correct=Math.abs(parseNumber(raw)-q.answer)<.00001;if(!correct){$('#feedback').className='feedback error';$('#feedback').textContent='Keep exploring! Adjust your workbench or ask for a hint, then try again.';return;}answerComplete=true;restorePower();const first=!state.solved.includes(active),rewarded=first||state.solved.length===questions.length,previousSquishies=earnedSquishies();if(first)state.solved.push(active);if(rewarded){state.crystals+=5;state.earnedCrystals+=5;}const unlocked=earnedSquishies()>previousSquishies?squishies[previousSquishies]:null;update();chime();const loc=locations.find(l=>l.ids.includes(active));
+const next=loc.ids.find(i=>!state.solved.includes(i))??loc.ids[(loc.ids.indexOf(active)+1)%loc.ids.length];
+$('#challengeBody').innerHTML=`<div class="celebration discovery-result">
+<h2>${first?'Discovery made!':'Practice complete!'}</h2>
+<p class="discovery-answer">${q.explain}</p>
+${rewarded?`<div class="crystal-reward" role="status" aria-label="5 crystals collected. Your total is ${state.crystals} crystals."><div class="crystal-shower" aria-hidden="true">${Array.from({length:5},(_,i)=>`<span class="reward-crystal" style="--i:${i}">◆</span>`).join('')}</div><div class="reward-balance" aria-hidden="true"><b class="reward-gain">+5 crystals</b><span class="reward-total">Total <strong id="rewardTotal">${state.crystals-5}</strong></span></div></div>`:'<p class="practice-note">Already discovered · keep practicing!</p>'}
+${unlocked?`<div class="squishy-unlock" role="status">${squishyArt(unlocked)}<div class="eyebrow">NEW SQUISHY · ${earnedSquishies()*50} CRYSTALS EARNED</div><h3>${unlocked.name}</h3>${unlocked.detail?`<p>${unlocked.detail}</p>`:""}<p>Tucked safely into your secret stash!</p></div>`:""}
+${state.solved.length===8&&first?'<div class="completion">Your egg hatched! Sprout will now follow you around the island.</div>':''}
+${state.solved.length===questions.length?`<div class="completion">All ${questions.length} discoveries made! Your journal is full of new ideas. Revisit any challenge to earn 5 more crystals!</div>`:''}
+<div class="discovery-actions"><button class="primary" id="nextQuestion" aria-keyshortcuts="Enter"><span>Next discovery</span><kbd>Enter</kbd></button><button id="backIsland" aria-keyshortcuts="Escape"><span>Keep exploring</span><kbd>Esc</kbd></button></div>
+</div>`;
+if(rewarded)animateCrystalReward(state.crystals);
+$('#nextQuestion').onclick=()=>openQuestion(next);
+$('#backIsland').onclick=()=>$('#challenge').close();
+$('#challenge').onkeydown=e=>{
+if(!answerComplete||!$('#challenge').open||e.altKey||e.ctrlKey||e.metaKey)return;
+if(e.key==='Escape'){e.preventDefault();if(!e.repeat)$('#backIsland').onclick();}
+else if(e.key==='Enter'&&(!e.target?.tagName||e.target.tagName!=='BUTTON'||e.target.id==='nextQuestion')){e.preventDefault();if(!e.repeat)$('#nextQuestion').onclick();}
+};
+$('#nextQuestion').focus();
+}
 function journal(){ $('#journalList').innerHTML=locations.map((l,i)=>`<button class="journal-row" data-location="${i}"><span style="font-size:24px">${l.icon}</span><span><strong>${l.name}</strong><small>${i===4&&!state.ferryTicket?'Ferry ticket needed · 50 crystals':l.ids.map(n=>questions[n].skill).slice(0,2).join(' · ')}</small></span><span class="badge">${l.ids.filter(n=>state.solved.includes(n)).length} / ${l.ids.length} ${i===4&&!state.ferryTicket?'⌑':'↗'}</span></button>`).join('');document.querySelectorAll('[data-location]').forEach(b=>b.onclick=()=>{closeMapPanel('journal');visit(+b.dataset.location);});$('#journalList').innerHTML+=boatIslands.map((l,i)=>`<button class="journal-row" data-boat-island="${i}"><span style="font-size:24px">⚓</span><span><strong>${l.name}</strong><small>${state.boatIslandsVisited.includes(l.id)?'Visited by boat · practice ashore':'Boat only · find the dock in the outer sea'}</small></span></button>`).join('');document.querySelectorAll('[data-boat-island]').forEach(b=>b.onclick=()=>visitBoatIsland(+b.dataset.boatIsland));$('#journalList').innerHTML+='<button class="journal-row" id="beachJournal"><span style="font-size:24px">☀</span><span><strong>Mainland Beach</strong><small>Southern coast · umbrellas, sunbathing & volleyball · anchor 50 crystals</small></span></button>';$('#beachJournal').onclick=()=>{closeMapPanel();openMapPanel('gearPanel');toast('Sail to the southern coast, then press Q near the beach to anchor and go ashore.');};openMapPanel('journal');}
 $('#profileSelect').onchange=e=>switchProfile(e.target.value);$('#saveProfile').onclick=editProfile;$('#createProfile').onclick=createProfile;$('#characterChoice').onchange=()=>renderCharacterPreview($('#characterChoice').value);
 $('#startFlash').onclick=startFlash;$('#tradeGive').onchange=updateTradeOptions;$('#tradeSubmit').onclick=tradeSquishy;$('#flash').addEventListener('close',cancelFlash);$('#flash').addEventListener('cancel',cancelFlash);
@@ -866,22 +888,39 @@ const server=v.server===0?player:v.opponents[0];ellipse(server.x+5,server.y-14,3
 ctx.fillStyle='#fff7d7';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.fillText(`${v.score[0]} — ${v.score[1]}`,c.x+c.w/2,c.y-24);
 }
 $('#mapVolleyJoin').onclick=()=>startVolleyball(nearbyVolleyballCourt());$('#mapVolleyHit').onclick=hitVolleyball;$('#mapVolleyLeave').onclick=leaveVolleyball;
-const WATERSPORTS_DOCK={x:550,y:247},WAKEBOARD_COST=25,WAKEBOARD_ROPE=110,WAKEBOARD_SPEED=.15;
-let wakeboardRide=null,wakeboardBoatTrip=null,wakeboardCrash=null,wakeboardDockHeading=0;
-function resetWatersports(){wakeboardRide=null;wakeboardBoatTrip=null;wakeboardCrash=null;wakeboardDockHeading=0;}
+const WATERSPORTS_DOCK={x:550,y:247},WAKEBOARD_COST=25,WATERSKIS_COST=100,WAKEBOARD_ROPE=110,WAKEBOARD_SPEED=.15;
+let wakeboardRide=null,wakeboardBoatTrip=null,wakeboardCrash=null,wakeboardDockHeading=0,waterskiWake=[];
+function resetWatersports(){waterskiWake=[];wakeboardRide=null;wakeboardBoatTrip=null;wakeboardCrash=null;wakeboardDockHeading=0;}
 function nearWatersportsDock(){return !wakeboardCrash&&!frisbeeGame&&!volleyball&&!wakeboardRide&&!dragonFlight&&!swimming&&!boating&&!voyage&&!shoreClimb&&!shoreRecovery&&!diveAnimation&&Math.hypot(player.x-WATERSPORTS_DOCK.x,player.y-WATERSPORTS_DOCK.y)<42;}
 function updateWakeboardUI(){
 for(const id of ['buyWakeboard','buyWakeboardDock']){
 $('#'+id).textContent=state.wakeboard?'Wakeboard owned ✓':'Buy wakeboard · 25 ◆';$('#'+id).disabled=!!state.wakeboard||state.crystals<WAKEBOARD_COST;
 }
-$('#wakeboardInfo').textContent=wakeboardBoatTrip?'The tow boat is completing its programmed route back to this dock. Your wakeboard is still yours; ride again when it returns.':state.wakeboard?'Your wakeboard is ready. Visit the watersports dock on Moonwater Island to ride behind the boat.':'Buy a wakeboard for 25 crystals, then visit the watersports dock on Moonwater Island.';
+for(const id of ['buyWaterskis','buyWaterskisDock']){
+$('#'+id).textContent=state.waterskis?'Waterskis owned ✓':'Buy waterskis · 100 ◆';$('#'+id).disabled=!!state.waterskis||state.crystals<WATERSKIS_COST;
+}
+$('#watersportsChoice').hidden=!(state.wakeboard&&state.waterskis);
+$('#startWaterskis').hidden=!state.waterskis;
+$('#startWaterskis').disabled=!state.waterskis||!nearWatersportsDock()||!!wakeboardBoatTrip||!!wakeboardCrash;
+$('#wakeboardInfo').textContent=wakeboardBoatTrip?'The tow boat is completing its programmed route back to this dock. Your equipment is still yours; ride again when it returns.':state.waterskis?'Your waterskis are ready. Visit the watersports dock on Moonwater Island to ride behind the boat.':state.wakeboard?'Your wakeboard is ready. Visit the watersports dock on Moonwater Island to ride behind the boat.':'Buy a wakeboard for 25 crystals or waterskis for 100 crystals, then visit the watersports dock on Moonwater Island.';
 $('#startWakeboard').disabled=!state.wakeboard||!nearWatersportsDock()||!!wakeboardBoatTrip||!!wakeboardCrash;
-$('#mapWakeboardStart').hidden=!state.wakeboard||!nearWatersportsDock();$('#mapWakeboardStart').disabled=!!wakeboardBoatTrip||!!wakeboardCrash;$('#mapWakeboardStop').hidden=!wakeboardRide;
+$('#mapWakeboardStart .suggestion-label').textContent=state.wakeboard&&state.waterskis?'Choose watersports equipment':state.waterskis?'Start waterskiing':'Start wakeboarding';
+$('#mapWakeboardStop .suggestion-label').textContent=wakeboardRide?.equipment==='waterskis'?'Finish waterskiing':'Finish wakeboarding';
+$('#mapWakeboardStart').hidden=!(state.wakeboard||state.waterskis)||!nearWatersportsDock();$('#mapWakeboardStart').disabled=!!wakeboardBoatTrip||!!wakeboardCrash;$('#mapWakeboardStop').hidden=!wakeboardRide;
 }
 function buyWakeboard(){
 if(state.wakeboard)return;
 if(state.crystals<WAKEBOARD_COST){toast('A wakeboard costs 25 crystals. Keep exploring to earn more!');return;}
 state.crystals-=WAKEBOARD_COST;state.wakeboard=true;update();chime();toast('Wakeboard ready! Head to the watersports dock on Moonwater Island.');
+}
+function buyWaterskis(){
+if(state.waterskis)return;
+if(state.crystals<WATERSKIS_COST){toast('Waterskis cost 100 crystals. Keep exploring to earn more!');return;}
+state.crystals-=WATERSKIS_COST;state.waterskis=true;update();chime();toast('Waterskis ready! Head to the watersports dock on Moonwater Island.');
+}
+function chooseWatersports(){
+if(state.wakeboard&&state.waterskis||!(state.wakeboard||state.waterskis)){openWatersports();return;}
+startWakeboarding(state.waterskis?'waterskis':'wakeboard');
 }
 function openWatersports(){updateWakeboardUI();openMapPanel('watersportsPanel');}
 function visitWatersportsDock(){
@@ -926,22 +965,22 @@ if(Math.hypot(rider.x-x,rider.y-y)<38||(rider.x-anchor.x)*Math.cos(heading)+(rid
 for(let i=0;i<=steps;i++){const t=i/steps;if(!water(anchor.x+(rider.x-anchor.x)*t,anchor.y+(rider.y-anchor.y)*t))return false;}
 return true;
 }
-function startWakeboarding(){
+function startWakeboarding(equipment='wakeboard'){
 if(!nearWatersportsDock()||wakeboardBoatTrip||wakeboardCrash||document.querySelector('dialog[open]'))return;
-if(!state.wakeboard){openWatersports();toast('Buy a wakeboard for 25 crystals to join the tow boat.');return;}
+if(!['wakeboard','waterskis'].includes(equipment)||!state[equipment]){openWatersports();return;}
 const boat={x:WATERSPORTS_DOCK.x+40,y:WATERSPORTS_DOCK.y+52};
 const launchHeading=Math.PI;
 if(!wakeboardRigWater(boat.x,boat.y,launchHeading))return;
 stopFishing();closeMapPanel();clearSharkRide();timberStep=null;goggleToss=null;
-wakeboardRide={boat,heading:launchHeading,courseDistance:0,phase:0,distance:0,wake:[],safe:{x:WATERSPORTS_DOCK.x,y:WATERSPORTS_DOCK.y-18}};
+wakeboardRide={equipment,boat,heading:launchHeading,courseDistance:0,phase:0,distance:0,wake:[],safe:{x:WATERSPORTS_DOCK.x,y:WATERSPORTS_DOCK.y-18}};
 wakeboardRide.rider=initialWakeboardRider(boat,launchHeading);wakeboardRide.rider.vx=-wakeboardCoursePose(0).speed*1000;syncWakeboardRider(wakeboardRide);keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});
-toast('Hold on! Arrows / WASD steer your wakeboarder. The boat follows its course. X or Finish wakeboarding drops the rope so you can swim.');
+toast(`Hold on! Arrows / WASD steer your ${equipment==='waterskis'?'waterskier':'wakeboarder'}. The boat follows its course. X drops the rope so you can swim.`);
 }
 function finishWakeboarding(){
 if(!wakeboardRide)return;
 const ride=wakeboardRide,handle=wakeboardHandle(ride);
 releaseWakeboardBoat(ride);wakeboardRide=null;swimming=false;
-wakeboardCrash={kind:'release',from:{x:player.x,y:player.y},to:{x:player.x,y:player.y},heading:ride.heading,handle:{x:handle.x,y:handle.y},elapsed:0,duration:700,safe:{...ride.safe}};
+wakeboardCrash={equipment:ride.equipment,kind:'release',from:{x:player.x,y:player.y},to:{x:player.x,y:player.y},heading:ride.heading,handle:{x:handle.x,y:handle.y},elapsed:0,duration:700,safe:{...ride.safe}};
 resetSwimMotion();keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});toast('You dropped the rope! Swim to shore while the boat returns to the dock.');
 }
 function syncWakeboardRider(ride){ride.rider??=initialWakeboardRider(ride.boat,ride.heading);player.x=ride.rider.x;player.y=ride.rider.y;}
@@ -1094,7 +1133,7 @@ const dx=Math.cos(release.heading),dy=Math.sin(release.heading);
 ctx.strokeStyle='#385c59';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx-dy*4,hy+dx*4);ctx.lineTo(hx+dy*4,hy-dx*4);ctx.stroke();ctx.restore();
 }
 ctx.save();ctx.translate(player.x,player.y);ctx.rotate(release.heading);ctx.globalAlpha=fade;
-polygon([[-14,-3],[10,-4],[15,0],[10,4],[-14,3],[-17,0]],'#bb694e');rect(-9,-1,18,2,'#edbe75');ctx.restore();
+drawTowEquipment(release.equipment);ctx.restore();
 // Lower the rider into the water without the head-over-heels wipeout motion.
 ctx.save();ctx.beginPath();ctx.rect(player.x-30,player.y-40,60,43);ctx.clip();character(player.x,player.y+settle*15);
 directionalSwimGear(player.x,player.y-15+settle*8);
@@ -1127,11 +1166,29 @@ const rider=predictWakeboardRider(from,oldBoat,ride.boat,oldHeading,ride.heading
 const contact=wakeboardRiderContact(ride,from,rider);
 appendTowWake(ride,ride.heading,distance,remaining);
 if(contact){crashWakeboarder(ride,contact,from,rider);if(remaining>0)advanceReturningWakeboardBoat(remaining);return;}
+if(ride.equipment==='waterskis'){
+ride.skiWakeDistance=(ride.skiWakeDistance||0)+Math.hypot(rider.x-from.x,rider.y-from.y);
+if(ride.skiWakeDistance>=3){ride.skiWakeDistance%=3;const heading=Math.atan2(rider.vy,rider.vx);waterskiWake.push({x:rider.x-Math.cos(heading)*19,y:rider.y-Math.sin(heading)*19,heading,age:remaining});waterskiWake=waterskiWake.slice(-140);}
+}
 ride.rider=rider;syncWakeboardRider(ride);
 }
 if(wakeboardRide)faceMovement(ride.rider.vx,ride.rider.vy);
 }
+function drawWaterskiWake(){
+for(let i=1;i<waterskiWake.length;i++){
+const a=waterskiWake[i-1],b=waterskiWake[i];if(Math.hypot(b.x-a.x,b.y-a.y)>12)continue;
+const fade=Math.pow(Math.max(0,1-(a.age+b.age)/3600),1.4);
+const point=(w,side,edge)=>{const width=5+w.age*.012+edge;return [w.x-Math.sin(w.heading)*side*width,w.y+Math.cos(w.heading)*side*width];};
+ctx.save();
+for(const side of [-1,1]){
+ctx.globalAlpha=fade*.22;polygon([point(a,side,-2),point(b,side,-2),point(b,side,3),point(a,side,3)],'#c9eee1');
+ctx.globalAlpha=fade*.8;polygon([point(a,side,0),point(b,side,0),point(b,side,1.2),point(a,side,1.2)],'#effff5');
+}
+ctx.restore();
+}
+}
 function drawWakeboardWake(){
+drawWaterskiWake();
 const wake=wakeboardRide?.wake||wakeboardBoatTrip?.wake;if(!wake?.length)return;
 // Successive world-space sections form connected prop wash and two spreading crests.
 for(let i=1;i<wake.length;i++){
@@ -1169,6 +1226,13 @@ ctx.globalAlpha=.6;ctx.strokeStyle='#daf2e8';ctx.lineWidth=.8;ctx.beginPath();ct
 }
 ctx.restore();const tow=wakeboardTowPoint({x,y},heading);ellipse(tow.x,tow.y-3,2,1.2,'#e9e4bc');
 }
+function drawTowEquipment(equipment){
+if(equipment==='waterskis'){
+for(const side of [-1,1]){const y=side*4.5;polygon([[-19,y-2.3],[17,y-2.3],[20,y-1.3],[20,y+1.3],[17,y+2.3],[-19,y+2.3]],'#4b9db6');rect(-16,y-.7,33,1.4,'#f7db79');rect(-2,y-1.8,5,3.6,'#44555a');}
+}else{
+polygon([[-14,-3],[10,-4],[15,0],[10,4],[-14,3],[-17,0]],'#bb694e');rect(-9,-1,18,2,'#edbe75');rect(-5,-2,3,4,'#44555a');rect(3,-2,3,4,'#44555a');
+}
+}
 function drawWatersports(){
 const ride=wakeboardRide;
 if(!ride){if(wakeboardBoatTrip)drawWakeboardBoat(wakeboardBoatTrip.boat.x,wakeboardBoatTrip.boat.y,wakeboardBoatTrip.heading,true);else drawWakeboardBoat(WATERSPORTS_DOCK.x+40,WATERSPORTS_DOCK.y+18,wakeboardDockHeading);}
@@ -1180,7 +1244,7 @@ const ropeDistance=Math.hypot(handle.x-anchor.x,handle.y+6-anchor.y),slack=Math.
 ctx.strokeStyle='#eee6b4';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(anchor.x,anchor.y-3);ctx.quadraticCurveTo((anchor.x+handle.x)/2,(anchor.y-3+handle.y)/2+Math.min(14,slack*.5),handle.x,handle.y);ctx.stroke();
 const boardHeading=Math.hypot(ride.rider.vx,ride.rider.vy)>10?Math.atan2(ride.rider.vy,ride.rider.vx):ride.heading;
 ctx.save();ctx.translate(player.x,player.y);ctx.rotate(boardHeading);
-ellipse(-4,3,15,5,'#c9eee17a');polygon([[-14,-3],[10,-4],[15,0],[10,4],[-14,3],[-17,0]],'#bb694e');rect(-9,-1,18,2,'#edbe75');rect(-5,-2,3,4,'#44555a');rect(3,-2,3,4,'#44555a');
+if(ride.equipment!=='waterskis')ellipse(-4,3,15,5,'#c9eee17a');drawTowEquipment(ride.equipment);
 ctx.strokeStyle='#dff8e9';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(-18,-5);ctx.lineTo(-8,-3);ctx.moveTo(-19,5);ctx.lineTo(-8,3);ctx.stroke();ctx.restore();
 const colors=characterColors();
 // Bent knees and both hands on the tow handle keep the rider in a board stance.
@@ -1193,7 +1257,7 @@ ctx.strokeStyle='#385c59';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(handle.x-dy
 }
 ctx.fillStyle='#fff0c1';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.fillText('WATERSPORTS',WATERSPORTS_DOCK.x,WATERSPORTS_DOCK.y+43);
 }
-$('#buyWakeboard').onclick=buyWakeboard;$('#buyWakeboardDock').onclick=buyWakeboard;$('#watersportsBtn').onclick=openWatersports;$('#visitWatersports').onclick=visitWatersportsDock;$('#startWakeboard').onclick=startWakeboarding;$('#mapWakeboardStart').onclick=startWakeboarding;$('#mapWakeboardStop').onclick=finishWakeboarding;
+$('#buyWakeboard').onclick=buyWakeboard;$('#buyWakeboardDock').onclick=buyWakeboard;$('#watersportsBtn').onclick=openWatersports;$('#visitWatersports').onclick=visitWatersportsDock;$('#buyWaterskis').onclick=buyWaterskis;$('#buyWaterskisDock').onclick=buyWaterskis;$('#startWaterskis').onclick=()=>startWakeboarding('waterskis');$('#startWakeboard').onclick=()=>startWakeboarding('wakeboard');$('#mapWakeboardStart').onclick=chooseWatersports;$('#mapWakeboardStop').onclick=finishWakeboarding;
 const PET_DRAGON_HOME={x:268,y:174},FLYING_DRAGON_SPEED=.30,SWIMMING_DRAGON_SPEED=.11;
 let petDragonPosition={...PET_DRAGON_HOME},dragonFlight=null,petDragonPhase=0,petDragonFire=null,petDragonWet=null,playerHairEffect=null,nextPetDragonFire=2000+Math.random()*3000;
 function resetPetDragon(){for(const t of burnableTrees.values())t.burnAge=null;dragonFlight=null;petDragonPosition={...PET_DRAGON_HOME};petDragonPhase=0;petDragonFire=null;petDragonWet=null;playerHairEffect=null;nextPetDragonFire=2000+Math.random()*3000;}
@@ -1281,7 +1345,7 @@ dragonFlight.stage='takeoff';dragonFlight.elapsed=0;keys.clear();updateWaterCont
 if(dragonFlight.stage!=='flying')return;
 const to=petDragonLandingPoint();
 if(to){beginPetDragonLanding(to);return;}
-if(petDragonSwimWater(player.x,player.y)){if(!hasSwimPower()){toast('Solve a problem to restore power before swimming with your dragon.');return;}beginPetDragonLanding({x:player.x,y:player.y},true);return;}
+if(petDragonSwimWater(player.x,player.y)){if(!hasSwimPower()){toast('Solve a problem to restore energy before swimming with your dragon.');return;}beginPetDragonLanding({x:player.x,y:player.y},true);return;}
 toast('Find clear ground or open water to land, or choose Return to cottage.');
 }
 function returnPetDragonHome(){
@@ -1980,7 +2044,7 @@ state.sponsorshipAnnounced=true;save();$('#sponsorName').textContent=FISHING_SPO
 function launchBoat(){
 if(beachTransfer||volleyball||frisbeeGame)return;
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame){toast('Finish your current ride first.');return;}
-if(!sponsored()||voyage||boating||shoreRecovery)return;if(!hasSwimPower()){toast('Solve a problem to restore power before heading out on the water.');return;}stopFishing();
+if(!sponsored()||voyage||boating||shoreRecovery)return;if(!hasSwimPower()){toast('Solve a problem to restore energy before heading out on the water.');return;}stopFishing();
 state.beachAnchor=null;state.boatIsland=null;state.parkedBoat=null;if(activeVessel==='ferry'){ferryPosition={...boatPosition};ferryHeading=boatMotion.heading;}activeVessel='fishing';closeMapPanel('ferry');swimming=false;diveAnimation=null;shoreClimb=null;shoreRecovery=null;timberStep=null;beachTransfer=null;boating=true;resetBoatMotion();const berth=clearBoatBerth({x:dock.x+43,y:dock.y+15});player.x=berth.x;player.y=berth.y;boatPosition={...berth};startBoatEngines();keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast('Your boat is launched! Up/W accelerates; Down/S brakes then reverses; Left/A and Right/D steer. Fish from your boat or return to the dock.');
 }
 function returnBoat(){if(!boating&&!swimming)return;state.beachAnchor=null;state.boatIsland=null;state.parkedBoat=null;const wasSwimming=swimming;stopFishing();boating=false;swimming=false;diveAnimation=null;shoreClimb=null;shoreRecovery=null;timberStep=null;beachTransfer=null;boatPosition=activeVessel==='ferry'?ferryBerth(dock):{...BOAT_MOORING};resetBoatMotion();player.x=dock.x;player.y=dock.y-18;if(wasSwimming)startGoggleToss();keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast(sponsored()?'Boat safely moored at the main ferry dock.':'Back on shore at the main ferry dock.');}
@@ -1995,7 +2059,7 @@ return null;
 }
 function startDive(to){
 if(wakeboardRide||volleyball||frisbeeGame)return;
-if(!hasSwimPower()){toast('Out of power! Solve a problem to swim again.');return;}
+if(!hasSwimPower()){toast('Out of energy! Solve a problem to swim again.');return;}
 state.boatIsland=null;
 faceMovement(to.x-player.x,to.y-player.y);
 const style=['roll','backflip','dive'][Math.floor(Math.random()*3)];
@@ -2156,7 +2220,7 @@ if(contact){
 shoreClimb={elapsed:0,from:{x:player.x,y:player.y},...contact};keys.clear();return;
 }
 if(!boating&&!swimming&&(dx||dy)&&canWalk(player.x,player.y)&&!walkableTimberAt(player.x,player.y)&&openSea(x,y)){
-if(!hasSwimPower()){toast('Out of power! Solve a problem to swim again.');return;}
+if(!hasSwimPower()){toast('Out of energy! Solve a problem to swim again.');return;}
 const length=Math.hypot(dx,dy),landing={x:x+dx/length*24,y:y+dy/length*24};
 closeMapPanel();startDive(openSea(landing.x,landing.y)?landing:{x,y});return;
 }
@@ -2312,7 +2376,7 @@ return !!anchor&&!surfSession&&!volleyball&&!boating&&!swimming&&!dragonFlight&&
 }
 function returnToAnchoredBoat(){
 if(!canReturnToAnchoredBoat())return;
-if(!hasSwimPower()){toast('Solve a problem to restore power before heading back onto the water.');return;}
+if(!hasSwimPower()){toast('Solve a problem to restore energy before heading back onto the water.');return;}
 stopFishing();keys.clear();const anchor=state.beachAnchor;
 beachTransfer={elapsed:0,from:{x:player.x,y:player.y},to:{x:anchor.x,y:anchor.y},boarding:true};save();
 }
@@ -2360,6 +2424,7 @@ stopFishing();keys.clear();openQuestion(island.practice);
 $('#challengeCategory').textContent=`${island.name} / ${questions[island.practice].skill}`;
 }
 function advanceSwimming(dt){
+if(dt>0&&!document.querySelector('dialog[open]'))waterskiWake=waterskiWake.filter(w=>{w.age+=dt;return w.age<1800;});
 advanceSunbathers(dt);
 advanceVolleySprayReactions(dt);
 advancePetDragonWet(dt);
@@ -2439,7 +2504,7 @@ $('#mapSharkExit').hidden=!sharkRide||!!sharkRide.landing;
 setSuggestionContent($('#mapSharkExit'),sharkRide?.kind==='marlin'?'Hop off marlin · X ↗':sharkRide?.kind==='dragon'?'Hop off monster · X ↗':'Hop off shark · X ↗');
 $('#mapDive').hidden=!walkableTimberAt(player.x,player.y)||!shoreDiveTarget();$('#mapBoatExit').hidden=!boating||!!boatAnchor?.retrieving;$('#mapBoatExit').disabled=boatAnchorBusy();setSuggestionContent($('#mapBoatExit'),boatAnchorCasting()?'Throwing anchor · X ↗':activeVessel==='ferry'?'Exit ferry · X ↗':'Exit boat · X ↗');$('#mapBoatBoard').hidden=!hasSwimPower()||(!swimming&&!canBoardIslandBoat())||!canUseCurrentVessel()||!!diveAnimation||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>(swimming?44:75);
 setSuggestionContent($('#mapBoatReturn'),swimming&&!sponsored()?'Return to shore ↗':'Return to dock ↗');$('#mapBoatReturn').hidden=!boating&&!swimming;
-const hint=wakeboardCrash?.kind==='release'?'WAKEBOARD · Dropping the rope…':wakeboardCrash?'WIPEOUT · The boat is completing its route back to the watersports dock.':wakeboardRide?'WAKEBOARD · Arrows / WASD steer the rider · The boat follows its programmed course · X drops the rope to swim.':dragonFlight?.stage==='swimming'?'DRAGON SWIM · Arrows / WASD swim · X or Take off flies again · Swim toward a beach to climb ashore.':dragonFlight?'DRAGON FLIGHT · Arrows / WASD fly · X lands on ground or water · Return to cottage brings you home.':shoreRecovery?'SHORE · '+(shoreRecovery.elapsed<1000?'Catching your breath…':shoreRecovery.elapsed<1450?'Shaking it off…':'Getting back up…'):shoreClimb?'SHORE · Pulling yourself onto the beach…':sharkRide?.landing?'SHORE LANDING · Your mount dives as you roll onto the beach.':sharkRide?.kind==='marlin'?'BLUE MARLIN RIDE · Arrows / WASD steer · X or Hop off to swim · Head to shore to land.':sharkRide?.kind==='dragon'?'LOCH NESS MONSTER · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':sharkRide?'SHARK RIDE · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':swimming?(sponsored()?'SWIMMING · Get close to a shark or blue marlin to ride · Arrows / WASD swim · E beside your boat to climb in · Swim onto shore to walk.':'SWIMMING · Get close to a shark or blue marlin to ride · Arrows / WASD swim · Swim onto shore to walk · Return to shore if you need a lift.'):boating?(fishingActive?'FISHING · Watch ripples · Cast ahead of a fish · Arrows aim; Enter/Space casts · Tap R to reel · Esc stops fishing · X exits: dock = walk, sea = dive.':`BOAT · Up/W forward · Down/S brake then reverse · Left/Right or A/D steer · Space trim ${boatTrimLevel()}/5${boatTrimLevel()===5?' · ROOSTER TAIL':''} · F to fish · X or Exit boat to get out.`):'ISLAND · Walk off the shoreline to dive & swim · X or Dive near shore · Visit the fishing dock to fish.';
+const hint=wakeboardCrash?.kind==='release'?'WATERSPORTS · Dropping the rope…':wakeboardCrash?'WIPEOUT · The boat is completing its route back to the watersports dock.':wakeboardRide?(wakeboardRide.equipment==='waterskis'?'WATERSKIS':'WAKEBOARD')+' · Arrows / WASD steer the rider · The boat follows its programmed course · X drops the rope to swim.':dragonFlight?.stage==='swimming'?'DRAGON SWIM · Arrows / WASD swim · X or Take off flies again · Swim toward a beach to climb ashore.':dragonFlight?'DRAGON FLIGHT · Arrows / WASD fly · X lands on ground or water · Return to cottage brings you home.':shoreRecovery?'SHORE · '+(shoreRecovery.elapsed<1000?'Catching your breath…':shoreRecovery.elapsed<1450?'Shaking it off…':'Getting back up…'):shoreClimb?'SHORE · Pulling yourself onto the beach…':sharkRide?.landing?'SHORE LANDING · Your mount dives as you roll onto the beach.':sharkRide?.kind==='marlin'?'BLUE MARLIN RIDE · Arrows / WASD steer · X or Hop off to swim · Head to shore to land.':sharkRide?.kind==='dragon'?'LOCH NESS MONSTER · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':sharkRide?'SHARK RIDE · Arrows / WASD steer · X or Hop off to swim · Ride toward shore to roll onto land.':swimming?(sponsored()?'SWIMMING · Get close to a shark or blue marlin to ride · Arrows / WASD swim · E beside your boat to climb in · Swim onto shore to walk.':'SWIMMING · Get close to a shark or blue marlin to ride · Arrows / WASD swim · Swim onto shore to walk · Return to shore if you need a lift.'):boating?(fishingActive?'FISHING · Watch ripples · Cast ahead of a fish · Arrows aim; Enter/Space casts · Tap R to reel · Esc stops fishing · X exits: dock = walk, sea = dive.':`BOAT · Up/W forward · Down/S brake then reverse · Left/Right or A/D steer · Space trim ${boatTrimLevel()}/5${boatTrimLevel()===5?' · ROOSTER TAIL':''} · F to fish · X or Exit boat to get out.`):'ISLAND · Walk off the shoreline to dive & swim · X or Dive near shore · Visit the fishing dock to fish.';
 if($('#waterControls').textContent!==hint)$('#waterControls').textContent=hint;
 }
 function stopFishing(){fishingActive=false;$('#mapFishingReel').hidden=true;pendingCast=null;hookedFish=null;$('#reelFish').hidden=true;fishingSplash=null;keys.clear();$('#fishing').hidden=true;$('#mapBoatFish').hidden=!boating;canvas.setAttribute('aria-label','Seventeen-island map. Move with arrows or WASD. Sail to the outer islands by boat. Press E to interact.');}
@@ -2803,7 +2868,7 @@ function boardFerry(){
 if(beachTransfer||volleyball||frisbeeGame)return;
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame){toast('Finish your current ride first.');return;}
 if(!state.ferryTicket||shoreRecovery||boating)return;
-if(!hasSwimPower()){toast('Solve a problem to restore power before heading out on the water.');return;}
+if(!hasSwimPower()){toast('Solve a problem to restore energy before heading out on the water.');return;}
 state.beachAnchor=null;stopFishing();const departure=onFinalIsland()?farDock:dock;
 const parkedClose=activeVessel==='ferry'&&Math.hypot(boatPosition.x-departure.x,boatPosition.y-departure.y)<90;
 if(activeVessel==='fishing'){fishingBoatPosition={...boatPosition};fishingBoatHeading=boatMotion.heading;}
@@ -3265,6 +3330,7 @@ if(shoreClimb){drawShoreClimb();return;}
 if(sharkRide){drawSharkRide();return;}
 if(diveAnimation){drawWaterEntry();return;}
 drawSwimmingCharacter(x,y);
+drawBeachWaveOccupantFoam(x,y);
 }
 let waterEntrySplash=null;
 let goggleToss=null;
@@ -3695,8 +3761,8 @@ if(x>731&&x<750&&y>405&&y<432)return false;
 return true;
 }
 function nearby(){if(wakeboardCrash||surfSession||frisbeeGame)return -1;if(nearSurfShack())return 103;if(volleyball||beachTransfer||wakeboardRide||dragonFlight)return -1;const court=nearbyVolleyballCourt();if(court>=0)return 200+court;if(canReturnToAnchoredBoat())return 102;if(nearWatersportsDock())return 101;if(canMountPetDragon())return 100;if(shoreRecovery)return -1;if(canBoardIslandBoat())return 7;if(swimming)return canUseCurrentVessel()&&!diveAnimation&&Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)<44?7:-1;if(boating)return -1;if(Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)<32)return 6;if(Math.hypot(player.x-dock.x,player.y-dock.y)<35||Math.hypot(player.x-farDock.x,player.y-farDock.y)<35)return 5;const outer=boatIslands.findIndex(l=>state.boatIsland===l.id&&inside(player.x,player.y,islandPolys[locations.length+boatIslands.indexOf(l)])&&Math.hypot(l.x-player.x,l.y-player.y)<65);if(outer>=0)return 8+outer;return locations.findIndex(l=>Math.hypot(l.x-player.x,l.y+20-player.y)<48);}
-function interact(){if(near===103){openSurfShack();return;}if(near>=200){startVolleyball(near-200);return;}if(near===102){returnToAnchoredBoat();return;}if(near===101){if(state.wakeboard)startWakeboarding();else openWatersports();return;}if(near===100){mountPetDragon();return;}if(near>=8){visitBoatIsland(near-8);return;}if(near===7)boardOwnBoat();else if(near===6)openFishing();else if(near===5)openFerry();else if(near>=0)visit(near);}
-let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(dragonFlight?(dragonFlight.stage==='swimming'?SWIMMING_DRAGON_SPEED:FLYING_DRAGON_SPEED):boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);if(boating)driveBoat(dt,-dy,dx);else moveExplorer(dx*speed,dy*speed);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0?`<button id="interactBtn">${suggestionMarkup(near===103?'E · Surf rental shack ↗':near>=200?'E · Play beach volleyball ↗':near===102?'E · Return to anchored boat ↗':near===101?'E · Watersports dock ↗':near===100?'E · Fly on your pet dragon ↗':near===7?'E · Climb into your boat ↗':near===6?'E · Go fishing ↗':near===5?'E · Board the ferry ↗':'E · '+(near>=8?boatIslands[near-8].name:locations[near].name)+' ↗')}</button>`:'';if(near>=0)$('#interactBtn').onclick=interact;$('#region').textContent=frisbeeGame?'Playing frisbee on the beach!':volleyball?'Playing beach volleyball!':wakeboardRide?'Wakeboarding behind the tow boat!':dragonFlight?(dragonFlight.stage==='swimming'?'Swimming on your pet dragon!':'Flying on your pet dragon!'):sharkRide?(sharkRide.kind==='dragon'?'Riding the Loch Ness monster!':sharkRide.kind==='marlin'?'Riding a blue marlin!':'Riding a shark!'):swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?(activeVessel==='ferry'?'Driving the ferry':'Your sponsored fishing boat'):voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':allIslands[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
+function interact(){if(near===103){openSurfShack();return;}if(near>=200){startVolleyball(near-200);return;}if(near===102){returnToAnchoredBoat();return;}if(near===101){chooseWatersports();return;}if(near===100){mountPetDragon();return;}if(near>=8){visitBoatIsland(near-8);return;}if(near===7)boardOwnBoat();else if(near===6)openFishing();else if(near===5)openFerry();else if(near>=0)visit(near);}
+let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(dragonFlight?(dragonFlight.stage==='swimming'?SWIMMING_DRAGON_SPEED:FLYING_DRAGON_SPEED):boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);if(boating)driveBoat(dt,-dy,dx);else moveExplorer(dx*speed,dy*speed);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0?`<button id="interactBtn">${suggestionMarkup(near===103?'E · Surf rental shack ↗':near>=200?'E · Play beach volleyball ↗':near===102?'E · Return to anchored boat ↗':near===101?'E · Watersports dock ↗':near===100?'E · Fly on your pet dragon ↗':near===7?'E · Climb into your boat ↗':near===6?'E · Go fishing ↗':near===5?'E · Board the ferry ↗':'E · '+(near>=8?boatIslands[near-8].name:locations[near].name)+' ↗')}</button>`:'';if(near>=0)$('#interactBtn').onclick=interact;$('#region').textContent=frisbeeGame?'Playing frisbee on the beach!':volleyball?'Playing beach volleyball!':wakeboardRide?(wakeboardRide.equipment==='waterskis'?'Waterskiing behind the tow boat!':'Wakeboarding behind the tow boat!'):dragonFlight?(dragonFlight.stage==='swimming'?'Swimming on your pet dragon!':'Flying on your pet dragon!'):sharkRide?(sharkRide.kind==='dragon'?'Riding the Loch Ness monster!':sharkRide.kind==='marlin'?'Riding a blue marlin!':'Riding a shark!'):swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?(activeVessel==='ferry'?'Driving the ferry':'Your sponsored fishing boat'):voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':allIslands[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
 window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]'))return;const k=e.key.toLowerCase();if(k==='escape'&&(activeMapPanel||activeSubmenu)){e.preventDefault();closeMapPanel();keys.clear();canvas.focus({preventScroll:true});return;}if(['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target?.tagName))return;if(frisbeeGame&&['x','escape'].includes(k)){e.preventDefault();if(!e.repeat){if(k==='escape')leaveFrisbee();else frisbeeAction();}return;}if(k==='x'&&nearbyFrisbeeHost()>=0){e.preventDefault();if(!e.repeat)startFrisbee();return;}if(volleyball&&[' ','enter','x','escape'].includes(k)){e.preventDefault();if(!e.repeat){if(k==='x'||k==='escape')leaveVolleyball();else hitVolleyball();}return;}if(k===' '&&boating&&!fishingActive){e.preventDefault();if(!e.repeat)cycleBoatTrim();return;}if(k==='q'&&boating){e.preventDefault();if(!e.repeat)anchorBoatAtBeach();return;}if(k==='x'&&wakeboardRide){e.preventDefault();if(!e.repeat)finishWakeboarding();return;}if(k==='x'&&dragonFlight){e.preventDefault();if(!e.repeat)landPetDragon();return;}if(k==='x'&&sharkRide){e.preventDefault();if(!e.repeat)dismountShark();return;}if(k==='x'&&!swimming&&!voyage&&!fishingActive){e.preventDefault();if(!e.repeat){if(boating)exitBoat();else diveFromIsland();}return;}if(k==='f'&&!swimming&&(boating||fishingActive)){e.preventDefault();if(!e.repeat){if(fishingActive)stopFishing();else openFishing();}return;}if(fishingActive){if(k==='r'){e.preventDefault();if(!e.repeat)reelFishing();}return;}if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e'].includes(k)){e.preventDefault();keys.add(k);if(k==='e'&&near>=0&&!e.repeat)interact();}});window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());save();});window.addEventListener('blur',()=>{keys.clear();save();});document.addEventListener('visibilitychange',()=>{keys.clear();save();});document.querySelectorAll('[data-dir]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.dir);};b.onpointerup=b.onpointercancel=()=>{keys.delete(b.dataset.dir);save();};});canvas.onclick=e=>{if(frisbeeGame){frisbeeAction();return;}if(volleyball){hitVolleyball();canvas.focus({preventScroll:true});return;}if(voyage||shoreRecovery||dragonFlight||wakeboardRide)return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*WORLD.viewWidth+camera.x,y=(e.clientY-r.top)/r.height*WORLD.viewHeight+camera.y;if(fishingActive){fishingAim={x,y};castFishing(x,y);return;}if(Math.hypot(x-SURF_SHACK.x,y-SURF_SHACK.y)<45){openSurfShack();return;}const court=nearbyVolleyballCourt();if(court>=0){const c=VOLLEYBALL_COURTS[court];if(x>=c.x&&x<=c.x+c.w&&y>=c.y&&y<=c.y+c.h){startVolleyball(court);return;}}if(Math.hypot(x-WATERSPORTS_DOCK.x,y-WATERSPORTS_DOCK.y)<30){openWatersports();return;}if(canMountPetDragon()&&Math.hypot(x-petDragonPosition.x,y-petDragonPosition.y)<30){mountPetDragon();return;}if(swimming){if(Math.hypot(x-boatPosition.x,y-boatPosition.y)<30)boardOwnBoat();return;}if(Math.hypot(x-fishingDock.x,y-fishingDock.y)<28){openFishing();return;}if([dock,farDock].some(d=>Math.hypot(d.x+30-x,d.y-y)<48)){openFerry();return;}const outer=boatIslands.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(outer>=0){visitBoatIsland(outer);return;}const i=locations.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(i>=0)visit(i);else{canvas.focus({preventScroll:true});toast('Walk across the islands, use your field journal to visit, or board the ferry at the main dock.');}};
 
 function resizeMap(){
