@@ -2513,11 +2513,11 @@ g.node('#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide.equipme
 const h=game();h.run('state.waterskis=true;visitWatersportsDock();near=101;interact()');assert.equal(h.run('wakeboardRide.equipment'),'waterskis');
 });
 
-test('speedboat dock unlocks at 500 earned crystals for free and stays with its explorer',()=>{
-const g=game();g.run('state.crystals=499;state.earnedCrystals=499;update();launchSpeedboat()');
+test('speedboat dock unlocks at 100 earned crystals for free and stays with its explorer',()=>{
+const g=game();g.run('state.crystals=99;state.earnedCrystals=99;update();launchSpeedboat()');
 assert.equal(g.run('speedboatUnlocked()'),false);assert.equal(g.run('boating'),false);assert.equal(g.node('#gearLaunchSpeedboat').hidden,true);
 assert.equal(g.run('activePiers().includes(speedboatPier)'),false);
-g.run('state.earnedCrystals=500;update()');assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.crystals'),499);
+g.run('state.earnedCrystals=100;update()');assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.crystals'),99);
 assert.equal(g.node('#gearLaunchSpeedboat').hidden,false);assert.equal(g.run('activePiers().includes(speedboatPier)'),true);
 g.run('state.crystals=0;save();switchAge("7-8")');assert.equal(g.run('speedboatUnlocked()'),true);
 g.node('#resetConfirm').open=true;g.node('#confirmReset').onclick();assert.equal(g.run('speedboatUnlocked()'),true);
@@ -2525,8 +2525,8 @@ const restored=game(undefined,g.snapshot());assert.equal(restored.run('speedboat
 g.node('#profileName').value='New speedboat explorer';g.run('createProfile()');assert.equal(g.run('speedboatUnlocked()'),false);
 });
 
-test('speedboat unlocks on the 500th earned crystal and migrates existing completed saves',()=>{
-const g=game();g.run('state.earnedCrystals=495;state.crystals=10;openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');
+test('speedboat unlocks on the 100th earned crystal and migrates existing completed saves',()=>{
+const g=game();g.run('state.earnedCrystals=95;state.crystals=10;openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');
 assert.equal(g.run('state.speedboat'),true);assert.equal(g.run('state.crystals'),15);
 const legacy=game({solved:Array.from({length:100},(_,i)=>i),upgrades:[],crystals:0});assert.equal(legacy.run('speedboatUnlocked()'),true);
 });
@@ -2576,7 +2576,7 @@ restored.run('advanceSwimming(ANCHOR_RETRIEVE_DURATION);openFishing()');assert.m
 
 
 test('existing crystal balances unlock the speedboat without changing lifetime rewards or spending crystals',()=>{
-for(const balance of [500,900,1000]){
+for(const balance of [100,150,500,900,1000]){
 const g=game({solved:[],upgrades:[],crystals:balance,earnedCrystals:0});
 assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.crystals'),balance);assert.equal(g.run('state.earnedCrystals'),0);
 assert.equal(g.run('activePiers().includes(speedboatPier)'),true);assert.equal(g.node('#gearLaunchSpeedboat').hidden,false);

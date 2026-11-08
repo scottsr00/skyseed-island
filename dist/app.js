@@ -1,7 +1,7 @@
 'use strict';
 const $=s=>document.querySelector(s), QUESTION_COUNT=200;
 const MAIN_DOCK={x:232,y:285},FISHING_DOCK={x:106,y:222},BOAT_MOORING={x:FISHING_DOCK.x-42,y:FISHING_DOCK.y+15};
-const SPEEDBOAT_DOCK={x:318,y:256},SPEEDBOAT_MOORING={x:361,y:271},SPEEDBOAT_UNLOCK_CRYSTALS=500;
+const SPEEDBOAT_DOCK={x:318,y:256},SPEEDBOAT_MOORING={x:361,y:271},SPEEDBOAT_UNLOCK_CRYSTALS=100;
 // Island shores span x=48…3008. Equal ocean margins center them in the expanded map.
 const WORLD={left:-1672,right:4728,width:6400,height:1800,viewWidth:480,viewHeight:300};
 const POWER_ENABLED=true,POWER_MAX=100,POWER_PER_ANSWER=25,POWER_DRAIN_PER_SECOND=.65,RIDING_ENERGY_DRAIN_PER_SECOND=.325;
@@ -2217,10 +2217,10 @@ function speedboatUnlocked(){return state.speedboat===true||currentProfile().spe
 function updateSpeedboatUI(){
 const unlocked=speedboatUnlocked(),newUnlock=unlocked&&!state.speedboat&&!currentProfile().speedboat;
 if(unlocked){state.speedboat=true;currentProfile().speedboat=true;}
-const status=unlocked?'Dock unlocked! Find the SPEEDBOAT sign southeast of the main harbour, or launch here. Triple outboards · 25% faster · no crystals to spend.':`${Math.min(SPEEDBOAT_UNLOCK_CRYSTALS,Math.max(state.crystals,state.earnedCrystals))} / 500 crystals · earn or hold 500 to unlock the speedboat dock.`;
+const status=unlocked?'Dock unlocked! Find the SPEEDBOAT sign southeast of the main harbour, or launch here. Triple outboards · 25% faster · no crystals to spend.':`${Math.min(SPEEDBOAT_UNLOCK_CRYSTALS,Math.max(state.crystals,state.earnedCrystals))} / ${SPEEDBOAT_UNLOCK_CRYSTALS} crystals · earn or hold ${SPEEDBOAT_UNLOCK_CRYSTALS} to unlock the speedboat dock.`;
 $('#gearSpeedboatStatus').textContent=status;$('#gearLaunchSpeedboat').hidden=!unlocked;
 
-if(newUnlock)toast('500-crystal milestone! Your speedboat dock is open — triple outboards and 25% more speed!');
+if(newUnlock)toast('100-crystal milestone! Your speedboat dock is open — triple outboards and 25% more speed!');
 }
 function outboardOffsets(vessel,spacing){return vessel==='speedboat'?[-spacing,0,spacing]:[-spacing,spacing];}
 function vesselPose(vessel){
@@ -2234,7 +2234,7 @@ else if(activeVessel==='speedboat'){speedboatPosition={...boatPosition};speedboa
 else{fishingBoatPosition={...boatPosition};fishingBoatHeading=boatMotion.heading;}
 }
 function launchSpeedboat(){
-if(!speedboatUnlocked()){toast('Earn or hold 500 crystals to unlock the speedboat dock.');return;}
+if(!speedboatUnlocked()){toast('Earn or hold 100 crystals to unlock the speedboat dock.');return;}
 if(boatExplosions.has('speedboat')){toast('Wait for the speedboat’s smoke to clear.');return;}
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame||surfSession||beachTransfer||shoreRecovery||voyage||boating)return;
 if(!hasSwimPower()){toast('Solve a problem to restore energy before heading out on the water.');return;}
