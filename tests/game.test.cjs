@@ -2022,6 +2022,79 @@ assert.equal(g.run('drawBurningTree(target.x,target.y)'),true);
 g.run('petDragonFire={elapsed:200,duration:850};checkTreeDragonFireHits()');assert.equal(g.run('target.burnAge'),g.run('TREE_BURN_DURATION'));
 });
 
+test('burned trees gradually regrow over five minutes, pause for dialogs, and can burn again',()=>{
+const g=game();g.run('const target=burnableTrees.values().next().value;target.burnAge=TREE_BURN_DURATION-100;advancePetDragonFire(1100)');
+assert.equal(g.run('target.regrowAge'),1000);
+g.node('#challenge').open=true;g.run('advancePetDragonFire(10000)');assert.equal(g.run('target.regrowAge'),1000);g.node('#challenge').open=false;
+g.run('advancePetDragonFire(149000)');assert.equal(g.run('target.regrowAge'),150000);
+g.run(`let growthScales=[];ctx.scale=(x,y)=>growthScales.push([x,y]);let flames=0;drawDragonFlame=()=>flames++;
+for(const kind of ['tree','pine','palm']){const t=[...burnableTrees.values()].find(t=>t.kind===kind);t.burnAge=TREE_BURN_DURATION;t.regrowAge=150000;drawBurningTree(t.x,t.y);}`);
+assert.equal(g.run('growthScales.length'),3);assert.equal(g.run('growthScales.every(([x,y])=>x===.52&&y===.52)'),true);assert.equal(g.run('flames'),0);
+g.run('advancePetDragonFire(149999)');assert.notEqual(g.run('target.burnAge'),null);
+g.run('advancePetDragonFire(1)');assert.equal(g.run('target.burnAge'),null);assert.equal(g.run('target.regrowAge'),0);
+assert.equal(g.run('drawBurningTree(target.x,target.y)'),false);
+g.run('petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200,duration:850};checkTreeDragonFireHits()');assert.equal(g.run('target.burnAge'),0);
+g.run('target.regrowAge=100000;resetPetDragon()');assert.equal(g.run('target.regrowAge'),0);assert.equal(g.run('target.burnAge'),null);
+});
+
+test('dragon fire explodes ferry, fishing, and tow boats once, with smoke clearing and dialog pauses',()=>{
+for(const vessel of ['ferry','fishing','tow']){
+const g=game();g.run(`state.catches={shark:5};const vessel='${vessel}';
+const target=vessel==='tow'?{x:WATERSPORTS_DOCK.x+40,y:WATERSPORTS_DOCK.y+18}:vessel===activeVessel?boatPosition:vessel==='ferry'?ferryPosition:fishingBoatPosition;
+petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200,duration:850};advancePetDragonFire(1)`);
+assert.equal(g.run('boatExplosions.has(vessel)'),true);
+g.run('boatExplosions.get(vessel).elapsed=100;checkBoatDragonFireHits()');assert.equal(g.run('boatExplosions.get(vessel).elapsed'),100);
+for(const elapsed of [0,100,400,900,1800,3000])g.run(`boatExplosions.get(vessel).elapsed=${elapsed};draw()`);
+g.run('boatExplosions.get(vessel).elapsed=100');g.node('#challenge').open=true;
+g.run('advancePetDragonFire(500)');assert.equal(g.run('boatExplosions.get(vessel).elapsed'),100);g.node('#challenge').open=false;
+g.run('petDragonFire=null;nextPetDragonFire=100000;advancePetDragonFire(BOAT_EXPLOSION_DURATION-101)');assert.equal(g.run('boatExplosions.has(vessel)'),true);
+g.run('advancePetDragonFire(1)');assert.equal(g.run('boatExplosions.has(vessel)'),false);
+g.run('petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits()');assert.equal(g.run('boatExplosions.has(vessel)'),true);
+g.run('resetPetDragon()');assert.equal(g.run('boatExplosions.size'),0);
+}
+});
+
+test('boat ignition preserves the hull before detonation and debris lands on both shore and sea',()=>{
+const g=game();g.run(`const blast=createBoatBlast({x:dock.x+20,y:dock.y+10,heading:0,vessel:'ferry'});boatExplosions.set('ferry',blast);
+let hullShapes=0;const savedPolygon=polygon;polygon=(...a)=>{hullShapes++;savedPolygon(...a)};ferryArt(blast.x,blast.y)`);
+assert.ok(g.run('hullShapes')>0);assert.equal(g.run("boatIsExploding('ferry')"),false);
+g.run('blast.elapsed=BOAT_IGNITION_DURATION;hullShapes=0;ferryArt(blast.x,blast.y)');assert.equal(g.run('hullShapes'),0);
+assert.ok(g.run('blast.debris.some(p=>p.land)'));assert.ok(g.run('blast.debris.some(p=>!p.land)'));
+assert.equal(g.run('new Set(blast.debris.map(p=>p.kind)).size'),8);
+g.run(`for(const p of blast.debris){
+const mid=boatDebrisPose(p,p.flight/2),impact=boatDebrisPose(p,p.flight),after=boatDebrisPose(p,p.flight+1);
+if(!mid.airborne||mid.z<=0||impact.airborne||impact.z!==0||after.airborne)throw new Error('Invalid ballistic impact');
+if(!p.land&&(impact.x!==after.x||impact.y!==after.y||after.z!==0))throw new Error('Water impact drifted');
+}
+let gradients=0;ctx.createRadialGradient=()=>{gradients++;return {addColorStop(){}}};
+for(const elapsed of [0,900,1799,1800,1850,2100,2400,3000,4000,5000,7000,11000]){blast.elapsed=elapsed;drawBoatExplosions();}
+const before=JSON.stringify(blast);drawBoatExplosions();if(JSON.stringify(blast)!==before)throw new Error('Rendering changed simulation');`);
+assert.ok(g.run('gradients')>200);
+});
+
+test('boat fire hits follow the dragon heading and altitude and the current vessel position',()=>{
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+const g=game();g.run(`const target={x:1100,y:1400,heading:.7,vessel:'ferry'};dragonFlight={stage:'flying',heading:${heading},altitude:30};
+player.x=target.x-Math.cos(${heading})*55;player.y=target.y+30-Math.sin(${heading})*55;petDragonFire={elapsed:200,duration:850}`);
+assert.equal(g.run('dragonFireTouchesBoat(target)'),true);
+g.run('dragonFlight.altitude=180');assert.equal(g.run('dragonFireTouchesBoat(target)'),false);
+g.run('dragonFlight.altitude=30;target.x+=250');assert.equal(g.run('dragonFireTouchesBoat(target)'),false);
+}
+const g=game();g.run(`state.catches={shark:5};activeVessel='fishing';boatPosition={x:1100,y:1400};fishingBoatPosition={x:1300,y:1400};
+petDragonPosition={x:1040,y:1392};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits()`);
+assert.equal(g.run("boatExplosions.get('fishing').x"),1100);
+assert.equal(g.run('canUseCurrentVessel()'),false);
+g.run('boating=false;swimming=true;player.x=boatPosition.x;player.y=boatPosition.y;boardOwnBoat()');assert.equal(g.run('boating'),false);
+});
+
+test('an exploding occupied boat leaves the explorer swimming and hides its sprite',()=>{
+const g=game();g.run(`state.catches={shark:5};activeVessel='fishing';boating=true;player.x=1100;player.y=1400;boatPosition={x:1100,y:1400};
+petDragonPosition={x:1040,y:1392};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits()`);
+assert.equal(g.run('boating'),false);assert.equal(g.run('swimming'),true);assert.equal(g.run('boatMotion.velocity'),0);
+g.run('let boatShapes=0;polygon=()=>boatShapes++;rect=()=>boatShapes++;ellipse=()=>boatShapes++;boatExplosions.get("fishing").elapsed=BOAT_IGNITION_DURATION;fishingBoatArt(1100,1400)');assert.equal(g.run('boatShapes'),0);
+g.run('launchBoat()');assert.equal(g.run('boating'),false);
+});
+
 test('tree fire hits follow flight heading, mirrored sprite and altitude, and miss distant trees',()=>{
 for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
 const g=game();g.run(`const target=burnableTrees.values().next().value;const heading=${heading};dragonFlight={stage:'flying',heading,altitude:30};player.x=target.x-Math.cos(heading)*55;player.y=target.y-8+30-Math.sin(heading)*55;petDragonFire={elapsed:200,duration:850};checkTreeDragonFireHits()`);
