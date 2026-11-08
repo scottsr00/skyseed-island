@@ -306,3 +306,15 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
  .map-app #challenge .discovery-answer{font-size:16px}
 }
 @media(max-width:380px){.map-app #challenge .discovery-actions{grid-template-columns:1fr}}
+
+/* Three compact instruments wrap on phones while retaining the resource HUD style. */
+.boat-instruments{flex-wrap:wrap;row-gap:12px}
+.boat-instrument[data-level="low"] .power-gauge>div{background:linear-gradient(#ffe8a2,#edaa53)}
+@media(max-width:600px){.boat-instruments{max-width:100%;gap:10px 14px}.boat-instrument .power-gauge{width:86px}}
+
+/* Ticket confirmation stays with the map's concise keyboard suggestions. */
+.ferry-confirmation{pointer-events:auto;background:#294e40;color:#fff5d6;padding:10px 12px;font:12px/1.5 monospace;max-width:100%;text-align:center}
+.ferry-confirmation p{margin:0 0 8px}
+.ferry-confirmation-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+.map-app .ferry-confirmation button{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:0;background:#365e43;color:#fff5d6;font:12px/1.4 monospace;padding:4px 8px}
+.map-suggestions:has(.ferry-confirmation:not([hidden])) #interaction{display:none}
