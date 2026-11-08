@@ -25,7 +25,7 @@ assert.match(g.node('#challengeBody').innerHTML,/Practice complete!/);
 assert.doesNotMatch(g.node('#challengeBody').innerHTML,/reward-gain/);
 g.node('#backIsland').onclick();assert.equal(g.node('#challenge').open,false);
 });
-function game(saved,stored,renderTools=false){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:(target,key)=>target[key]??(()=>{})});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{listeners:{},addEventListener(type,handler,options){(this.listeners[type]??=[]).push({handler,capture:!!options?.capture});}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/surfing.js','utf8'),c);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);if(!renderTools)vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
+function game(saved,stored,renderTools=false){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:(target,key)=>target[key]??(()=>{})});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#profileActionConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{listeners:{},addEventListener(type,handler,options){(this.listeners[type]??=[]).push({handler,capture:!!options?.capture});}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/surfing.js','utf8'),c);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);if(!renderTools)vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
 test('all 200 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<200;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),200);assert.equal(g.run('state.crystals'),1000);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),1005);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),945);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),945);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
 test('a 25-crystal ferry ticket starts one timed ride and allows reboarding while time remains',()=>{
@@ -2872,4 +2872,60 @@ for(const vessel of ['fishing','speedboat']){
 const g=game();g.run(`state.catches={bass:5};state.sponsorshipAnnounced=true;state.speedboat=true;currentProfile().fuel.${vessel}=0;currentProfile().reserveGas=5;${vessel==='fishing'?'launchBoat':'launchSpeedboat'}()`);
 assert.equal(g.run(`currentProfile().fuel.${vessel}`),5);assert.equal(g.run('boatMotion.engineStage'),'starting');assert.doesNotMatch(g.node('#toast').textContent,/Out of gas/);
 }
+});
+
+test('full profile reset clears every age and permanent rewards while preserving identity and other players',()=>{
+const g=game();
+g.node('#profileName').value='Other player';g.run('createProfile();state.crystals=37;save();switchProfile("legacy")');
+g.node('#profileName').value='Maya';g.node('#characterChoice').value='girl';g.run('editProfile()');
+g.run(`for(const level of AGE_LEVELS){switchAge(level);state.solved=[0,1];state.crystals=150;state.earnedCrystals=200;state.upgrades=['cottage'];state.anchor=true;state.speedboat=true;state.wakeboard=true;state.waterskis=true;state.surfBest=99;state.catches={shark:2};state.tradingTickets=5;save();}currentProfile().lifetimeCatches={shark:8};currentProfile().reserveGas=75;currentProfile().fuel={fishing:0,speedboat:3};state.power=0;save();adminMode=true;boating=true;swimming=true;pendingCast={};`);
+g.node('#resetProfile').onclick();assert.match(g.node('#profileActionTitle').textContent,/Reset Maya to zero/);
+g.node('#confirmProfileAction').onclick();
+assert.equal(g.run('profileId'),'legacy');assert.equal(g.run('currentProfile().name'),'Maya');assert.equal(g.run('currentProfile().character'),'girl');assert.equal(g.run('ageLevel'),'11-12');
+assert.equal(g.run('adminMode||boating||swimming'),false);assert.equal(g.run('pendingCast'),null);assert.equal(g.run('state.power'),100);
+assert.equal(g.run('currentProfile().reserveGas'),0);assert.equal(g.run('currentProfile().fuel.fishing'),100);assert.equal(g.run('Object.keys(currentProfile().lifetimeCatches).length'),0);
+const reloaded=game(null,g.snapshot());
+for(const level of ['5-6','7-8','9-10','11-12']){
+reloaded.run(`switchAge('${level}')`);
+assert.equal(reloaded.run('state.crystals+state.earnedCrystals+state.solved.length+state.upgrades.length+state.tradingTickets+state.surfBest'),0);
+assert.equal(reloaded.run('state.anchor||state.speedboat||state.wakeboard||state.waterskis'),false);assert.equal(reloaded.run('state.catches.shark'),0);assert.equal(reloaded.run('state.squishyInventory.length'),0);
+}
+reloaded.run('switchProfile("p1")');assert.equal(reloaded.run('state.crystals'),37);
+});
+
+test('profile deletion removes all saves and survives reload without changing other profiles',()=>{
+for(const deleting of ['legacy','p1']){
+const g=game();g.run('state.crystals=35;save()');g.node('#profileName').value='Friend';g.run('createProfile();state.crystals=60;save()');
+g.run(`switchProfile('${deleting}');for(const age of AGE_LEVELS)localStorage.setItem(progressKey(profileId,age),JSON.stringify({solved:[1],upgrades:[],crystals:10}));`);
+g.node('#deleteProfile').onclick();g.node('#confirmProfileAction').onclick();
+assert.equal(g.run('profiles.length'),1);assert.equal(g.run('profileId'),deleting==='legacy'?'p1':'legacy');
+for(const age of ['5-6','7-8','9-10','11-12'])assert.equal(g.run(`localStorage.getItem(progressKey('${deleting}','${age}'))`),undefined);
+const reloaded=game(null,g.snapshot());assert.equal(reloaded.run('profiles.length'),1);assert.equal(reloaded.run('state.crystals'),deleting==='legacy'?60:35);
+}
+});
+
+test('deleting the final profile creates a fresh explorer without restoring legacy saves',()=>{
+const g=game({solved:[0],upgrades:['cottage'],crystals:50,anchor:true});
+g.node('#deleteProfile').onclick();assert.match(g.node('#profileActionDescription').textContent,/fresh Explorer/);g.node('#confirmProfileAction').onclick();
+assert.equal(g.run('profiles.length'),1);assert.equal(g.run('currentProfile().name'),'Explorer');assert.equal(g.run('state.crystals'),0);assert.equal(g.run('state.anchor'),false);
+g.run('update();save()');const reloaded=game(null,g.snapshot());assert.equal(reloaded.run('profileId'),g.run('profileId'));assert.equal(reloaded.run('state.solved.length'),0);
+});
+
+test('profile management cancels safely, binds confirmation to the selected player, and waits for ferry arrival',()=>{
+const g=game({solved:[0],upgrades:[],crystals:50});
+for(const action of ['resetProfile','deleteProfile']){
+const before=g.snapshot();g.node('#'+action).onclick();g.node('#cancelProfileAction').onclick();g.node('#confirmProfileAction').onclick();assert.deepEqual(g.snapshot(),before);assert.equal(g.run('state.crystals'),50);
+}
+g.node('#deleteProfile').onclick();g.node('#profileName').value='Friend';g.run('createProfile()');g.node('#confirmProfileAction').onclick();assert.equal(g.run('profiles.length'),2);
+g.run('voyage={from:{x:230,y:176}}');g.node('#resetProfile').onclick();assert.equal(g.node('#profileActionConfirm').open,false);assert.match(g.node('#profileFeedback').textContent,/after the ferry arrives/);
+});
+
+test('profile management reports storage failure without removing the active player',()=>{
+const g=game({solved:[0],upgrades:[],crystals:50});g.run('localStorage.removeItem=()=>{throw new Error("Storage blocked")};');
+g.node('#deleteProfile').onclick();g.node('#confirmProfileAction').onclick();assert.equal(g.run('profiles.length'),1);assert.equal(g.run('state.crystals'),50);assert.match(g.node('#profileFeedback').textContent,/could not be changed/);
+});
+
+test('profile management restores removed age saves if writing the profile list fails',()=>{
+const g=game({solved:[0],upgrades:[],crystals:50});g.run('save();localStorage.setItem("skyseed-v1-9-10",JSON.stringify({solved:[1],upgrades:[],crystals:20}));const originalSet=localStorage.setItem;let failOnce=true;localStorage.setItem=(key,value)=>{if(key===PROFILE_KEY&&failOnce){failOnce=false;throw new Error("Storage full");}return originalSet(key,value);};');
+const before=g.snapshot();g.node('#resetProfile').onclick();g.node('#confirmProfileAction').onclick();assert.deepEqual(g.snapshot(),before);assert.equal(g.run('state.crystals'),50);assert.match(g.node('#profileFeedback').textContent,/could not be changed/);
 });

@@ -81,16 +81,63 @@ const profile={id:'p'+next,name,character:$('#characterChoice').value==='girl'?'
 profiles.push(profile);switchProfile(profile.id);
 $('#profileFeedback').textContent=storageOK?'New profile created. Your own island is ready!':'Profile created for this session; browser storage is unavailable.';
 }
-function switchProfile(id){
-if(id===profileId||!profiles.some(p=>p.id===id))return;
+function switchProfile(id,{saveCurrent=true,force=false}={}){
+if((id===profileId&&!force)||!profiles.some(p=>p.id===id))return;
 if(voyage){$('#profileFeedback').textContent='Switch profiles after the ferry arrives.';$('#profileSelect').value=profileId;return;}
-save();adminMode=false;cancelFlash();for(const dialog of ['challenge','flash','sponsorship'])if($('#'+dialog).open)$('#'+dialog).close();
+if(saveCurrent)save();adminMode=false;cancelFlash();for(const dialog of ['challenge','flash','sponsorship'])if($('#'+dialog).open)$('#'+dialog).close();
 closeMapPanel();stopFishing();clearLochDragon();clearBlueMarlin();resetPetDragon();resetWatersports();resetSurfing();resetVolleyball();resetFrisbee();resetSunbathers();goggleToss=null;boating=false;swimming=false;diveAnimation=null;shoreClimb=null;shoreRecovery=null;timberStep=null;beachTransfer=null;sharkFins=[];boatPosition={...BOAT_MOORING};resetBoatMotion();pendingCast=null;fishSet='classic';keys.clear();
 profileId=id;ageLevel=currentProfile().age;KEY=progressKey();state=loadProgress();restoreParkedBoat();questions=questionsByAge[ageLevel];
 player.x=Number.isFinite(state.x)?state.x:230;player.y=Number.isFinite(state.y)?state.y:176;
 if(!canWalk(player.x,player.y)){player.x=230;player.y=176;}
 active=0;answerComplete=false;near=-1;update();checkSponsorship();openMapPanel('settingsPanel');$('#profileFeedback').textContent='';draw();toast(`${currentProfile().name}’s island is ready!`);
 }
+// Confirm against the saved profile identity, rather than the editable name field.
+let pendingProfileAction=null;
+function requestProfileAction(action){
+if(!['reset','delete'].includes(action))return;
+if(voyage){$('#profileFeedback').textContent='Manage this profile after the ferry arrives.';return;}
+const profile=currentProfile();
+pendingProfileAction={action,id:profile.id};keys.clear();
+$('#profileActionTitle').textContent=action==='reset'?`Reset ${profile.name} to zero?`:`Delete ${profile.name}?`;
+$('#profileActionDescription').textContent=action==='reset'
+?`This permanently clears ${profile.name}’s progress at all four math levels, including crystals, discoveries, upgrades, gear, records, fish collections, and reserve gas. Their name, character, and selected math level stay. Energy and boat fuel return to the starting amounts. This cannot be undone.`
+:`This permanently deletes ${profile.name} and all their progress at every math level. This cannot be undone. ${profiles.length===1?'A fresh Explorer profile will be created.':'Your other profiles will stay saved.'}`;
+$('#confirmProfileAction').textContent=action==='reset'?'Reset profile to zero':'Delete profile';
+$('#profileActionConfirm').showModal();$('#cancelProfileAction').focus();
+}
+function confirmProfileAction(){
+if(!$('#profileActionConfirm').open||!pendingProfileAction)return;
+const {action,id}=pendingProfileAction;
+if(id!==profileId||voyage){$('#profileActionConfirm').close();pendingProfileAction=null;return;}
+const profile=currentProfile(),name=profile.name;
+let nextProfiles=action==='reset'
+?profiles.map(p=>p.id===id?{id,name,character:p.character,age:p.age}:p)
+:profiles.filter(p=>p.id!==id);
+if(!nextProfiles.length)nextProfiles=[{id:id==='legacy'?'p1':'p'+(Number(id.slice(1))+1),name:'Explorer',character:'boy',age:ageLevel}];
+const nextId=action==='reset'?id:nextProfiles[0].id;
+// Remove every age save before loading a fresh profile, so permanent gear cannot migrate back.
+const previous=new Map();
+try{
+previous.set(PROFILE_KEY,localStorage.getItem(PROFILE_KEY));
+for(const age of AGE_LEVELS){const key=progressKey(id,age);previous.set(key,localStorage.getItem(key));}
+for(const age of AGE_LEVELS)localStorage.removeItem(progressKey(id,age));
+localStorage.setItem(PROFILE_KEY,JSON.stringify({active:nextId,profiles:nextProfiles}));
+}catch{
+for(const [key,value] of previous){try{if(value!=null)localStorage.setItem(key,value);}catch{}}
+$('#profileActionConfirm').close();pendingProfileAction=null;
+$('#profileFeedback').textContent='Browser storage is unavailable. The profile could not be changed. Please try again.';return;
+}
+$('#profileActionConfirm').close();pendingProfileAction=null;
+profiles=nextProfiles;
+switchProfile(nextId,{saveCurrent:false,force:true});
+$('#profileFeedback').textContent=storageOK
+?(action==='reset'?`${name} has been reset to zero at every math level.`:`${name} was deleted.`)
+:'Profile changed for this session; browser storage is unavailable.';
+}
+$('#resetProfile').onclick=()=>requestProfileAction('reset');
+$('#deleteProfile').onclick=()=>requestProfileAction('delete');
+$('#cancelProfileAction').onclick=()=>{$('#profileActionConfirm').close();pendingProfileAction=null;};
+$('#confirmProfileAction').onclick=confirmProfileAction;
 function loadProgress(){
 let loaded={...defaults,solved:[],upgrades:[]};
 try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.solved)&&Array.isArray(s.upgrades))loaded={...defaults,...s,travelRules:s.travelRules===2?2:1,solved:[...new Set(s.solved.filter(n=>Number.isInteger(n)&&n>=0&&n<QUESTION_COUNT))],upgrades:[...new Set(s.upgrades.filter(n=>['cottage','garden','bridge'].includes(n)))],crystals:Math.max(0,Number(s.crystals)||0)};}catch{storageOK=false;}

@@ -318,3 +318,5 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .ferry-confirmation-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
 .map-app .ferry-confirmation button{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:0;background:#365e43;color:#fff5d6;font:12px/1.4 monospace;padding:4px 8px}
 .map-suggestions:has(.ferry-confirmation:not([hidden])) #interaction{display:none}
+
+.profile-management{border-top:1px solid var(--pixel-edge);padding-top:16px}.profile-management h3{margin:0 0 8px}.profile-management p{margin:0 0 12px;line-height:1.6}.map-app .danger-button{color:#842e28;background:#f8dfcd;border-color:#a15c48}.map-app .danger-button:hover,.map-app .danger-button:focus-visible{background:#f1c5ad}.profile-actions button{overflow-wrap:anywhere}#profileActionTitle{overflow-wrap:anywhere}
