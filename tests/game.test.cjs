@@ -1996,6 +1996,38 @@ g.run('driveBoat(500,-1,-1)');assert.ok(g.run('boatMotion.steering')<0);
 g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.steering'),0);
 });
 
+for(const vessel of ['ferry','fishing'])test(`${vessel} bow wake stays in the water through turns and fades after stopping`,()=>{
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=-1100;player.y=900;resetBoatMotion();driveBoat(700,1,0)`);
+assert.ok(g.run('boatMotion.bowWake.length')>0);
+assert.equal(g.run('new Set(boatMotion.bowWake.map(w=>w.side)).size'),2);
+const first=g.run('JSON.stringify(boatMotion.bowWake[0])');
+g.run('driveBoat(500,1,1)');
+assert.equal(g.run('JSON.stringify(boatMotion.bowWake[0])'),first,'turning does not move previous wave origins');
+const trail=g.run('JSON.stringify(boatMotion.bowWake)');
+g.run('draw();draw()');assert.equal(g.run('JSON.stringify(boatMotion.bowWake)'),trail,'rendering does not advance wake state');
+g.run('boatMotion.velocity=0;advanceBoatMotion(2200)');assert.ok(g.run('boatMotion.bowWake.length')>0);
+g.run('advanceBoatMotion(1400)');assert.equal(g.run('boatMotion.bowWake.length'),0);
+g.run('driveBoat(500,-1,0)');assert.equal(g.run('boatMotion.bowWake.length'),0,'reverse does not emit bow foam');
+g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.bowWake.length'),0);
+});
+for(const vessel of ['ferry','fishing'])test(`${vessel} replays exhaust when throttle resumes from rest`,()=>{
+for(const direction of [1,-1]){
+const g=game();g.run(`boating=true;activeVessel='${vessel}';player.x=-1100;player.y=900;resetBoatMotion();driveBoat(40,${direction},0)`);
+assert.equal(g.run('boatMotion.engineAge'),0);
+assert.equal(g.run('boatMotion.engineStage'),'running');
+assert.ok(g.run('Math.abs(boatMotion.velocity)')>0,'restart keeps movement responsive');
+g.run('let puffs=0;ellipse=()=>puffs++;drawBoatExhaust(player.x,player.y,boatMotion.heading,activeVessel)');
+assert.equal(g.run('puffs'),2,'both motors emit exhaust');
+g.run(`advanceBoatMotion(400);driveBoat(40,${direction},0)`);
+assert.equal(g.run('boatMotion.engineAge'),400,'held throttle does not restart the puff');
+g.run(`advanceBoatMotion(600);driveBoat(40,0,0);driveBoat(40,${direction},0)`);
+assert.equal(g.run('boatMotion.engineAge'),1000,'throttle changes while moving do not puff');
+g.run(`driveBoat(20000,0,0);driveBoat(40,${direction},0)`);
+assert.equal(g.run('boatMotion.engineAge'),0,'stopping and restarting emits another puff');
+g.run('advanceBoatMotion(1000);puffs=0;drawBoatExhaust(player.x,player.y,boatMotion.heading,activeVessel)');
+assert.equal(g.run('puffs'),0,'restart smoke clears');
+}
+});
 for(const vessel of ['ferry','fishing'])test(`${vessel} starts with a brief exhaust puff before engaging its engines`,()=>{
 const g=game();g.run(`state.ferryTicket=true;state.catches={shark:5};${vessel==='ferry'?'boardFerry()':'launchBoat()'};player.x=1100;player.y=1400`);
 assert.equal(g.run('boatMotion.engineStage'),'starting');
@@ -2485,4 +2517,65 @@ const g=game();g.run("visitWatersportsDock();startWakeboarding('waterskis')");as
 g.run('state.waterskis=true;updateWakeboardUI()');assert.equal(g.node('#mapWakeboardStart').hidden,false);
 g.node('#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide.equipment'),'waterskis');assert.match(g.node('#waterControls').textContent,/WATERSKIS/);
 const h=game();h.run('state.waterskis=true;visitWatersportsDock();near=101;interact()');assert.equal(h.run('wakeboardRide.equipment'),'waterskis');
+});
+
+test('speedboat dock unlocks at 500 earned crystals for free and stays with its explorer',()=>{
+const g=game();g.run('state.crystals=900;state.earnedCrystals=499;update();launchSpeedboat()');
+assert.equal(g.run('speedboatUnlocked()'),false);assert.equal(g.run('boating'),false);assert.equal(g.node('#launchSpeedboat').hidden,true);
+assert.equal(g.run('activePiers().includes(speedboatPier)'),false);
+g.run('state.earnedCrystals=500;update()');assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.crystals'),900);
+assert.equal(g.node('#launchSpeedboat').hidden,false);assert.equal(g.run('activePiers().includes(speedboatPier)'),true);
+g.run('state.crystals=0;save();switchAge("7-8")');assert.equal(g.run('speedboatUnlocked()'),true);
+g.node('#resetConfirm').open=true;g.node('#confirmReset').onclick();assert.equal(g.run('speedboatUnlocked()'),true);
+const restored=game(undefined,g.snapshot());assert.equal(restored.run('speedboatUnlocked()'),true);
+g.node('#profileName').value='New speedboat explorer';g.run('createProfile()');assert.equal(g.run('speedboatUnlocked()'),false);
+});
+
+test('speedboat unlocks on the 500th earned crystal and migrates existing completed saves',()=>{
+const g=game();g.run('state.earnedCrystals=495;state.crystals=10;openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');
+assert.equal(g.run('state.speedboat'),true);assert.equal(g.run('state.crystals'),15);
+const legacy=game({solved:Array.from({length:100},(_,i)=>i),upgrades:[],crystals:0});assert.equal(legacy.run('speedboatUnlocked()'),true);
+});
+
+test('speedboat has three outboards and exactly 25 percent more speed at every trim',()=>{
+const g=game();
+for(let trim=0;trim<=5;trim++){
+g.run(`activeVessel='fishing';const fishingSpeed${trim}=boatTopSpeed(${trim});activeVessel='speedboat'`);
+assert.ok(Math.abs(g.run(`boatTopSpeed(${trim})/fishingSpeed${trim}`)-1.25)<1e-12);
+}
+g.run("let scales=0;ctx.scale=()=>scales++;drawOutboardMotors('speedboat',false)");assert.equal(g.run('scales'),3);
+const distances=[];
+for(const vessel of ['fishing','speedboat']){
+g.run(`activeVessel='${vessel}';boating=true;player.x=-1200;player.y=1200;boatPosition={x:player.x,y:player.y};resetBoatMotion();boatMotion.velocity=boatTopSpeed();driveBoat(1000,1,0)`);
+distances.push(g.run('player.x+1200'));
+}
+assert.ok(Math.abs(distances[1]/distances[0]-1.25)<1e-8);
+});
+
+test('speedboat dock is accessible, launches clear of obstacles, and permits returning and reboarding',()=>{
+const g=game({solved:[],upgrades:[],earnedCrystals:500});
+g.run('player.x=SPEEDBOAT_DOCK.x;player.y=SPEEDBOAT_DOCK.y-18');assert.equal(g.run('canWalk(player.x,player.y)'),true);
+assert.equal(g.run('nearby()'),104);g.run('near=nearby();interact()');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),'speedboat');
+assert.equal(g.run('boatPoseClear(boatPosition.x,boatPosition.y,boatMotion.heading)'),true);
+g.run('advanceSwimming(550);driveBoat(1000,1,0);draw();returnBoat()');assert.equal(g.run('boating'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('launchSpeedboat();exitBoat()');assert.equal(g.run('boating'),false);assert.equal(g.run('swimming'),false);
+});
+
+test('speedboat parking, island reloads, vessel switching, and dragon fire keep the correct vessel',()=>{
+const g=game({solved:[],upgrades:[],earnedCrystals:500,ferryTicket:true,catches:{shark:5}});
+g.run(`launchSpeedboat();boating=false;state.boatIsland=boatIslands[0].id;boatPosition={x:boatIslands[0].dock.x+50,y:boatIslands[0].dock.y+20};boatMotion.heading=.7;save()`);
+const restored=game(undefined,g.snapshot());assert.equal(restored.run('activeVessel'),'speedboat');assert.equal(restored.run('boatPosition.x'),g.run('boatPosition.x'));
+g.run('const parkedSpeed={...boatPosition};launchBoat()');assert.equal(g.run('activeVessel'),'fishing');assert.equal(g.run('speedboatPosition.x'),g.run('parkedSpeed.x'));
+g.run(`boating=false;launchSpeedboat();boating=false;boardFerry()`);assert.equal(g.run('activeVessel'),'ferry');
+g.run(`petDragonPosition={x:speedboatPosition.x-60,y:speedboatPosition.y-8};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits()`);assert.equal(g.run("boatExplosions.has('speedboat')"),true);
+g.run("boatExplosions.get('speedboat').elapsed=BOAT_IGNITION_DURATION;draw()");
+});
+
+test('speedboat anchors at the beach and reloads into the same triple-outboard vessel',()=>{
+const g=game({solved:[],upgrades:[],earnedCrystals:500,anchor:true});
+g.run('launchSpeedboat();player.x=1200;player.y=beachShoreY(1200)-70;boatMotion.heading=.8;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);save()');
+assert.equal(g.run('onMainlandBeach()'),true);assert.equal(g.run('state.beachAnchor.vessel'),'speedboat');
+const restored=game(undefined,g.snapshot());assert.equal(restored.run('activeVessel'),'speedboat');assert.equal(restored.run('canReturnToAnchoredBoat()'),true);
+restored.run('returnToAnchoredBoat();advanceSwimming(900)');assert.equal(restored.run('boating'),true);assert.equal(restored.run('activeVessel'),'speedboat');
+restored.run('advanceSwimming(ANCHOR_RETRIEVE_DURATION);openFishing()');assert.match(restored.node('#fishingPlace').textContent,/SPEEDBOAT/);
 });
