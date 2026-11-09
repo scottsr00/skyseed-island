@@ -8,7 +8,7 @@ All entry points are in `dist/app.js`.
 | --- | --- |
 | Boats | `launchBoat()`, `launchSpeedboat()`, `boardOwnBoat()`, `exitBoat()`, `returnBoat()`, `driveBoat()`, `moveBoat()`, `boatPoseClear()` |
 | Ferry | `openFerry()`, `confirmFerryBoarding()`, `buyFerryTicket()`, `boardFerry()`, `advanceFerryRide()` |
-| Anchorage | `buyAnchor()`, `anchorBoatAtBeach()`, `returnToAnchoredBoat()`, `restoreBeachAnchor()` |
+| Anchorage | `buyBeachPass()`, `anchorBoatAtBeach()`, `returnToAnchoredBoat()`, `restoreBeachAnchor()` |
 | Fishing | `fishingTier()`, `fishingTargets()`, `castFishing()`, `reelFishing()`, `landHookedFish()`, `advanceFishing()`, `sponsored()` |
 
 See [world and travel](world-and-travel.md) for island access, swimming, energy, and mounts.
@@ -18,17 +18,29 @@ for watersports and beach games.
 
 ## Beach anchoring
 
-Buy a permanent 50-crystal anchor in Gear; ownership stays with the explorer across all age levels,
-adventure resets, and reloads, including anchors found in older saves; it works with the
-fishing boat, speedboat, or ferry. Within 105 world pixels of the shore, Q or Anchor & go ashore parks the boat
-and animates the trip ashore. Return to the mooring flag and press E or Return to anchored boat to
-reboard. Boat position, type, and anchor ownership persist across reloads; ownership also persists
-across age changes and adventure resets.
+Every boat includes an anchor for ordinary offshore exits. Buy a permanent 50-crystal beach
+pass directly in the Fishing & travel menu to access Mainland Beach, including swimming ashore. The pass stays with the explorer
+across age levels, adventure resets, and reloads. Older purchased anchors automatically become
+beach passes without another charge; a full profile reset removes the pass.
+
+With a pass, within 105 world pixels of the shore, Q or Anchor & go ashore parks the fishing boat,
+speedboat, or ferry and animates the trip ashore. Without a pass, the action opens Fishing & travel to buy one.
+Return to the mooring flag and press E or Return to anchored boat to reboard. Boat position, type,
+and beach mooring persist across reloads.
+
+Arriving offshore without a pass shows a 50-crystal reminder once per approach. Swimmers also
+get a Beach pass required purchase action that opens Fishing & travel. Five lifeguard chairs
+span the entire coast at equal intervals. The nearest guard climbs down, runs along the sand
+to the swimmer’s shoreline position, and waves both arms with a beach-pass reminder. Guards
+return to their chairs after the swimmer leaves or buys a pass. They do not restrict ordinary
+boat anchors; the beach pass still gates going ashore.
 
 ## Ferry
 
 A ferry waits at the main island dock. A 25-crystal ticket buys one five-minute ride, consumed on
-boarding. E at the dock shows a compact map confirmation: Enter/E uses the ticket (or buys and
+boarding. Fishing & travel shows pass ownership or live ride time beneath Ferry Pass, with inline
+purchase and boarding controls. Buying a pass here does not move the player or start the timer.
+E at the dock shows a compact map confirmation: Enter/E uses the ticket (or buys and
 boards for 25 crystals), and Escape cancels. The upper-right countdown matches the speed and trim
 instruments. Time pauses during fishing and question dialogs, but continues ashore; reboard the
 parked ferry while time remains. At zero the ferry stops in place and cannot be controlled, but
@@ -43,7 +55,9 @@ from obsolete permanent passes.
 
 Five total catches unlock a Skyseed Angling Co. sponsorship celebration, unlimited bait, and a
 steerable fishing boat at the fishing dock. The fishing boat launches and returns there, with a
-boarding button at the fishing dock. Persistent map hints explain casting and boat controls. X /
+Launch fishing boat action in the normal map actions near the fishing dock, outside the fishing menu.
+Dock commands are Go fishing (F), Launch fishing boat (E, once sponsored), and Dive into the sea
+(X, when clear water is within reach). `canFishAtDock()` gates the dock actions and fishing shortcut. Persistent map hints explain casting and boat controls. X /
 Exit boat steps onto a nearby dock; offshore, the rider first throws an anchor with an unfurling
 rope, then dives into the sea. The boat stays still during the throw and the rope remains while it
 is moored. Anchor throws land in clear water at least 72 pixels from the boat. Reboarding
@@ -55,8 +69,9 @@ a ferry pass. Sponsorship is saved per age level.
 Earn or hold 100 crystals to unlock the main island’s new speedboat dock, southeast of the original
 harbour. No crystals are spent. The unlock stays with that explorer across age levels, adventure
 resets, and reloads; existing saves with 100 earned crystals or a balance of at least 100 also
-qualify, including admin grants. Launch from the dock with E, tap the dock, or use “Launch my
-speedboat” in Gear or Fishing & travel. The teal-and-white speedboat has three outboards with
+qualify, including admin grants. Launch with E at the dock or tap the dock. Fishing & travel
+provides direct fishing, supplies, beach pass, ferry dock, and watersports options.
+The teal-and-white speedboat has three outboards with
 coordinated steering, exhaust, wakes, and trim spray. Its forward acceleration and top speed are 25%
 above the fishing boat, with quicker steering response and a tighter turning circle even at full
 speed. Its top speed advantage applies at every matching trim setting (175 versus 140 at neutral
@@ -91,9 +106,16 @@ owned boat up to 100%; catches from shore or the ferry build a reserve that tran
 owned boat boarded, retaining any overflow. Tanks and reserve belong to the explorer and persist
 across age levels, resets, and reloads. Relaunching never grants free gas.
 
-Fishing takes place directly on the map. Five crystals buys a rod and five bait; a reusable lure
-costs 20 crystals and does not use bait. Shore bait catches Bass, Salmon, and Catfish (+2–5% gas);
-shore lures catch Snook, Redfish, and Trout (+5–10%). From any boat in shallow water, bait or lure
+Fishing takes place directly on the map, without a fishing panel. Buy supplies beneath Go fishing
+in the left Fishing & travel submenu. Five crystals buys five bait; lures
+cost 20 crystals, are used automatically once owned, and do not use bait. There is no tackle
+selector. Shore fishing always catches Bass, Salmon, and Catfish (+2–5% gas), with bait or lures.
+Existing Snook, Redfish, and Trout catch records remain in the lifetime log. The permanent
+bottom-left fish icon toggles `catchHistory`; `updateCatchHistory()` shows the selected explorer’s
+lifetime species counts and total, across ages and adventures. Feedback appears above the normal
+map actions; Reel appears when a fish is hooked, and Stop fishing remains available throughout.
+Click/tap water to cast, use arrows to aim, Enter/Space to cast, R to reel, and Escape to stop.
+There is no separate tackle selector, shop popup, or catch log inside the fishing activity. From any boat in shallow water, bait or lure
 catches Tarpon, Wahoo, and Kingfish (+10–15%). Other boats show a hint as they approach the
 deep-water boundary. Only the speedboat can enter the darker outer ocean, where it catches Tuna,
 Blue-ringed Octopus, and Shark (+10–15%). Lead moving fish with a 0.9-second cast; tap R six times

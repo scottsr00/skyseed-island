@@ -114,29 +114,42 @@ assert.equal(g.run('state.bait'),0);assert.equal(g.run('Object.values(state.catc
 g.run('castFishing(10,40)');assert.equal(g.run('pendingCast'),null);
 g.run('buyRod();buyLure();buyLure()');assert.equal(g.run('state.bait'),5);assert.equal(g.run('state.crystals'),20);assert.equal(g.run('state.earnedCrystals'),50);assert.equal(g.run('state.fishingLure'),true);
 });
-test('shore tackle catches its six species and repeated catches increment lifetime badges',()=>{
+test('shore lures catch the same small fish without consuming bait and survive reload',()=>{
 const g=game();g.run('state.crystals=100;openFishing();buyRod()');
 for(let i=0;i<3;i++)g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}`);
 for(const id of ['bass','salmon','catfish'])assert.equal(g.run(`state.catches.${id}`),1);
-g.run('buyLure();fishSet="lure";updateFishing()');
-for(let i=0;i<3;i++){if(i===2)g.run('buyRod()');g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}`);g.node('#sponsorship').close();}
-for(const id of ['snook','redfish','trout'])assert.equal(g.run(`state.catches.${id}`),1);
-g.run('{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}');assert.equal(g.run('state.catches.snook'),2);assert.match(g.node('#fishBadges').innerHTML,/Lifetime × 2/);
-const saved=g.run('JSON.parse(localStorage.getItem(KEY))');const restored=game(saved);assert.equal(restored.run('state.catches.snook'),2);assert.equal(restored.run('state.fishingLure'),true);assert.equal(restored.run('state.bait'),2);
-g.run("switchAge('9-10')");assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.fishingLure'),false);assert.equal(g.run('state.catches.snook'),0);
-g.run("switchAge('11-12')");assert.equal(g.run('state.catches.snook'),2);
+g.run('buyLure();updateFishing()');
+assert.equal(g.node('#buyRod').hidden,true);
+for(let i=0;i<3;i++){g.run(`{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[${i}];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}`);g.node('#sponsorship').close();}
+for(const id of ['bass','salmon','catfish'])assert.equal(g.run(`state.catches.${id}`),2);
+for(const id of ['snook','redfish','trout'])assert.equal(g.run(`state.catches.${id}`)||0,0);
+g.run('{const fish=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(fish.x,fish.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}}');assert.equal(g.run('state.catches.bass'),3);assert.match(g.node('#fishBadges').innerHTML,/Lifetime × 3/);
+const saved=g.run('JSON.parse(localStorage.getItem(KEY))');const restored=game(saved);assert.equal(restored.run('state.catches.bass'),3);assert.equal(restored.run('state.fishingLure'),true);assert.equal(restored.run('state.bait'),2);
+g.run("switchAge('9-10')");assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.fishingLure'),false);assert.equal(g.run('state.catches.bass'),0);
+g.run("switchAge('11-12')");assert.equal(g.run('state.catches.bass'),3);
+});
+test('automatic lures allow repeated casts with no bait before sponsorship',()=>{
+const g=game();g.run('state.crystals=20;openFishing();buyLure()');
+for(let i=0;i<7;i++){
+g.run('castFishing(10,40)');assert.equal(g.run('pendingCast.lure'),true);
+g.run('advanceFishing(FISH_CAST_DURATION)');
+}
+assert.equal(g.run('state.bait'),0);assert.equal(g.run('totalCatches()'),0);
+assert.equal(g.run('state.crystals'),0);assert.match(g.node('#fishingFeedback').textContent,/Lures ready/);
+const restored=game(undefined,g.snapshot());restored.run('openFishing();castFishing(10,40)');
+assert.equal(restored.run('pendingCast.lure'),true);
 });
 test('hooked fish struggle and escape after exactly two seconds without reeling',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod();{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}');
-assert.equal(g.run('totalCatches()'),0);assert.equal(g.node('#reelFish').hidden,false);
+assert.equal(g.run('totalCatches()'),0);assert.equal(g.node('#mapFishingReel').hidden,false);
 const first=g.run('hookedFishingPose().fish.x');g.run('advanceFishing(150);draw()');assert.notEqual(g.run('hookedFishingPose().fish.x'),first);
 g.run('advanceFishing(1849)');assert.equal(g.run('!!hookedFish'),true);
-g.run('advanceFishing(1);reelFishing()');assert.equal(g.run('hookedFish'),null);assert.equal(g.run('totalCatches()'),0);assert.equal(g.node('#reelFish').hidden,true);assert.match(g.node('#fishingFeedback').textContent,/shook free/);
+g.run('advanceFishing(1);reelFishing()');assert.equal(g.run('hookedFish'),null);assert.equal(g.run('totalCatches()'),0);assert.equal(g.node('#mapFishingReel').hidden,true);assert.match(g.node('#fishingFeedback').textContent,/shook free/);
 });
 test('reeling resets the escape timer, bends the rod, and rewards only a landed fish',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod();{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[0];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);}advanceFishing(1900)');
 const tip=g.run('hookedFishingPose().tip.y'),lean=g.run('hookedFishingPose().lean');
-g.node('#reelFish').onclick();assert.ok(g.run('hookedFishingPose().tip.y')<tip);assert.ok(g.run('hookedFishingPose().lean')>lean);
+g.node('#mapFishingReel').onclick();assert.ok(g.run('hookedFishingPose().tip.y')<tip);assert.ok(g.run('hookedFishingPose().lean')>lean);
 const target=g.run('hookedFish.target');g.run('reelFishing()');assert.equal(g.run('hookedFish.target'),target);
 g.run('advanceFishing(1800);draw()');assert.equal(g.run('!!hookedFish'),true);assert.equal(g.run('totalCatches()'),0);
 g.run('for(let r=0;r<5;r++){reelFishing();advanceFishing(180);draw();}');assert.equal(g.run('hookedFish'),null);assert.equal(g.run('totalCatches()'),1);
@@ -175,15 +188,62 @@ test('existing five-fish saves receive the sponsorship announcement',()=>{
 const g=game({solved:[],upgrades:[],crystals:0,catches:{barracuda:3,stingray:2}});assert.equal(g.node('#sponsorship').open,true);assert.equal(g.run('state.sponsorshipAnnounced'),true);assert.equal(g.run('sponsored()'),true);
 });
 
+test('fishing dock commands use F to fish, E to launch, and X to dive',()=>{
+const g=game({solved:[],upgrades:[],catches:{bass:5},sponsorshipAnnounced:true});
+g.run('const dockQuery=document.querySelector;document.querySelector=selector=>selector==="#interactBtn"?null:dockQuery(selector);player.x=fishingDock.x;player.y=fishingDock.y-8;tick(16)');
+assert.equal(g.node('#mapDockFishing').hidden,false);assert.equal(g.node('#mapFishingBoat').hidden,false);
+assert.equal(g.node('#mapDive').hidden,false);assert.equal(g.node('#interaction').innerHTML,'');
+g.run('const dockKey=(key,repeat=false)=>window.listeners.keydown.find(l=>!l.capture).handler({key,repeat,target:{tagName:"CANVAS"},preventDefault(){}})');
+g.run('dockKey("f",true)');assert.equal(g.run('fishingActive'),false);
+g.run('dockKey("f")');assert.equal(g.run('fishingActive'),true);assert.equal(g.run('boating'),false);
+g.run('dockKey("e")');assert.equal(g.run('boating'),true);assert.equal(g.run('fishingActive'),false);
+g.run('returnBoat();dockKey("x")');assert.equal(g.run('swimming'),true);assert.ok(g.run('diveAnimation'));
+const h=game();h.run('player.x=fishingDock.x;player.y=fishingDock.y-8;tick(16)');
+assert.equal(h.node('#mapDockFishing').hidden,false);assert.equal(h.node('#mapFishingBoat').hidden,true);
+h.node('#mapDockFishing').onclick();assert.equal(h.run('fishingActive'),true);
+});
 test('fishing uses the main map and stops cleanly without a popup',()=>{
 const g=game();g.run('state.crystals=5;openFishing();buyRod()');
-assert.equal(g.run('fishingActive'),true);assert.equal(g.node('#fishing').hidden,false);assert.equal(g.node('#fishing').open,undefined);
+assert.equal(g.run('fishingActive'),true);assert.equal(g.node('#stopFishing').hidden,false);assert.equal(g.node('#fishingFeedback').hidden,false);
 assert.equal(g.run('fishingTargets().every(f=>!islandPolys.some(p=>inside(f.x,f.y,p)))'),true);
 g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATION)[1];castFishing(f.x,f.y);advanceFishing(FISH_CAST_DURATION);for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}draw();}');assert.equal(g.run('state.catches.salmon'),1);
-g.run('castFishing(10,40);stopFishing();advanceFishing(FISH_CAST_DURATION)');assert.equal(g.run('pendingCast'),null);assert.equal(g.node('#fishing').hidden,true);
-const html=fs.readFileSync('dist/index.html','utf8');assert.doesNotMatch(html,/<dialog id="fishing"/);assert.doesNotMatch(html,/id="fishingWater"/);assert.match(html,/<section id="fishing"/);
+g.run('castFishing(10,40);stopFishing();advanceFishing(FISH_CAST_DURATION)');assert.equal(g.run('pendingCast'),null);assert.equal(g.node('#fishingFeedback').hidden,true);assert.equal(g.node('#stopFishing').hidden,true);
+const html=fs.readFileSync('dist/index.html','utf8');assert.doesNotMatch(html,/<dialog id="fishing"/);assert.doesNotMatch(html,/id="fishingWater"/);assert.doesNotMatch(html,/id="fishing"/);assert.doesNotMatch(html,/id="reelFish"/);
 });
 
+test('fishing supplies work from the travel submenu without starting fishing',()=>{
+const g=game();g.run('state.crystals=30;update();toggleSubmenu("water")');
+assert.equal(g.node('#waterSubmenu').hidden,false);
+g.node('#buyRod').onclick();assert.equal(g.run('state.bait'),5);assert.equal(g.run('state.crystals'),25);
+g.node('#buyLure').onclick();assert.equal(g.run('state.fishingLure'),true);assert.equal(g.run('state.crystals'),5);
+assert.equal(g.run('fishingActive'),false);assert.equal(g.node('#buyRod').hidden,true);
+g.node('#railFishingBtn').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('fishingActive'),true);
+g.node('#stopFishing').onclick();assert.equal(g.run('fishingActive'),false);
+});
+test('inline ferry pass purchases stay in travel and show ownership, active time, and expiry',()=>{
+const g=game();g.run('toggleSubmenu("water");updateWaterControls()');
+assert.equal(g.node('#buyFerryPass').disabled,true);assert.equal(g.node('#useFerryPass').hidden,true);
+const start=g.run('JSON.stringify([player.x,player.y])');
+g.run('state.crystals=50;update()');g.node('#buyFerryPass').onclick();
+assert.equal(g.run('state.crystals'),25);assert.equal(g.run('state.ferryTicket'),true);assert.equal(g.run('state.ferryRemaining'),0);
+assert.equal(g.run('JSON.stringify([player.x,player.y])'),start);assert.equal(g.run('activeSubmenu'),'water');assert.equal(g.run('activeMapPanel'),null);
+assert.equal(g.node('#buyFerryPass').hidden,true);assert.equal(g.node('#useFerryPass').hidden,false);assert.match(g.node('#ferryPassStatus').textContent,/pass ready/);
+g.node('#buyFerryPass').onclick();assert.equal(g.run('state.crystals'),25);
+g.node('#useFerryPass').onclick();assert.equal(g.run('boating'),true);assert.equal(g.run('activeMapPanel'),null);
+g.run('advanceSwimming(1000);updateWaterControls()');assert.match(g.node('#ferryPassStatus').textContent,/4:59 remaining/);
+const restored=game(null,g.snapshot());assert.match(restored.node('#ferryPassStatus').textContent,/Active pass/);
+g.run('state.ferryRemaining=1;advanceSwimming(1);updateWaterControls()');assert.equal(g.node('#buyFerryPass').hidden,false);assert.match(g.node('#ferryPassStatus').textContent,/No ferry pass/);
+});
+test('permanent catch history opens lifetime totals and follows the selected explorer',()=>{
+const g=game({catches:{bass:2,snook:1},sponsorshipAnnounced:true});
+g.node('#catchHistoryBtn').onclick();assert.equal(g.run('activeMapPanel'),'catchHistory');
+assert.equal(g.node('#catchHistory').hidden,false);
+assert.match(g.node('#fishCatchTotal').textContent,/3 fish caught/);assert.match(g.node('#fishBadges').innerHTML,/Snook/);
+g.run("switchAge('9-10')");g.node('#catchHistoryBtn').onclick();assert.match(g.node('#fishCatchTotal').textContent,/3 fish caught/);
+g.run('closeMapPanel()');assert.equal(g.node('#catchHistory').hidden,true);
+g.node('#profileName').value='New angler';g.run('createProfile()');g.node('#catchHistoryBtn').onclick();
+assert.match(g.node('#fishCatchTotal').textContent,/0 fish caught/);assert.doesNotMatch(g.node('#fishBadges').innerHTML,/Lifetime ×/);
+});
 test('full-window map preserves proportions on desktop, portrait, and landscape screens',()=>{
 const g=game();for(const [width,height] of [[1440,900],[390,844],[844,390],[2560,1080]]){
 g.run(`window.innerWidth=${width};window.innerHeight=${height};window.devicePixelRatio=2;resizeMap()`);
@@ -194,7 +254,7 @@ assert.equal(g.run('WORLD.viewWidth<=WORLD.width&&WORLD.viewHeight<=WORLD.height
 });
 test('map menus hand off to activities and fishing clicks use the resized viewport',()=>{
 const g=game();g.node('#settingsBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,false);
-g.node('#fishingBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.run('fishingActive'),true);
+g.node('#railFishingBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.run('fishingActive'),true);
 g.run('window.innerWidth=390;window.innerHeight=844;resizeMap();state.crystals=5;buyRod()');
 g.node('#world').getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});
 const point=g.run('({x:(10-camera.x)/WORLD.viewWidth*390,y:(40-camera.y)/WORLD.viewHeight*844})');
@@ -322,8 +382,8 @@ test('left icon rail toggles nonmodal panels and preserves map actions',()=>{
 const g=game();g.node('#settingsBtn').onclick();assert.equal(g.run('activeMapPanel'),'settingsPanel');assert.equal(g.node('#settingsPanel').hidden,false);
 g.node('#upgradesBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.node('#upgradesPanel').hidden,false);
 g.node('#upgradesBtn').onclick();assert.equal(g.node('#upgradesPanel').hidden,true);assert.equal(g.run('activeMapPanel'),null);
-g.node('#railFerryBtn').onclick();assert.equal(g.node('#ferry').hidden,false);g.run('state.crystals=50;buyFerryTicket()');assert.equal(g.node('#ferry').hidden,false);assert.equal(g.run('state.ferryTicket'),true);
-g.node('#railFishingBtn').onclick();assert.equal(g.node('#ferry').hidden,true);assert.equal(g.run('fishingActive'),true);
+g.run('toggleSubmenu("water");state.crystals=50;buyFerryTicket()');assert.equal(g.run('activeMapPanel'),null);assert.equal(g.run('activeSubmenu'),'water');assert.equal(g.run('state.ferryTicket'),true);
+g.node('#railFishingBtn').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('fishingActive'),true);
 const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/map-icon-rail/);assert.doesNotMatch(html,/id="islandMenu"/);assert.doesNotMatch(html,/<dialog id="(?:journal|stash|ferry|welcome)"/);
 });
 
@@ -377,10 +437,10 @@ g.run('advanceFishing(250);draw()');assert.equal(g.run('fishingCastPose(pendingC
 const pose=g.run('fishingCastPose({...pendingCast,elapsed:FISH_CAST_DURATION})');assert.ok(Math.abs(pose.bait.x-g.run('pendingCast.x'))<.00001);assert.ok(Math.abs(pose.bait.y-g.run('pendingCast.y'))<.00001);
 g.run('advanceFishing(FISH_CAST_DURATION-450)');assert.equal(g.run('totalCatches()'),0);assert.equal(g.run('!!hookedFish'),true);g.run('for(let r=0;r<6;r++){reelFishing();advanceFishing(180);}');assert.equal(g.run('totalCatches()'),1);g.run('advanceFishing(1000)');assert.equal(g.run('fishingSplash'),null);
 });
-test('fish swim smoothly and only surface intermittently in both fishing panels',()=>{
+test('fish swim smoothly and only surface intermittently with bait or automatic lures',()=>{
 const g=game();g.run('openFishing()');
-for(const panel of ['classic','lure']){
-g.run(`fishSet='${panel}'`);
+for(const lure of [false,true]){
+g.run(`state.fishingLure=${lure}`);
 assert.equal(g.run('fishingTargets(800).some(f=>f.surface>0)'),true);
 assert.equal(g.run('fishingTargets(4000)[0].surface'),0);assert.equal(g.run('fishingTargets(4000)[0].nearSurface'),false);
 for(const time of [0,500,1500,3000,6500,9000])g.run(`fishingTime=${time};draw()`);
@@ -1154,17 +1214,17 @@ g.run('advanceSwimming(1000);draw()');assert.equal(g.run('dragonFlight'),null);a
 test('wakeboard costs exactly 25 crystals, cannot be bought twice, and saves per explorer and age',()=>{
 const g=game();g.run('state.crystals=24;buyWakeboard()');assert.equal(g.run('state.wakeboard'),false);assert.equal(g.run('state.crystals'),24);
 g.run('state.crystals=40;buyWakeboard();buyWakeboard()');assert.equal(g.run('state.wakeboard'),true);assert.equal(g.run('state.crystals'),15);
-assert.equal(g.node('#buyWakeboard').disabled,true);assert.equal(g.node('#buyWakeboardDock').disabled,true);
+assert.equal(g.node('#buyWakeboardDock').disabled,true);
 const restored=game(null,g.snapshot());assert.equal(restored.run('state.wakeboard'),true);assert.equal(restored.run('state.crystals'),15);
 g.run("switchAge('7-8')");assert.equal(g.run('state.wakeboard'),false);g.run("switchAge('11-12')");assert.equal(g.run('state.wakeboard'),true);
 g.node('#profileName').value='Board friend';g.run('createProfile()');assert.equal(g.run('state.wakeboard'),false);
 });
 
 test('watersports dock is on Moonwater Island and requires a wakeboard before towing',()=>{
-const g=game();g.node('#visitWatersports').onclick();
+const g=game();g.run('visitWatersportsDock()');
 assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('inside(player.x,player.y,islandPolys[1])'),true);
-assert.equal(g.run('nearby()'),101);g.node('#startWakeboard').onclick();assert.equal(g.run('wakeboardRide'),null);
-g.run('state.crystals=25;buyWakeboard()');g.node('#startWakeboard').onclick();
+assert.equal(g.run('nearby()'),101);g.node('#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide'),null);
+g.run('state.crystals=25;buyWakeboard()');g.node('#mapWakeboardStart').onclick();
 assert.equal(g.run('!!wakeboardRide'),true);assert.equal(g.node('#mapWakeboardStop').hidden,false);assert.match(g.node('#waterControls').textContent,/WAKEBOARD/);
 assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),false);assert.equal(g.run('sponsored()'),false);
 g.run('draw()');
@@ -1243,50 +1303,144 @@ const a=simulate(8),b=simulate(16);assert.ok(Math.hypot(a.x-b.x,a.y-b.y)<3);
 });
 
 test('mainland beach spans the southern world edge, blocks boats, and renders beach life',()=>{
-const g=game();
+const g=game({beachPass:true});
 for(const x of [20,320,1100,2100,3180]){assert.equal(g.run(`canWalk(${x},1760)`),true);assert.ok(g.run(`beachShoreY(${x})`)<1720);}
 g.run('boating=true');assert.equal(g.run('canWalk(1200,1750)'),false);g.run('boating=false;player.x=500;player.y=1740;draw()');
 g.run('const originalUmbrella=beachUmbrella,originalPerson=beachPerson,originalVolley=drawBeachVolleyball,originalEllipse=ellipse;let umbrellas=0,people=0,courts=0,balls=[];beachUmbrella=(...a)=>{umbrellas++;originalUmbrella(...a)};beachPerson=(...a)=>{people++;originalPerson(...a)};drawBeachVolleyball=(...a)=>{courts++;originalVolley(...a)};ellipse=(...a)=>{if(a[4]==="#f9efcf")balls.push(a.slice(0,2));originalEllipse(...a)};frame=0;drawMainlandBeach()');
 assert.ok(g.run('umbrellas')>0);assert.ok(g.run('people')>=4);assert.ok(g.run('courts')>0);const ball=g.run('JSON.stringify(balls[0])');g.run('balls=[];frame=25;drawMainlandBeach()');assert.notEqual(g.run('JSON.stringify(balls[0])'),ball);
 });
-test('anchor costs 50 crystals once and remains owned across ages, resets, and reloads',()=>{
-const g=game();g.run('state.crystals=49;buyAnchor()');assert.equal(g.run('state.anchor'),false);assert.equal(g.run('state.crystals'),49);
-g.run('state.crystals=75;state.earnedCrystals=75;buyAnchor();buyAnchor()');assert.equal(g.run('state.anchor'),true);assert.equal(g.run('state.crystals'),25);assert.equal(g.run('state.earnedCrystals'),75);
-g.run('switchAge("9-10")');assert.equal(g.run('state.anchor'),true);g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.anchor'),true);
-const restored=game(null,g.snapshot());assert.equal(restored.run('state.anchor'),true);
-g.node('#profileName').value='Beach Guest';g.run('createProfile()');assert.equal(g.run('state.anchor'),false);
+test('beach pass gates swimming ashore while ordinary boat anchors remain included',()=>{
+const g=game();g.run('swimming=true');
+assert.equal(g.run('canWalk(1200,1750)'),false);
+g.run('state.crystals=50;buyBeachPass()');assert.equal(g.run('canWalk(1200,1750)'),true);
+const fresh=game();fresh.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=1000;exitBoat()');
+assert.equal(fresh.run('boatAnchorCasting()'),true);assert.equal(fresh.run('state.beachPass'),false);
+});
+test('legacy profile anchor purchases become beach passes without another charge',()=>{
+const g=game(null,{'skyseed-profiles-v1':JSON.stringify({active:'legacy',profiles:[{id:'legacy',name:'Explorer',age:'11-12',anchor:true}]})});
+assert.equal(g.run('state.beachPass'),true);g.run('state.crystals=60;buyBeachPass()');assert.equal(g.run('state.crystals'),60);
+const restored=game(null,g.snapshot());assert.equal(restored.run('currentProfile().beachPass'),true);assert.equal(restored.run('"anchor" in state'),false);
+});
+test('five lifeguard stations cover the whole beach at even intervals',()=>{
+const g=game();const stations=JSON.parse(g.run('JSON.stringify(BEACH_LIFEGUARDS)'));
+assert.equal(stations.length,5);
+const spacing=g.run('WORLD.width/5');
+for(let i=0;i<stations.length;i++){
+assert.equal(stations[i].y,g.run(`beachShoreY(${stations[i].x})+65`));
+assert.equal(stations[i].x,g.run(`WORLD.left+WORLD.width*(${i}+.5)/5`));
+if(i)assert.equal(stations[i].x-stations[i-1].x,spacing);
+}
+g.run('player.x=BEACH_LIFEGUARDS[2].x;player.y=1750;draw()');
+});
+test('unpassed swimmers summon the nearest lifeguard, get a hint, and remain offshore',()=>{
+const g=game();g.run('swimming=true;player.x=BEACH_LIFEGUARDS[2].x+50;player.y=beachShoreY(player.x)-10;advanceBeachLifeguards(16);updateBeachControls()');
+assert.match(g.node('#toast').textContent,/50 crystals.*Fishing & travel/);
+assert.equal(g.node('#mapBeachPass').hidden,false);assert.equal(g.run('beachLifeguards[2].phase'),'descending');
+assert.equal(g.run('beachLifeguards.filter(g=>g.phase!=="seated").length'),1);
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION)');assert.equal(g.run('beachLifeguards[2].phase'),'running');
+g.run('advanceBeachLifeguards(1000);draw()');assert.equal(g.run('beachLifeguards[2].phase'),'waving');
+assert.equal(g.run('beachLifeguards[2].y'),g.run('beachShoreY(beachLifeguards[2].x)+12'));
+g.run('moveExplorer(0,20)');assert.equal(g.run('swimming'),true);assert.equal(g.run('shoreClimb'),null);assert.equal(g.run('onMainlandBeach()'),false);
+g.node('#toast').textContent='unchanged';g.run('advanceBeachLifeguards(16)');assert.equal(g.node('#toast').textContent,'unchanged');
+g.node('#mapBeachPass').onclick();assert.equal(g.run('activeSubmenu'),'water');
+g.run('state.crystals=50;buyBeachPass();advanceBeachLifeguards(16);updateBeachControls()');
+assert.equal(g.node('#mapBeachPass').hidden,true);assert.equal(g.run('beachLifeguards[2].phase'),'returning');
+g.run('advanceBeachLifeguards(1000);advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION)');assert.equal(g.run('beachLifeguards[2].phase'),'seated');
+});
+test('lifeguards face all four travel directions and animate their actual stride',()=>{
+const g=game({beachPass:true});
+for(const [dx,dy,facing] of [[60,0,'left'],[-60,0,'right'],[0,30,'up'],[0,-30,'down']]){
+g.run(`resetBeachLifeguards();const foot${facing}=lifeguardLadderPose(BEACH_LIFEGUARDS[2],1);Object.assign(beachLifeguards[2],{x:foot${facing}.x+${dx},y:foot${facing}.y+${dy},phase:'returning'});advanceBeachLifeguards(16)`);
+assert.equal(g.run('beachLifeguards[2].facing'),facing);assert.ok(g.run('beachLifeguards[2].gait')>0);
+}
+// Each direction has its own visible sprite geometry, including a back without sunglasses.
+const poses=g.run(`(()=>{const originalRect=rect,originalStroke=ctx.stroke,poses=[];for(const face of ['up','down','left','right']){const calls=[];rect=(...a)=>calls.push(a);drawLifeguardSprite(0,0,'skin',face,8);poses.push(JSON.stringify(calls));}rect=originalRect;ctx.stroke=originalStroke;return poses;})()`);
+assert.equal(new Set(poses).size,4);
+});
+test('lifeguards descend along their ladders and return to the foot before climbing up',()=>{
+const g=game();g.run('swimming=true;player.x=BEACH_LIFEGUARDS[2].x+50;player.y=beachShoreY(player.x)-10;advanceBeachLifeguards(16)');
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION/2);draw()');assert.equal(g.run('beachLifeguards[2].phase'),'descending');
+const poses=JSON.parse(g.run('JSON.stringify([0,.5,1].map(t=>lifeguardLadderPose(BEACH_LIFEGUARDS[2],t)))'));
+assert.ok(poses[0].x<poses[1].x&&poses[1].x<poses[2].x);assert.ok(poses[0].y<poses[1].y&&poses[1].y<poses[2].y);
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION/2)');assert.equal(g.run('beachLifeguards[2].phase'),'running');assert.equal(g.run('beachLifeguards[2].x'),poses[2].x);assert.equal(g.run('beachLifeguards[2].y'),poses[2].y);
+g.run('advanceBeachLifeguards(1000);state.beachPass=true;advanceBeachLifeguards(1000)');assert.equal(g.run('beachLifeguards[2].phase'),'ascending');assert.equal(g.run('beachLifeguards[2].x'),poses[2].x);
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION/2);draw()');assert.equal(g.run('beachLifeguards[2].phase'),'ascending');
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION/2)');assert.equal(g.run('beachLifeguards[2].phase'),'seated');assert.equal(g.run('beachLifeguards[2].x'),g.run('BEACH_LIFEGUARDS[2].x'));
+});
+test('real maximum-trim rooster tails can splash seated lifeguards from every boat',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=game({beachPass:true});g.run(`boating=true;activeVessel='${vessel}';player.x=BEACH_LIFEGUARDS[2].x;player.y=beachShoreY(player.x)-50;resetBoatMotion();Object.assign(boatMotion,{heading:-Math.PI/2,trimStep:5,engineStage:'running',throttle:1,velocity:0,power:1});for(let i=0;i<100;i++)advanceBoatSpray(20);`);
+assert.equal(g.run('!!beachLifeguards[2].sprayReaction'),true,`${vessel} should splash the seated guard with emitted droplets`);
+}
+});
+test('boat spray summons a seated lifeguard even with a beach pass and does not restart the reaction',()=>{
+const g=game({beachPass:true});g.run(`boating=true;activeVessel='speedboat';player.x=BEACH_LIFEGUARDS[2].x+50;player.y=beachShoreY(player.x)-50;
+boatMotion.spray=[{x:BEACH_LIFEGUARDS[2].x,y:BEACH_LIFEGUARDS[2].y,vx:0,vy:0,vz:80,gravity:0,age:0,life:1}];advanceBoatSpray(500);`);
+assert.equal(g.run('!!beachLifeguards[2].sprayReaction'),true);assert.equal(g.run('beachLifeguards.filter(g=>g.sprayReaction).length'),1);
+g.run('advanceBeachLifeguards(16)');assert.equal(g.run('beachLifeguards[2].phase'),'descending');
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION);advanceBeachLifeguards(1000);draw()');assert.equal(g.run('beachLifeguards[2].phase'),'waving');assert.equal(g.run('beachLifeguards[2].warning'),'spray');
+const before=g.run('JSON.stringify(beachLifeguards[2])');g.run('sprayBeachLifeguards([{x:beachLifeguards[2].x,y:beachLifeguards[2].y,vx:0,vy:0,vz:20,gravity:0,age:.5,life:1}])');assert.equal(g.run('JSON.stringify(beachLifeguards[2])'),before);
+g.run('advanceBeachLifeguards(12000)');assert.equal(g.run('beachLifeguards[2].sprayReaction'),undefined);assert.equal(g.run('beachLifeguards[2].phase'),'ascending');
+g.run('advanceBeachLifeguards(LIFEGUARD_LADDER_DURATION)');assert.equal(g.run('beachLifeguards[2].phase'),'seated');
+});
+test('lifeguard spray checks reject missed heights and positions and clear on departure or profile changes',()=>{
+const g=game({beachPass:true});g.run(`boating=true;activeVessel='speedboat';player.x=BEACH_LIFEGUARDS[2].x;player.y=beachShoreY(player.x)-50;
+const lifeguardDrop=(dx=0,vz=80,start=0)=>({x:BEACH_LIFEGUARDS[2].x+dx,y:BEACH_LIFEGUARDS[2].y,vx:0,vy:0,vz,gravity:0,age:.5,life:1,lifeguardCheckedAge:start});
+sprayBeachLifeguards([lifeguardDrop(40),lifeguardDrop(0,10),lifeguardDrop(0,200,.4)]);`);
+assert.equal(g.run('beachLifeguards.some(g=>g.sprayReaction)'),false);
+g.node('#challenge').showModal();g.run('sprayBeachLifeguards([lifeguardDrop()])');assert.equal(g.run('beachLifeguards.some(g=>g.sprayReaction)'),false);g.node('#challenge').close();
+g.run('sprayBeachLifeguards([lifeguardDrop()]);advanceBeachLifeguards(16)');const before=g.run('JSON.stringify(beachLifeguards)');
+g.node('#challenge').showModal();g.run('advanceBeachLifeguards(1000)');assert.equal(g.run('JSON.stringify(beachLifeguards)'),before);g.node('#challenge').close();
+g.run('player.y-=400;advanceBeachLifeguards(16)');assert.equal(g.run('beachLifeguards.some(g=>g.sprayReaction)'),false);
+g.run('player.y+=400;sprayBeachLifeguards([lifeguardDrop()]);switchAge("9-10")');assert.equal(g.run('beachLifeguards.some(g=>g.sprayReaction)'),false);
+});
+test('lifeguard reminders rearm after leaving, respect passes and boats, pause, and reset',()=>{
+const g=game();g.run('boating=true;player.x=BEACH_LIFEGUARDS[0].x;player.y=beachShoreY(player.x)-60;advanceBeachLifeguards(16)');
+assert.equal(g.run('beachPassHintShown'),true);assert.equal(g.run('beachLifeguards.every(g=>g.phase==="seated")'),true);
+g.run('player.y-=300;advanceBeachLifeguards(16)');assert.equal(g.run('beachPassHintShown'),false);
+g.run('boating=false;swimming=true;player.y=beachShoreY(player.x)-10;advanceBeachLifeguards(16)');
+const before=g.run('JSON.stringify(beachLifeguards)');g.node('#challenge').showModal();g.run('advanceBeachLifeguards(1000)');assert.equal(g.run('JSON.stringify(beachLifeguards)'),before);g.node('#challenge').close();
+g.run('switchAge("9-10")');assert.equal(g.run('beachPassHintShown'),false);assert.equal(g.run('beachLifeguards.every(g=>g.phase==="seated")'),true);
+g.run('state.beachPass=true;swimming=true;player.x=BEACH_LIFEGUARDS[1].x;player.y=beachShoreY(player.x)-10;advanceBeachLifeguards(1000)');assert.equal(g.run('beachPassHintShown'),false);assert.equal(g.run('beachLifeguards.every(g=>g.phase==="seated")'),true);
+});
+test('beach pass costs 50 crystals once and remains owned across ages, resets, and reloads',()=>{
+const g=game();g.run('state.crystals=49;buyBeachPass()');assert.equal(g.run('state.beachPass'),false);assert.equal(g.run('state.crystals'),49);
+g.run('state.crystals=75;state.earnedCrystals=75;buyBeachPass();buyBeachPass()');assert.equal(g.run('state.beachPass'),true);assert.equal(g.run('state.crystals'),25);assert.equal(g.run('state.earnedCrystals'),75);
+g.run('switchAge("9-10")');assert.equal(g.run('state.beachPass'),true);g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.beachPass'),true);
+const restored=game(null,g.snapshot());assert.equal(restored.run('state.beachPass'),true);
+g.node('#profileName').value='Beach Guest';g.run('createProfile()');assert.equal(g.run('state.beachPass'),false);
 });
 test('ferry and fishing boat can anchor near the beach, enter it, and return to the same vessel',()=>{
 for(const vessel of ['fishing','ferry']){
-const g=game();g.run(`state.crystals=50;buyAnchor();state.catches={barracuda:5};state.ferryTicket=true;${vessel==='ferry'?'boardFerry()':'launchBoat()'};player.x=1200;player.y=beachShoreY(1200)-70;boatMotion.heading=.8;updateWaterControls()`);
+const g=game();g.run(`state.crystals=50;buyBeachPass();state.catches={barracuda:5};state.ferryTicket=true;${vessel==='ferry'?'boardFerry()':'launchBoat()'};player.x=1200;player.y=beachShoreY(1200)-70;boatMotion.heading=.8;updateWaterControls()`);
 assert.equal(g.node('#mapAnchor').hidden,false);const parked=g.run('JSON.stringify([player.x,player.y])');g.run('anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');assert.equal(g.run('boating'),false);assert.equal(g.run('!!beachTransfer'),true);assert.equal(g.run('state.beachAnchor.vessel'),vessel);
 g.run('advanceSwimming(450);draw()');const midway=g.run('JSON.stringify([player.x,player.y])');g.run('moveExplorer(50,0)');assert.equal(g.run('JSON.stringify([player.x,player.y])'),midway);
 g.run('advanceSwimming(450);draw()');assert.equal(g.run('beachTransfer'),null);assert.equal(g.run('onMainlandBeach()'),true);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),true);assert.equal(g.node('#mapBeachBoat').hidden,false);assert.equal(g.run('JSON.stringify([boatPosition.x,boatPosition.y])'),parked);
 g.run('returnToAnchoredBoat();advanceSwimming(900);draw()');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),vessel);assert.equal(g.run('state.beachAnchor'),null);assert.equal(g.run('boatMotion.heading'),.8);assert.equal(g.run('JSON.stringify([player.x,player.y])'),parked);
 }
 });
-test('beach anchoring needs an owned anchor and a nearby coastline, and survives reload mid-transfer',()=>{
-const g=game();g.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=beachShoreY(1200)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');assert.equal(g.run('boating'),true);assert.equal(g.run('beachTransfer'),null);assert.equal(g.run('activeMapPanel'),'gearPanel');
-g.run('state.crystals=50;buyAnchor();player.y=1000;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');assert.equal(g.run('beachTransfer'),null);
+test('beach anchoring needs a beach pass and a nearby coastline, and survives reload mid-transfer',()=>{
+const g=game();g.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=beachShoreY(1200)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');assert.equal(g.run('boating'),true);assert.equal(g.run('beachTransfer'),null);assert.equal(g.run('activeSubmenu'),'water');
+g.run('state.crystals=50;buyBeachPass();player.y=1000;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');assert.equal(g.run('beachTransfer'),null);
 g.run('player.y=beachShoreY(1200)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(200);save()');
-const restored=game(null,g.snapshot());assert.equal(restored.run('onMainlandBeach()'),true);assert.equal(restored.run('activeVessel'),'ferry');assert.equal(restored.run('canReturnToAnchoredBoat()'),true);assert.equal(restored.run('state.anchor'),true);
+const restored=game(null,g.snapshot());assert.equal(restored.run('onMainlandBeach()'),true);assert.equal(restored.run('activeVessel'),'ferry');assert.equal(restored.run('canReturnToAnchoredBoat()'),true);assert.equal(restored.run('state.beachPass'),true);
 restored.run('returnToAnchoredBoat();advanceSwimming(900)');assert.equal(restored.run('boating'),true);
 });
 
-test('an anchor from any older age save becomes permanent profile gear and cannot be charged twice',()=>{
+test('an anchor from any older age save becomes a permanent profile beach pass and cannot be charged twice',()=>{
 const g=game(null,{'skyseed-v1-5-6':JSON.stringify({solved:[],upgrades:[],anchor:true})});
-assert.equal(g.run('state.anchor'),true);assert.equal(g.run('currentProfile().anchor'),true);
+assert.equal(g.run('state.beachPass'),true);assert.equal(g.run('currentProfile().beachPass'),true);
 for(const age of ['5-6','7-8','9-10','11-12']){
-g.run(`switchAge('${age}');state.crystals=60;buyAnchor()`);assert.equal(g.run('state.anchor'),true);assert.equal(g.run('state.crystals'),60);
+g.run(`switchAge('${age}');state.crystals=60;buyBeachPass()`);assert.equal(g.run('state.beachPass'),true);assert.equal(g.run('state.crystals'),60);
 }
-g.run('state.anchor=false;save()');assert.equal(g.run('state.anchor'),true);
-g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.anchor'),true);
-const restored=game(null,g.snapshot());assert.equal(restored.run('state.anchor'),true);assert.match(restored.node('#anchorInfo').textContent,/Permanently yours/);
-g.node('#profileName').value='New sailor';g.run('createProfile()');assert.equal(g.run('state.anchor'),false);g.run("switchProfile('legacy')");assert.equal(g.run('state.anchor'),true);
+g.run('state.beachPass=false;save()');assert.equal(g.run('state.beachPass'),true);
+g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.beachPass'),true);
+const restored=game(null,g.snapshot());assert.equal(restored.run('state.beachPass'),true);assert.match(restored.node('#beachPassInfo').textContent,/Permanent beach access/);
+g.node('#profileName').value='New sailor';g.run('createProfile()');assert.equal(g.run('state.beachPass'),false);g.run("switchProfile('legacy')");assert.equal(g.run('state.beachPass'),true);
 });
 
 test('all three beach courts let the selected character join a bounded doubles match',()=>{
-const g=game();g.run('startVolleyball(0)');assert.equal(g.run('volleyball'),null);
+const g=game({beachPass:true});g.run('startVolleyball(0)');assert.equal(g.run('volleyball'),null);
 for(let index=0;index<3;index++){
 g.run(`player.x=VOLLEYBALL_COURTS[${index}].x+20;player.y=VOLLEYBALL_COURTS[${index}].y+50;tick(16)`);
 assert.equal(g.run('near'),200+index);assert.match(g.node('#interaction').innerHTML,/Play beach volleyball/);
@@ -1319,7 +1473,7 @@ g.run('hitVolleyball()');assert.equal(g.run('volleyball.phase'),'serve');assert.
 });
 
 test('volleyball keeps anchored-boat access, saves safely, and clears on profile changes',()=>{
-const g=game();g.run('state.crystals=50;buyAnchor();state.ferryTicket=true;boardFerry();player.x=500;player.y=beachShoreY(500)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);startVolleyball(0);draw()');
+const g=game();g.run('state.crystals=50;buyBeachPass();state.ferryTicket=true;boardFerry();player.x=500;player.y=beachShoreY(500)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);startVolleyball(0);draw()');
 assert.equal(g.run('!!volleyball'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),false);
 const x=g.run('player.x');g.run('returnToAnchoredBoat();visit(0);openFishing();openFerry()');assert.equal(g.run('player.x'),x);
 g.run('save()');const restored=game(null,g.snapshot());assert.equal(restored.run('volleyball'),null);assert.equal(restored.run('canReturnToAnchoredBoat()'),true);
@@ -1327,7 +1481,7 @@ g.run('leaveVolleyball()');assert.equal(g.run('canReturnToAnchoredBoat()'),true)
 g.run('startVolleyball(0)');g.node('#profileName').value='Beach teammate';g.run('createProfile()');assert.equal(g.run('volleyball'),null);assert.equal(g.node('#volleyballHud').hidden,true);
 });
 
-function surfGame(){const g=game();g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;state.crystals=20;rentSurfboard();startSurfing()');return g;}
+function surfGame(){const g=game({beachPass:true});g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;state.crystals=20;rentSurfboard();startSurfing()');return g;}
 test('surf shack rents one board for exactly 20 crystals and requires returning it before charging again',()=>{
 const g=game();g.run('state.crystals=25;rentSurfboard()');assert.equal(g.run('state.surfRental'),false);
 g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;state.crystals=19;rentSurfboard()');assert.equal(g.run('state.surfRental'),false);
@@ -1385,7 +1539,7 @@ g.run('switchAge("9-10")');assert.equal(g.run('surfSession'),null);assert.equal(
 g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;startSurfing()');g.node('#profileName').value='New Surfer';g.run('createProfile()');assert.equal(g.run('surfSession'),null);assert.equal(g.run('state.surfRental'),false);
 });
 test('surfing leaves an anchored ferry and the return-to-boat route intact',()=>{
-const g=game();g.run('state.ferryTicket=true;state.crystals=70;buyAnchor();boardFerry();player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-50;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);rentSurfboard();startSurfing();keys.add("up");advanceSurfing(1000);stopSurfing()');assert.equal(g.run('onMainlandBeach()'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),true);assert.equal(g.run('state.surfRental'),true);g.run('returnToAnchoredBoat();advanceSwimming(900)');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),'ferry');
+const g=game();g.run('state.ferryTicket=true;state.crystals=70;buyBeachPass();boardFerry();player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-50;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);rentSurfboard();startSurfing();keys.add("up");advanceSurfing(1000);stopSurfing()');assert.equal(g.run('onMainlandBeach()'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),true);assert.equal(g.run('state.surfRental'),true);g.run('returnToAnchoredBoat();advanceSwimming(900)');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),'ferry');
 });
 
 test('settings admin override requires the password for each 1000-crystal grant',()=>{
@@ -1463,7 +1617,7 @@ g.run('moveFrisbeePlayer(frisbeeGame.disc.to.x-player.x,frisbeeGame.disc.to.y-pl
 });
 
 test('frisbee sessions preserve anchored-boat access and clear on reload or player changes',()=>{
-const g=game();g.run('state.crystals=50;buyAnchor();state.ferryTicket=true;boardFerry();player.x=240;player.y=beachShoreY(240)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);startFrisbee(0);draw()');
+const g=game();g.run('state.crystals=50;buyBeachPass();state.ferryTicket=true;boardFerry();player.x=240;player.y=beachShoreY(240)-60;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);startFrisbee(0);draw()');
 assert.equal(g.run('!!frisbeeGame'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),false);
 const x=g.run('player.x');g.run('returnToAnchoredBoat();visit(0);openFerry();openFishing()');assert.equal(g.run('player.x'),x);
 g.run('save()');const restored=game(null,g.snapshot());assert.equal(restored.run('frisbeeGame'),null);assert.equal(restored.run('canReturnToAnchoredBoat()'),true);
@@ -1685,7 +1839,7 @@ for(let j=0;j<8;j++)assert.equal(g.run(`sharkWater(${target.x}+Math.cos(${j}*Mat
 }
 });
 test('beach moorings preserve the offshore anchor point and automatically haul it aboard after reload',()=>{
-const g=game();g.run('state.crystals=50;buyAnchor();state.ferryTicket=true;boardFerry();player.x=1200;player.y=beachShoreY(1200)-70;anchorBoatAtBeach();advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);save()');
+const g=game();g.run('state.crystals=50;buyBeachPass();state.ferryTicket=true;boardFerry();player.x=1200;player.y=beachShoreY(1200)-70;anchorBoatAtBeach();advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);save()');
 const point=g.run('JSON.stringify(state.beachAnchor.anchorPoint)');assert.ok(g.run('Math.hypot(boatAnchor.x-boatPosition.x,boatAnchor.y-boatPosition.y)>=72'));
 const restored=game(null,g.snapshot());assert.equal(restored.run('JSON.stringify({x:boatAnchor.x,y:boatAnchor.y})'),point);
 restored.run('returnToAnchoredBoat();advanceSwimming(900);draw()');assert.equal(restored.run('boatAnchor.retrieving'),true);
@@ -2496,29 +2650,46 @@ g.run("switchAge('7-8')");assert.equal(g.run('state.waterskis'),false);g.run("sw
 g.node('#profileName').value='Skier';g.run('createProfile()');assert.equal(g.run('state.waterskis'),false);
 });
 
-test('dock asks owners of both to choose equipment and launches either selection',()=>{
+test('watersports dock offers separate owned-equipment actions that launch directly',()=>{
 for(const equipment of ['wakeboard','waterskis']){
-const g=game();g.run('state.wakeboard=true;state.waterskis=true;visitWatersportsDock();near=101;interact()');
-assert.equal(g.run('wakeboardRide'),null);assert.equal(g.node('#watersportsPanel').hidden,false);assert.equal(g.node('#watersportsChoice').hidden,false);
-g.node(equipment==='waterskis'?'#startWaterskis':'#startWakeboard').onclick();assert.equal(g.run('wakeboardRide.equipment'),equipment);
+const g=game();g.run('state.wakeboard=true;state.waterskis=true;visitWatersportsDock();tick(16)');
+assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('activeMapPanel'),null);
+assert.equal(g.node('#mapWakeboardStart').hidden,false);assert.equal(g.node('#mapWaterskisStart').hidden,false);assert.equal(g.node('#interaction').innerHTML,'');
+g.node(equipment==='waterskis'?'#mapWaterskisStart':'#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide.equipment'),equipment);
 g.run('advanceSwimming(400);draw();save()');assert.equal(g.run('!!wakeboardRide'),true);assert.equal(g.run('canWalk(state.x,state.y)'),true);
 g.run('finishWakeboarding();advanceSwimming(350);draw();advanceSwimming(350)');assert.equal(g.run('swimming'),true);
 }
 });
 
+test('watersports menu only purchases equipment and dock shortcuts launch the matching ride',()=>{
+for(const [equipment,key] of [['wakeboard','e'],['waterskis','r']]){
+const g=game();g.run('state.crystals=125');g.run('openWatersports()');assert.equal(g.run('activeSubmenu'),'water');assert.equal(g.run('activeMapPanel'),null);
+g.node('#buyWakeboardDock').onclick();g.node('#buyWaterskisDock').onclick();
+assert.equal(g.run('state.crystals'),0);assert.equal(g.run('wakeboardRide'),null);
+g.run('visitWatersportsDock();const sportKey=(key,repeat=false)=>window.listeners.keydown.find(l=>!l.capture).handler({key,repeat,target:{tagName:"CANVAS"},preventDefault(){}})');
+g.run(`sportKey('${key}',true)`);assert.equal(g.run('wakeboardRide'),null);
+g.run(`sportKey('${key}')`);assert.equal(g.run('wakeboardRide.equipment'),equipment);
+assert.equal(g.node('#mapWakeboardStart').hidden,true);assert.equal(g.node('#mapWaterskisStart').hidden,true);
+g.run('finishWakeboarding();advanceSwimming(700);swimming=false;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;updateWakeboardUI()');
+assert.equal(g.node('#mapWakeboardStart').disabled,true);assert.equal(g.node('#mapWaterskisStart').disabled,true);
+g.run(`sportKey('${key}')`);assert.equal(g.run('wakeboardRide'),null);
+}
+const html=fs.readFileSync('dist/index.html','utf8');const panel=html.match(/<section id="waterSubmenu"[\s\S]*?<\/section>/)[0];assert.doesNotMatch(html,/id="watersportsPanel"/);
+assert.doesNotMatch(panel,/id="(?:startWakeboard|startWaterskis|visitWatersports|watersportsChoice)"/);
+});
 test('waterskis alone can launch from the dock and map action, and unowned gear cannot launch',()=>{
 const g=game();g.run("visitWatersportsDock();startWakeboarding('waterskis')");assert.equal(g.run('wakeboardRide'),null);
-g.run('state.waterskis=true;updateWakeboardUI()');assert.equal(g.node('#mapWakeboardStart').hidden,false);
-g.node('#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide.equipment'),'waterskis');assert.match(g.node('#waterControls').textContent,/WATERSKIS/);
-const h=game();h.run('state.waterskis=true;visitWatersportsDock();near=101;interact()');assert.equal(h.run('wakeboardRide.equipment'),'waterskis');
+g.run('state.waterskis=true;closeMapPanel();updateWakeboardUI()');assert.equal(g.node('#mapWakeboardStart').hidden,true);assert.equal(g.node('#mapWaterskisStart').hidden,false);
+g.node('#mapWaterskisStart').onclick();assert.equal(g.run('wakeboardRide.equipment'),'waterskis');assert.match(g.node('#waterControls').textContent,/WATERSKIS/);
+const h=game();h.run('state.waterskis=true;visitWatersportsDock();window.listeners.keydown.find(l=>!l.capture).handler({key:"r",repeat:false,target:{tagName:"CANVAS"},preventDefault(){}})');assert.equal(h.run('wakeboardRide.equipment'),'waterskis');
 });
 
 test('speedboat dock unlocks at 100 earned crystals for free and stays with its explorer',()=>{
 const g=game();g.run('state.crystals=99;state.earnedCrystals=99;update();launchSpeedboat()');
-assert.equal(g.run('speedboatUnlocked()'),false);assert.equal(g.run('boating'),false);assert.equal(g.node('#gearLaunchSpeedboat').hidden,true);
+assert.equal(g.run('speedboatUnlocked()'),false);assert.equal(g.run('boating'),false);
 assert.equal(g.run('activePiers().includes(speedboatPier)'),false);
 g.run('state.earnedCrystals=100;update()');assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.crystals'),99);
-assert.equal(g.node('#gearLaunchSpeedboat').hidden,false);assert.equal(g.run('activePiers().includes(speedboatPier)'),true);
+assert.equal(g.run('activePiers().includes(speedboatPier)'),true);
 g.run('state.crystals=0;save();switchAge("7-8")');assert.equal(g.run('speedboatUnlocked()'),true);
 g.node('#resetConfirm').open=true;g.node('#confirmReset').onclick();assert.equal(g.run('speedboatUnlocked()'),true);
 const restored=game(undefined,g.snapshot());assert.equal(restored.run('speedboatUnlocked()'),true);
@@ -2571,7 +2742,7 @@ g.run('launchSpeedboat();player.x=1200;player.y=beachShoreY(1200)-70;boatMotion.
 assert.equal(g.run('onMainlandBeach()'),true);assert.equal(g.run('state.beachAnchor.vessel'),'speedboat');
 const restored=game(undefined,g.snapshot());assert.equal(restored.run('activeVessel'),'speedboat');assert.equal(restored.run('canReturnToAnchoredBoat()'),true);
 restored.run('returnToAnchoredBoat();advanceSwimming(900)');assert.equal(restored.run('boating'),true);assert.equal(restored.run('activeVessel'),'speedboat');
-restored.run('advanceSwimming(ANCHOR_RETRIEVE_DURATION);openFishing()');assert.match(restored.node('#fishingPlace').textContent,/SPEEDBOAT/);
+restored.run('advanceSwimming(ANCHOR_RETRIEVE_DURATION);openFishing()');assert.equal(restored.run('activeVessel'),'speedboat');assert.equal(restored.node('#stopFishing').hidden,false);
 });
 
 
@@ -2579,9 +2750,9 @@ test('existing crystal balances unlock the speedboat without changing lifetime r
 for(const balance of [100,150,500,900,1000]){
 const g=game({solved:[],upgrades:[],crystals:balance,earnedCrystals:0});
 assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.crystals'),balance);assert.equal(g.run('state.earnedCrystals'),0);
-assert.equal(g.run('activePiers().includes(speedboatPier)'),true);assert.equal(g.node('#gearLaunchSpeedboat').hidden,false);
-assert.match(g.node('#gearSpeedboatStatus').textContent,/southeast/);
-g.node('#gearLaunchSpeedboat').onclick();assert.equal(g.run('activeVessel'),'speedboat');assert.equal(g.run('boating'),true);
+assert.equal(g.run('activePiers().includes(speedboatPier)'),true);
+
+g.run('launchSpeedboat()');assert.equal(g.run('activeVessel'),'speedboat');assert.equal(g.run('boating'),true);
 g.run('state.crystals=0;save()');assert.equal(game(undefined,g.snapshot()).run('speedboatUnlocked()'),true);
 }
 });
@@ -2589,7 +2760,7 @@ g.run('state.crystals=0;save()');assert.equal(game(undefined,g.snapshot()).run('
 test('admin crystal grants unlock the speedboat without awarding lifetime squishies',()=>{
 const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');
 assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.earnedCrystals'),0);assert.equal(g.run('earnedSquishies()'),0);
-assert.equal(g.node('#gearLaunchSpeedboat').hidden,false);
+
 });
 
 
@@ -2741,11 +2912,14 @@ g.node('#nextQuestion').onclick();assert.equal(g.run('active'),101);
 });
 
 
-test('the fishing boat is berthed at the fishing dock, boards there and returns to a walkable landing',()=>{
+test('the fishing boat launches from normal dock actions and returns to a walkable landing',()=>{
 const g=game({solved:[],upgrades:[],catches:{shark:5},sponsorshipAnnounced:true});
 assert.ok(g.run('Math.hypot(fishingBoatPosition.x-fishingDock.x,fishingBoatPosition.y-fishingDock.y)')<45);
 assert.equal(g.run("boatPoseClear(boatPosition.x,boatPosition.y,0,'fishing')"),true);
-g.run('openFishing()');assert.equal(g.node('#fishingLaunchBoat').hidden,false);g.node('#fishingLaunchBoat').onclick();
+assert.equal(g.node('#mapFishingBoat').hidden,true);
+g.run('player.x=fishingDock.x;player.y=fishingDock.y-8;updateWaterControls()');
+assert.equal(g.run('fishingActive'),false);assert.equal(g.node('#mapFishingBoat').hidden,false);g.node('#mapFishingBoat').onclick();
+assert.equal(g.node('#mapFishingBoat').hidden,true);
 assert.equal(g.run('boating'),true);assert.equal(g.run('fishingActive'),false);
 assert.ok(g.run('Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)')<45);
 g.run('exitBoat()');assert.equal(g.run('swimming'),false);assert.equal(g.run('player.x'),g.run('fishingDock.x'));assert.equal(g.run('canWalk(player.x,player.y)'),true);
@@ -2797,11 +2971,11 @@ g.run('state.catches={bass:5};state.sponsorshipAnnounced=true;currentProfile().f
 g.run('returnBoat();state.speedboat=true;currentProfile().fuel.speedboat=10;launchSpeedboat()');assert.equal(g.run('currentProfile().fuel.speedboat'),10+reserve-1);assert.equal(g.run('currentProfile().reserveGas'),0);
 });
 
-test('all twelve fish follow shore tackle and boat depth, with speedboat-only deep access',()=>{
+test('fish depend on location rather than tackle, with speedboat-only deep access',()=>{
 const g=game();
 for(const [setup,expected] of [
-['boating=false;fishSet="classic"',['bass','salmon','catfish']],
-['boating=false;fishSet="lure"',['snook','redfish','trout']],
+['boating=false;state.fishingLure=false',['bass','salmon','catfish']],
+['boating=false;state.fishingLure=true',['bass','salmon','catfish']],
 ['boating=true;activeVessel="ferry";player.x=600;player.y=350',['tarpon','wahoo','kingfish']],
 ['boating=true;activeVessel="fishing";player.x=600;player.y=350',['tarpon','wahoo','kingfish']],
 ['boating=true;activeVessel="speedboat";player.x=600;player.y=350',['tarpon','wahoo','kingfish']],
@@ -2861,7 +3035,7 @@ const g=game();g.run('boating=true;activeVessel="speedboat";player.x=WORLD.left+
 
 test('boarding either owned boat at its dock hints when tank and reserve are empty',()=>{
 for(const vessel of ['fishing','speedboat']){
-const g=game();g.run(`state.catches={bass:5};state.sponsorshipAnnounced=true;state.speedboat=true;currentProfile().fuel.${vessel}=0;currentProfile().reserveGas=0;player.x=${vessel==='fishing'?'fishingDock':'SPEEDBOAT_DOCK'}.x;player.y=${vessel==='fishing'?'fishingDock':'SPEEDBOAT_DOCK'}.y;near=nearby();interact();${vessel==='fishing'?'$("#fishingLaunchBoat").onclick()':''}`);
+const g=game();g.run(`state.catches={bass:5};state.sponsorshipAnnounced=true;state.speedboat=true;currentProfile().fuel.${vessel}=0;currentProfile().reserveGas=0;player.x=${vessel==='fishing'?'fishingDock':'SPEEDBOAT_DOCK'}.x;player.y=${vessel==='fishing'?'fishingDock':'SPEEDBOAT_DOCK'}.y;near=nearby();interact();${vessel==='fishing'?'$("#mapFishingBoat").onclick()':''}`);
 assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),vessel);assert.equal(g.run('boatMotion.engineStage'),'off');assert.match(g.node('#toast').textContent,/Out of gas! Press F to catch fish and refill your tank/);
 g.run('openFishing()');assert.equal(g.run('fishingActive'),true);
 }
@@ -2878,7 +3052,7 @@ test('full profile reset clears every age and permanent rewards while preserving
 const g=game();
 g.node('#profileName').value='Other player';g.run('createProfile();state.crystals=37;save();switchProfile("legacy")');
 g.node('#profileName').value='Maya';g.node('#characterChoice').value='girl';g.run('editProfile()');
-g.run(`for(const level of AGE_LEVELS){switchAge(level);state.solved=[0,1];state.crystals=150;state.earnedCrystals=200;state.upgrades=['cottage'];state.anchor=true;state.speedboat=true;state.wakeboard=true;state.waterskis=true;state.surfBest=99;state.catches={shark:2};state.tradingTickets=5;save();}currentProfile().lifetimeCatches={shark:8};currentProfile().reserveGas=75;currentProfile().fuel={fishing:0,speedboat:3};state.power=0;save();adminMode=true;boating=true;swimming=true;pendingCast={};`);
+g.run(`for(const level of AGE_LEVELS){switchAge(level);state.solved=[0,1];state.crystals=150;state.earnedCrystals=200;state.upgrades=['cottage'];state.beachPass=true;state.speedboat=true;state.wakeboard=true;state.waterskis=true;state.surfBest=99;state.catches={shark:2};state.tradingTickets=5;save();}currentProfile().lifetimeCatches={shark:8};currentProfile().reserveGas=75;currentProfile().fuel={fishing:0,speedboat:3};state.power=0;save();adminMode=true;boating=true;swimming=true;pendingCast={};`);
 g.node('#resetProfile').onclick();assert.match(g.node('#profileActionTitle').textContent,/Reset Maya to zero/);
 g.node('#confirmProfileAction').onclick();
 assert.equal(g.run('profileId'),'legacy');assert.equal(g.run('currentProfile().name'),'Maya');assert.equal(g.run('currentProfile().character'),'girl');assert.equal(g.run('ageLevel'),'11-12');
@@ -2888,7 +3062,7 @@ const reloaded=game(null,g.snapshot());
 for(const level of ['5-6','7-8','9-10','11-12']){
 reloaded.run(`switchAge('${level}')`);
 assert.equal(reloaded.run('state.crystals+state.earnedCrystals+state.solved.length+state.upgrades.length+state.tradingTickets+state.surfBest'),0);
-assert.equal(reloaded.run('state.anchor||state.speedboat||state.wakeboard||state.waterskis'),false);assert.equal(reloaded.run('state.catches.shark'),0);assert.equal(reloaded.run('state.squishyInventory.length'),0);
+assert.equal(reloaded.run('state.beachPass||state.speedboat||state.wakeboard||state.waterskis'),false);assert.equal(reloaded.run('state.catches.shark'),0);assert.equal(reloaded.run('state.squishyInventory.length'),0);
 }
 reloaded.run('switchProfile("p1")');assert.equal(reloaded.run('state.crystals'),37);
 });
@@ -2907,7 +3081,7 @@ const reloaded=game(null,g.snapshot());assert.equal(reloaded.run('profiles.lengt
 test('deleting the final profile creates a fresh explorer without restoring legacy saves',()=>{
 const g=game({solved:[0],upgrades:['cottage'],crystals:50,anchor:true});
 g.node('#deleteProfile').onclick();assert.match(g.node('#profileActionDescription').textContent,/fresh Explorer/);g.node('#confirmProfileAction').onclick();
-assert.equal(g.run('profiles.length'),1);assert.equal(g.run('currentProfile().name'),'Explorer');assert.equal(g.run('state.crystals'),0);assert.equal(g.run('state.anchor'),false);
+assert.equal(g.run('profiles.length'),1);assert.equal(g.run('currentProfile().name'),'Explorer');assert.equal(g.run('state.crystals'),0);assert.equal(g.run('state.beachPass'),false);
 g.run('update();save()');const reloaded=game(null,g.snapshot());assert.equal(reloaded.run('profileId'),g.run('profileId'));assert.equal(reloaded.run('state.solved.length'),0);
 });
 

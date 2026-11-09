@@ -2,7 +2,7 @@
 
 ## Code map and integration
 
-In `dist/app.js`: `nearWatersportsDock()`, `chooseWatersports()`, `buyWakeboard()`,
+In `dist/app.js`: `nearWatersportsDock()`, `updateWakeboardUI()`, `startWakeboarding()`, `buyWakeboard()`,
 `buyWaterskis()`, `advanceWakeboarding()`, `finishWakeboarding()`, `resetWatersports()`,
 `startVolleyball()`, `hitVolleyball()`, `advanceVolleyball()`, `leaveVolleyball()`,
 `resetVolleyball()`, `startFrisbee()`, `frisbeeAction()`, `advanceFrisbee()`, `leaveFrisbee()`,
@@ -18,9 +18,12 @@ Surfing has its own [document](surfing.md). Boat access and beach anchoring are 
 
 ## Watersports
 
-Buy waterskis for 100 crystals or a wakeboard for 25 crystals in Island upgrades or Fishing & travel
-→ Watersports dock. Press E at the Moonwater dock to ride; if you own both, choose which equipment
-to use. Waterskis appear as twin skis and use the same towing controls. Both purchases save per
+Buy waterskis for 100 crystals or a wakeboard for 25 crystals in Fishing & travel
+beneath the Watersports equipment heading, alongside owned status. Purchases stay in this menu;
+there is no separate equipment popup. Watersports gear is not listed in Island upgrades. At the Moonwater dock,
+normal bottom-screen actions show Start wakeboarding (E) for an owned wakeboard and Start
+waterskiing (R) for owned waterskis. Both actions appear when both are owned; either launches
+directly without an equipment chooser. Actions disable while the tow boat returns or is exploding. Waterskis appear as twin skis and use the same towing controls. Both purchases save per
 explorer and age level. The boat automatically follows the center of the island channel to a
 repeating open-water circuit with over 200 pixels of island clearance. WASD/arrows control the
 wakeboarder; momentum and stern-mounted rope tension carry the rider through turns. X / Finish

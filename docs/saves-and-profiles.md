@@ -19,7 +19,7 @@ origin retains access to saves; a different origin has separate storage. Failed 
 | Legacy explorer age saves | `skyseed-v1` for 11–12; `skyseed-v1-${age}` for other ages |
 | Other explorer age saves | `skyseed-profile-${id}-${age}` |
 | Legacy age preference | `skyseed-age`; selected age is also kept in each profile |
-| Explorer across ages/adventure resets | Name, character, selected age, anchor, speedboat unlock, energy, lifetime fish, fishing/speedboat fuel tanks, reserve gas |
+| Explorer across ages/adventure resets | Name, character, selected age, beach pass, speedboat unlock, energy, lifetime fish, fishing/speedboat fuel tanks, reserve gas |
 | Per explorer and age | Solved IDs, crystals, earned reward total, upgrades, collection inventory/tickets, bait/lure, sponsorship progress, watersports gear, surf rental/best score, island visits and saved travel state |
 | Session only | Active mini-game simulation, creature rides, effects, admin unlimited-energy mode |
 
@@ -49,7 +49,10 @@ Start again option still resets only the current adventure.
   progress when changing curriculum. `loadProgress()` filters and deduplicates valid IDs.
 - `travelRules: 2` marks single-ride ferry saves. Old permanent passes are discarded;
   `loadProgress()` clears old ticket ownership and does not convert it into a free ride.
-- Anchor and speedboat ownership migrate from any age save to the explorer. Full reset removes
+- Beach pass and speedboat ownership migrate from any age save to the explorer. Legacy purchased
+  anchors (`anchor: true`) in either a profile or age save become permanent beach passes
+  (`beachPass: true`) without charging again. New saves use `beachPass`; anchoring itself is basic
+  boat equipment. Full reset removes
   all age saves before loading fresh state so permanent gear cannot migrate back.
 - Lifetime catch counts migrate once from age saves when the profile lacks lifetime totals.
   Subsequent catches update both the age count and explorer lifetime count.

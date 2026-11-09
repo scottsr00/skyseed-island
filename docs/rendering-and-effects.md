@@ -17,7 +17,9 @@ pixel contours.
 
 Full-window browser map with responsive camera proportions, floating crystal/status displays, a
 left-side rail of flat pixel-art icons, grouped submenus, and nonmodal map panels, and fishing
-controls over the map.
+actions over the map. Permanent bottom-left fish and chest icons open lifetime catch history and the secret stash; fishing
+supplies live beneath Go fishing in the Fishing & travel submenu. Cast feedback sits above the
+normal suggested actions, with no fishing popup panel.
 
 Keyboard (WASD/arrows), touch movement, and tappable destination markers.
 
@@ -82,6 +84,26 @@ Effect entry points include `drawDragonFlame()`, `drawPetDragonFire()`, `drawPla
 `createBoatBlast()`, `drawBoatExplosions()`, `drawBurningTree()`, `drawVolleySprayReactions()`,
 and their advance/reset helpers. `resetPetDragon()` clears tree fires, regrowth, boat explosions,
 and hair effects; `resetVolleyball()` clears spray reactions.
+
+## Beach lifeguards
+
+`BEACH_LIFEGUARDS` places five evenly spaced elevated chairs with red-and-white sunshades
+along the full coast. `advanceBeachLifeguards()` controls descending, running, waving, returning,
+and climbing back up. `drawBeachLifeguards()` draws the chairs, guards, and waving reminder
+inside `drawMainlandBeach()`. `drawLifeguardSprite()` supplies distinct front, back, left, and
+right walking poses; facing follows travel and alternating arm/leg strides follow distance moved.
+`lifeguardLadderPose()` traces a 1.5-second path from seat to top rails, down the sloped ladder,
+and onto the sand. `drawClimbingLifeguard()` alternates hand grips and tucked knees facing the
+ladder; returning guards walk to its foot and reverse the climb into their seats.
+Animation uses simulation time, pauses for dialogs, and is not saved.
+`sprayBeachLifeguards()` sweeps each boat-spray droplet against the guard’s visible sprite bounds using
+the rendered `y - z` projection, including seated and climbing guards. Real maximum-trim spray
+peaks below the seat height, so requiring that physical elevation would miss visible splashes. A splashed guard uses the same ladder/run/wave sequence,
+with a WATCH THE SPRAY warning even when the boater owns a beach pass. The reaction lasts up to
+12 seconds and ends early when the boater leaves the coast or vessel. Repeated spray does not
+restart it. Spray checks use their own per-droplet cursor so other beach reactions still work.
+`resetBeachLifeguards()` clears reactions and approach reminders on profile/age/adventure changes.
+See [boats and fishing](boats-and-fishing.md) for pass access and approach behavior.
 
 ## Verification
 

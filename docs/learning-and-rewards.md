@@ -48,6 +48,7 @@ Correct answers also restore energy; see [world and travel](world-and-travel.md)
 Discovery results show the answer and outcome before rewards/actions. Next discovery selection
 stays on the current destination while it has unsolved questions; destination visits and the
 journal are distinct from boat-only island access.
+The field journal shows each island's discovery count as plain text without a surrounding box.
 
 ## Collection and trading
 
@@ -56,6 +57,8 @@ Rare, Ultra Rare, and Mythic tiers. Includes the requested NeeDoh catalog, with 
 treasures and existing saves preserved. Complete all discoveries to keep earning through repeat
 practice.
 
+The permanent bottom-left chest icon, beside the fish catch-history icon, toggles the secret stash
+through `quickStashBtn`. The stash entry is no longer in the Treasures submenu.
 The stash contains an island trading counter and a six-tier catalog. Earn one trading ticket by
 answering 10 flash arithmetic questions correctly in a row, with a fresh 15-second deadline for each
 question. Wrong answers, timeouts, and leaving end the streak; retries are unlimited. Flash
