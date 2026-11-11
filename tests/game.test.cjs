@@ -820,44 +820,17 @@ if(g.run(`!!questions[${i}].visual`))assert.match(g.node('#workbench').innerHTML
 }
 });
 
-test('Loch Ness sightings use timed checks, stay in water, and expire',()=>{
-const g=game();g.run('player.x=430;player.y=310;Math.random=()=>0;nextLochDragon=30000');
-g.run('advanceLochDragon(29999)');assert.equal(g.run('lochDragon'),null);
-g.run('advanceLochDragon(1);draw()');assert.equal(g.run('!!lochDragon'),true);
-assert.equal(g.run('sharkWater(lochDragon.x,lochDragon.y)'),true);
-for(let i=0;i<100;i++)g.run('advanceLochDragon(40)');
-assert.equal(g.run('sharkWater(lochDragon.x,lochDragon.y)'),true);
-g.run('advanceLochDragon(18000)');assert.equal(g.run('lochDragon'),null);
-g.run('Math.random=()=>.9;nextLochDragon=0;advanceLochDragon(1)');assert.equal(g.run('lochDragon'),null);
-assert.ok(g.run('nextLochDragon')>=30000&&g.run('nextLochDragon')<=60000);
-g.run('advanceLochDragon(0)');assert.equal(g.run('lochDragon'),null);
-});
-
-test('a lucky swimmer catches and rides the dragon, with dragon controls and no shark spawned on dismount',()=>{
-const g=game();const sighting='lochDragon={x:435,y:310,heading:0,age:1000,duration:18000}';
-g.run(`player.x=430;player.y=310;${sighting};latchLochDragon()`);assert.equal(g.run('sharkRide'),null);
-g.run('swimming=true;advanceSwimming(0)');assert.equal(g.run('sharkRide.kind'),'dragon');assert.equal(g.run('lochDragon'),null);
-assert.match(g.node('#waterControls').textContent,/LOCH NESS MONSTER/);assert.match(g.node('#mapSharkExit').textContent,/Hop off monster/);
-const start=g.run('player.x');g.run('advanceSwimming(200);draw()');assert.ok(g.run('player.x')>start);
-assert.equal(g.run('sharkDiveDepth()'),0);
-const fins=g.run('sharkFins.length');g.node('#mapSharkExit').onclick();assert.equal(g.run('sharkRide'),null);
-assert.equal(g.run('swimming'),true);assert.equal(g.run('sharkFins.length'),fins);
-g.run(`${sighting};latchLochDragon()`);assert.equal(g.run('sharkRide'),null);
-g.run('dragonLatchCooldown=0;lochDragon.age=17900;latchLochDragon()');assert.equal(g.run('sharkRide'),null);
-});
-
-test('dragon rides land safely, allow cavern landing, and clear on player or age changes',()=>{
-const g=game();
-g.run(`swimming=true;player.y=176;
-const shoreX=Array.from({length:320},(_,i)=>i+20).find(x=>inside(x,176,islandPolys[0]));
-player.x=shoreX-25;lochDragon={x:player.x+2,y:176,heading:0,age:1000,duration:18000};latchLochDragon();advanceSwimming(16);draw()`);
-assert.equal(g.run('!!sharkRide.landing'),true);g.run('advanceSwimming(1500);draw()');
-assert.equal(g.run('sharkRide'),null);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
-g.run('swimming=true;player.x=740;player.y=325');assert.ok(g.run('sharkShoreLanding(Math.PI/2)'));
-g.run("lochDragon={x:430,y:310,heading:0,age:1000,duration:18000};switchAge('7-8')");assert.equal(g.run('lochDragon'),null);
-g.run('swimming=true;player.x=430;player.y=310;lochDragon={x:435,y:310,heading:0,age:1000,duration:18000};latchLochDragon()');
-assert.equal(g.run('sharkRide.kind'),'dragon');g.node('#profileName').value='Dragon watcher';g.run('createProfile()');
-assert.equal(g.run('sharkRide'),null);assert.equal(g.run('lochDragon'),null);
+test('Loch Ness encounters are disabled while swimming',()=>{
+const g=game();g.run('player.x=430;player.y=310;swimming=true;Math.random=()=>0;nextLochDragon=0');
+for(let i=0;i<10;i++)g.run('advanceLochDragon(60000)');
+assert.equal(g.run('lochDragon'),null);
+g.run('lochDragon={x:435,y:310,heading:0,age:1000,duration:18000};latchLochDragon()');
+assert.equal(g.run('sharkRide'),null);
+g.run('let monsterDraws=0;drawLochDragonBody=()=>monsterDraws++;drawLochDragon()');
+assert.equal(g.run('monsterDraws'),0);
+g.run('advanceSwimming(0);draw()');
+assert.equal(g.run('lochDragon'),null);assert.equal(g.run('sharkRide'),null);
+assert.doesNotMatch(g.node('#waterControls').textContent,/LOCH NESS MONSTER/);
 });
 
 test('idle swimmers tread with only their head and gear visible, then resume full strokes',()=>{

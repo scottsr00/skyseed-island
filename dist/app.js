@@ -1845,10 +1845,13 @@ if(flight){character(x,y-height-4);if(inWater)directionalSwimGear(x,y-19);}
 else{ctx.fillStyle='#f7e3ad';ctx.font='bold 8px monospace';ctx.textAlign='center';ctx.fillText('PET DRAGON',x,y-34);}
 }
 $('#mapDragonMount').onclick=mountPetDragon;$('#mapDragonLand').onclick=landPetDragon;$('#mapDragonHome').onclick=returnPetDragonHome;
+// Keep Loch Ness encounters disabled; other sea mounts and the pet dragon remain available.
+const LOCH_NESS_ENABLED=false;
 // Rare sightings are timed in active play, never rerolled every frame.
 let lochDragon=null,nextLochDragon=30000+Math.random()*30000,dragonLatchCooldown=0;
 function clearLochDragon(){lochDragon=null;nextLochDragon=30000+Math.random()*30000;dragonLatchCooldown=0;}
 function advanceLochDragon(dt){
+if(!LOCH_NESS_ENABLED){lochDragon=null;return;}
 if(dt<=0||document.querySelector('dialog[open]'))return;
 dragonLatchCooldown=Math.max(0,dragonLatchCooldown-dt);
 if(lochDragon){
@@ -1873,7 +1876,7 @@ lochDragon={x,y,heading,age:0,duration:18000};break;
 }
 }
 function latchLochDragon(){
-if(!hasSwimPower()||!lochDragon||!swimming||boating||voyage||diveAnimation||shoreClimb||sharkRide||dragonLatchCooldown>0||document.querySelector('dialog[open]'))return;
+if(!LOCH_NESS_ENABLED||!hasSwimPower()||!lochDragon||!swimming||boating||voyage||diveAnimation||shoreClimb||sharkRide||dragonLatchCooldown>0||document.querySelector('dialog[open]'))return;
 if(lochDragon.age<500||lochDragon.duration-lochDragon.age<700||Math.hypot(lochDragon.x-player.x,lochDragon.y-player.y)>22)return;
 sharkRide={kind:'dragon',x:player.x,y:player.y,heading:lochDragon.heading,distance:0,phase:0,diveElapsed:0,surfaceWake:[],surfaceDistance:0};
 lochDragon=null;sharkWake=[];closeMapPanel();keys.clear();updateWaterControls();
@@ -1908,7 +1911,7 @@ ellipse(33,neck-13,1,1,'#183d35');rect(38,neck-13,1,1,'#315b48');rect(35,neck-10
 ctx.restore();
 }
 function drawLochDragon(){
-if(!lochDragon)return;
+if(!LOCH_NESS_ENABLED||!lochDragon)return;
 const surface=Math.max(0,Math.min(1,lochDragon.age/900,(lochDragon.duration-lochDragon.age)/1600));
 drawLochDragonBody(lochDragon.x,lochDragon.y,lochDragon.heading,lochDragon.age*.002,surface);
 }

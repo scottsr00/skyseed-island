@@ -65,12 +65,10 @@ All sea animal rides (shark, blue marlin, and Loch Ness monster) share steering 
 avoidance, a ten-second dive cycle, head-first submerging beneath bridges, snorkel and foam wakes,
 and the same quick shore tumble, prone pause, head shake, and recovery.
 
-Occasional Loch Ness monster sightings appear briefly in open water, with a tiny wake, two separate
-humps, and a long-necked head pointing along its direction of travel. A flowing side-to-side wave
-animates its neck, humps, and tail. Swim within reach to catch a ride; arrows/WASD steer, X or Hop
-off dismounts, and approaching an unlocked beach rolls the rider ashore as the monster dives.
-Sightings have a 70% chance at checks every 30–60 seconds of eligible active play, remain temporary,
-and clear on profile or age changes.
+Loch Ness monster encounters are currently disabled by `LOCH_NESS_ENABLED`: sightings do not
+spawn or render, and swimmers cannot mount the monster. The dormant encounter and ride code
+remains available for re-enabling later. Sharks, blue marlin, and the cottage pet dragon
+remain available.
 
 Blue marlin also surface near swimmers, with a blue back, silver belly, forked tail, and long bill.
 Swim within reach to ride one; arrows/WASD steer and X or Hop off dismounts. Marlin dive beneath
