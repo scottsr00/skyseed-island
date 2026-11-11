@@ -136,7 +136,8 @@ Their shorter seated torso uses 55% of hull roll, with turn rate resolving direc
 steering reversals. `drawBoatSteeringWheel()` supplies a mounted, spoked wheel that stays visible
 when parked. Seated riders grip its rim, bending their elbows as they lean; the spokes turn with
 outboard steering. The tow-boat driver has a matching wheel. World-space wakes and shadows stay
-on the water.
+on the water. Boat shadows use soft oval footprints so a hard-edged shadow cannot resemble
+a rectangular hull beneath the banked deck.
 
 ## Dragon shadow
 

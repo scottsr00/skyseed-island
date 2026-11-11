@@ -60,6 +60,8 @@ At zero energy, beach games and surfing exit safely, tow sports return to their 
 creature riders and swimmers return to land, and fishing stops while preserving boat travel.
 A correct discovery, repeat-practice, or flash answer restores 25 energy, capped at 100.
 Energy stays with the explorer across age changes, resets, and reloads.
+Mainland Beach has a Maritime Museum, Snack Shack, and Aquarium with discovery/practice
+questions for recharging ashore; see [learning and rewards](learning-and-rewards.md).
 
 For each new activity, register effort in `ENERGY_ACTIVITY_EFFORT`, classify it in
 `currentEnergyActivity()`, guard entry with `requireActivityPower()`, and provide a safe exit in

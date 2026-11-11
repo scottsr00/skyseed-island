@@ -50,6 +50,15 @@ stays on the current destination while it has unsolved questions; destination vi
 journal are distinct from boat-only island access.
 The field journal shows each island's discovery count as plain text without a surrounding box.
 
+Mainland Beach has three discovery buildings, spaced along the coast: Maritime Museum,
+Snack Shack, and Aquarium. Walk to the entrance and press E, tap the building, or use the
+interaction button. `BEACH_DISCOVERIES` shares the existing 200 age-appropriate question IDs
+across the three buildings, preserving discovery progress and crystal rules. Each correct answer
+restores 25 energy (including repeat practice), so an exhausted explorer can recharge without
+leaving the beach. `visitBeachDiscovery()` requires the explorer to be ashore nearby; it does not
+teleport from the journal or bypass the beach pass. Next discovery stays at the same building;
+Keep exploring closes the dialog at the entrance. No extra saved fields are needed.
+
 ## Collection and trading
 
 Squishees unlock every 50 lifetime crystals: 29 treasures across Common, Uncommon, Hard-to-Find,

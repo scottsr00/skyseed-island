@@ -3677,3 +3677,45 @@ const reloaded=game(null,g.snapshot());assert.equal(reloaded.run('[...burnableUm
 g.run("switchAge('7-8')");assert.equal(g.run('umbrella.burnAge'),null);
 g.run('umbrella.burnAge=4200;resetPetDragon()');assert.equal(g.run('umbrella.burnAge'),null);
 });
+
+
+test('beach discovery buildings restore energy in place, keep question context and preserve rewards on repeats',()=>{
+for(const age of ['5-6','7-8','9-10','11-12']){
+const g=game();g.run(`switchAge('${age}');state.beachPass=true;state.power=0`);
+for(let index=0;index<3;index++){
+g.run(`player.x=BEACH_DISCOVERIES[${index}].x;player.y=BEACH_DISCOVERIES[${index}].y+20;near=nearby();interact()`);
+assert.equal(g.run('near'),300+index);assert.equal(g.node('#challenge').open,true);
+assert.ok(g.node('#challengeCategory').textContent.startsWith(g.run(`BEACH_DISCOVERIES[${index}].name`)));
+assert.equal(g.run('canWalk(player.x,player.y)'),true);
+assert.equal(g.run(`canWalk(BEACH_DISCOVERIES[${index}].x,BEACH_DISCOVERIES[${index}].y-10)`),false);
+const x=g.run('player.x'),y=g.run('player.y'),power=g.run('state.power');
+g.node('#answer').value='incorrect';g.run('checkAnswer()');assert.equal(g.run('state.power'),power);
+g.node('#answer').value=g.run("Array.isArray(questions[active].answer)?questions[active].answer.join(','):String(questions[active].answer)");g.run('checkAnswer();checkAnswer()');
+assert.equal(g.run('state.power'),Math.min(100,power+25));
+const crystals=g.run('state.crystals');g.run('openQuestion(active,activeBeachDiscovery)');
+g.node('#answer').value=g.run("Array.isArray(questions[active].answer)?questions[active].answer.join(','):String(questions[active].answer)");g.run('checkAnswer()');
+assert.equal(g.run('state.crystals'),crystals);assert.equal(g.run('state.power'),Math.min(100,power+50));
+g.node('#nextQuestion').onclick();assert.equal(g.run('activeBeachDiscovery'),index);
+assert.equal(g.run(`BEACH_DISCOVERIES[${index}].ids.includes(active)`),true);
+g.node('#challenge').close();assert.equal(g.run('player.x'),x);assert.equal(g.run('player.y'),y);
+g.run('draw()');
+}
+const reloaded=game(null,g.snapshot());reloaded.run(`switchAge('${age}')`);assert.equal(reloaded.run('state.power'),g.run('state.power'));
+assert.equal(reloaded.run('state.solved.length'),3);
+}
+});
+
+test('beach discoveries require nearby land access and are separate from beach games',()=>{
+const g=game();g.run('visitBeachDiscovery(0)');assert.notEqual(g.node('#challenge').open,true);
+g.run('state.beachPass=true');
+for(let i=0;i<3;i++){
+g.run(`player.x=BEACH_DISCOVERIES[${i}].x;player.y=BEACH_DISCOVERIES[${i}].y+20`);
+assert.equal(g.run('nearbyVolleyballCourt()'),-1);assert.equal(g.run('nearbyFrisbeeHost()'),-1);
+for(const flag of ['swimming','boating','beachTransfer','shoreRecovery','dragonFlight','volleyball','frisbeeGame','surfSession']){
+g.run(`${flag}=true;visitBeachDiscovery(${i})`);assert.notEqual(g.node('#challenge').open,true,flag);g.run(`${flag}=false`);
+}
+}
+g.run('state.beachPass=false;visitBeachDiscovery(2)');assert.notEqual(g.node('#challenge').open,true);
+assert.equal(g.run('new Set(BEACH_DISCOVERIES.flatMap(b=>b.ids)).size'),200);
+assert.equal(g.run('beachSunbathers().some(p=>BEACH_DISCOVERIES.some(b=>Math.abs(p.x-b.x)<88))'),false);
+});
