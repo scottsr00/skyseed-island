@@ -38,8 +38,8 @@ boat anchors; the beach pass still gates going ashore.
 ## Ferry
 
 A ferry waits at the main island dock. A 25-crystal ticket buys one five-minute ride, consumed on
-boarding. Fishing & travel shows pass ownership or live ride time beneath Ferry Pass, with inline
-purchase and boarding controls. Buying a pass here does not move the player or start the timer.
+boarding. Fishing & travel uses a title and purchase or use button for each item, without descriptive
+subtext or a Go fishing navigation link. Ferry Pass switches from purchase to boarding controls after purchase. Buying a pass here does not move the player or start the timer.
 E at the dock shows a compact map confirmation: Enter/E uses the ticket (or buys and
 boards for 25 crystals), and Escape cancels. The upper-right countdown matches the speed and trim
 instruments. Time pauses during fishing and question dialogs, but continues ashore; reboard the
@@ -70,7 +70,7 @@ Earn or hold 100 crystals to unlock the main island’s new speedboat dock, sout
 harbour. No crystals are spent. The unlock stays with that explorer across age levels, adventure
 resets, and reloads; existing saves with 100 earned crystals or a balance of at least 100 also
 qualify, including admin grants. Launch with E at the dock or tap the dock. Fishing & travel
-provides direct fishing, supplies, beach pass, ferry dock, and watersports options.
+provides supplies, beach pass, ferry pass, and watersports purchases.
 The teal-and-white speedboat has three outboards with
 coordinated steering, exhaust, wakes, and trim spray. Its forward acceleration and top speed are 25%
 above the fishing boat, with quicker steering response and a tighter turning circle even at full
@@ -106,8 +106,8 @@ owned boat up to 100%; catches from shore or the ferry build a reserve that tran
 owned boat boarded, retaining any overflow. Tanks and reserve belong to the explorer and persist
 across age levels, resets, and reloads. Relaunching never grants free gas.
 
-Fishing takes place directly on the map, without a fishing panel. Buy supplies beneath Go fishing
-in the left Fishing & travel submenu. Five crystals buys five bait; lures
+Fishing takes place directly on the map, without a fishing panel or distance labels. Buy supplies
+in the left Fishing & travel submenu. Start fishing from the dock or boat actions, or with F. Five crystals buys five bait; lures
 cost 20 crystals, are used automatically once owned, and do not use bait. There is no tackle
 selector. Shore fishing always catches Bass, Salmon, and Catfish (+2–5% gas), with bait or lures.
 Existing Snook, Redfish, and Trout catch records remain in the lifetime log. The permanent

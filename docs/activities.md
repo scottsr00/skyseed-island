@@ -23,7 +23,8 @@ beneath the Watersports equipment heading, alongside owned status. Purchases sta
 there is no separate equipment popup. Watersports gear is not listed in Island upgrades. At the Moonwater dock,
 normal bottom-screen actions show Start wakeboarding (E) for an owned wakeboard and Start
 waterskiing (R) for owned waterskis. Both actions appear when both are owned; either launches
-directly without an equipment chooser. Actions disable while the tow boat returns or is exploding. Waterskis appear as twin skis and use the same towing controls. Both purchases save per
+directly without an equipment chooser. E and R work at the dock while a button has keyboard focus.
+Actions disable while the tow boat returns or is exploding. Waterskis appear as twin skis and use the same towing controls. Both purchases save per
 explorer and age level. The boat automatically follows the center of the island channel to a
 repeating open-water circuit with over 200 pixels of island clearance. WASD/arrows control the
 wakeboarder; momentum and stern-mounted rope tension carry the rider through turns. X / Finish

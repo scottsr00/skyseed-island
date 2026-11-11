@@ -172,7 +172,7 @@ for(let i=0;i<5;i++){g.run('{const f=fishingTargets(fishingTime+FISH_CAST_DURATI
 assert.equal(g.run('sponsored()'),true);assert.equal(g.node('#sponsorship').open,true);assert.equal(g.node('#sponsorName').textContent,'Skyseed Angling Co.');assert.equal(g.run('state.bait'),0);
 g.node('#sponsorship').close();
 for(let i=0;i<8;i++)g.run('castFishing(10,40);advanceFishing(FISH_CAST_DURATION)');
-assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.crystals'),0);assert.equal(g.node('#sponsorship').open,false);assert.match(g.node('#baitCount').textContent,/Unlimited/);
+assert.equal(g.run('state.bait'),0);assert.equal(g.run('state.crystals'),0);assert.equal(g.node('#sponsorship').open,false);assert.equal(g.node('#buyRod').hidden,true);
 g.run('buyRod()');assert.equal(g.run('state.crystals'),0);
 const restored=game(g.run('JSON.parse(localStorage.getItem(KEY))'));assert.equal(restored.run('sponsored()'),true);assert.equal(restored.node('#sponsorship').open,undefined);
 });
@@ -217,22 +217,22 @@ assert.equal(g.node('#waterSubmenu').hidden,false);
 g.node('#buyRod').onclick();assert.equal(g.run('state.bait'),5);assert.equal(g.run('state.crystals'),25);
 g.node('#buyLure').onclick();assert.equal(g.run('state.fishingLure'),true);assert.equal(g.run('state.crystals'),5);
 assert.equal(g.run('fishingActive'),false);assert.equal(g.node('#buyRod').hidden,true);
-g.node('#railFishingBtn').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('fishingActive'),true);
+g.node('#mapDockFishing').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('fishingActive'),true);
 g.node('#stopFishing').onclick();assert.equal(g.run('fishingActive'),false);
 });
-test('inline ferry pass purchases stay in travel and show ownership, active time, and expiry',()=>{
+test('inline ferry pass purchases stay in travel and reflect ownership and expiry',()=>{
 const g=game();g.run('toggleSubmenu("water");updateWaterControls()');
 assert.equal(g.node('#buyFerryPass').disabled,true);assert.equal(g.node('#useFerryPass').hidden,true);
 const start=g.run('JSON.stringify([player.x,player.y])');
 g.run('state.crystals=50;update()');g.node('#buyFerryPass').onclick();
 assert.equal(g.run('state.crystals'),25);assert.equal(g.run('state.ferryTicket'),true);assert.equal(g.run('state.ferryRemaining'),0);
 assert.equal(g.run('JSON.stringify([player.x,player.y])'),start);assert.equal(g.run('activeSubmenu'),'water');assert.equal(g.run('activeMapPanel'),null);
-assert.equal(g.node('#buyFerryPass').hidden,true);assert.equal(g.node('#useFerryPass').hidden,false);assert.match(g.node('#ferryPassStatus').textContent,/pass ready/);
+assert.equal(g.node('#buyFerryPass').hidden,true);assert.equal(g.node('#useFerryPass').hidden,false);
 g.node('#buyFerryPass').onclick();assert.equal(g.run('state.crystals'),25);
 g.node('#useFerryPass').onclick();assert.equal(g.run('boating'),true);assert.equal(g.run('activeMapPanel'),null);
-g.run('advanceSwimming(1000);updateWaterControls()');assert.match(g.node('#ferryPassStatus').textContent,/4:59 remaining/);
-const restored=game(null,g.snapshot());assert.match(restored.node('#ferryPassStatus').textContent,/Active pass/);
-g.run('state.ferryRemaining=1;advanceSwimming(1);updateWaterControls()');assert.equal(g.node('#buyFerryPass').hidden,false);assert.match(g.node('#ferryPassStatus').textContent,/No ferry pass/);
+g.run('advanceSwimming(1000);updateWaterControls()');assert.equal(g.run('formatRideTime(state.ferryRemaining)'), '4:59');
+const restored=game(null,g.snapshot());assert.equal(restored.node('#useFerryPass').hidden,false);
+g.run('state.ferryRemaining=1;advanceSwimming(1);updateWaterControls()');assert.equal(g.node('#buyFerryPass').hidden,false);
 });
 test('permanent catch history opens lifetime totals and follows the selected explorer',()=>{
 const g=game({catches:{bass:2,snook:1},sponsorshipAnnounced:true});
@@ -254,7 +254,7 @@ assert.equal(g.run('WORLD.viewWidth<=WORLD.width&&WORLD.viewHeight<=WORLD.height
 });
 test('map menus hand off to activities and fishing clicks use the resized viewport',()=>{
 const g=game();g.node('#settingsBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,false);
-g.node('#railFishingBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.run('fishingActive'),true);
+g.node('#mapDockFishing').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.run('fishingActive'),true);
 g.run('window.innerWidth=390;window.innerHeight=844;resizeMap();state.crystals=5;buyRod()');
 g.node('#world').getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});
 const point=g.run('({x:(10-camera.x)/WORLD.viewWidth*390,y:(40-camera.y)/WORLD.viewHeight*844})');
@@ -383,7 +383,7 @@ const g=game();g.node('#settingsBtn').onclick();assert.equal(g.run('activeMapPan
 g.node('#upgradesBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);assert.equal(g.node('#upgradesPanel').hidden,false);
 g.node('#upgradesBtn').onclick();assert.equal(g.node('#upgradesPanel').hidden,true);assert.equal(g.run('activeMapPanel'),null);
 g.run('toggleSubmenu("water");state.crystals=50;buyFerryTicket()');assert.equal(g.run('activeMapPanel'),null);assert.equal(g.run('activeSubmenu'),'water');assert.equal(g.run('state.ferryTicket'),true);
-g.node('#railFishingBtn').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('fishingActive'),true);
+g.node('#mapDockFishing').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('fishingActive'),true);
 const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/map-icon-rail/);assert.doesNotMatch(html,/id="islandMenu"/);assert.doesNotMatch(html,/<dialog id="(?:journal|stash|ferry|welcome)"/);
 });
 
@@ -392,7 +392,7 @@ const g=game();g.node('#exploreMenuBtn').onclick();assert.equal(g.run('activeSub
 g.node('#waterMenuBtn').onclick();assert.equal(g.node('#exploreSubmenu').hidden,true);assert.equal(g.node('#waterSubmenu').hidden,false);
 g.node('#waterMenuBtn').onclick();assert.equal(g.node('#waterSubmenu').hidden,true);assert.equal(g.run('activeSubmenu'),null);
 g.node('#settingsMenuBtn').onclick();g.node('#settingsBtn').onclick();assert.equal(g.node('#settingsSubmenu').hidden,true);assert.equal(g.node('#settingsPanel').hidden,false);
-g.node('#waterMenuBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);g.node('#railFishingBtn').onclick();assert.equal(g.run('activeSubmenu'),null);assert.equal(g.run('fishingActive'),true);
+g.node('#waterMenuBtn').onclick();assert.equal(g.node('#settingsPanel').hidden,true);g.node('#mapDockFishing').onclick();assert.equal(g.run('activeSubmenu'),null);assert.equal(g.run('fishingActive'),true);
 g.node('#soundBtn').onclick();assert.match(g.node('#soundBtn').innerHTML,/<svg/);assert.match(g.node('#soundBtn').innerHTML,/Sound on/);
 const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/shape-rendering="crispEdges"/);assert.match(html,/class="submenu-action"/);
 });
@@ -1435,7 +1435,7 @@ g.run(`switchAge('${age}');state.crystals=60;buyBeachPass()`);assert.equal(g.run
 }
 g.run('state.beachPass=false;save()');assert.equal(g.run('state.beachPass'),true);
 g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('state.beachPass'),true);
-const restored=game(null,g.snapshot());assert.equal(restored.run('state.beachPass'),true);assert.match(restored.node('#beachPassInfo').textContent,/Permanent beach access/);
+const restored=game(null,g.snapshot());assert.equal(restored.run('state.beachPass'),true);assert.match(restored.node('#buyBeachPass').textContent,/Beach pass owned/);
 g.node('#profileName').value='New sailor';g.run('createProfile()');assert.equal(g.run('state.beachPass'),false);g.run("switchProfile('legacy')");assert.equal(g.run('state.beachPass'),true);
 });
 
@@ -2666,8 +2666,8 @@ for(const [equipment,key] of [['wakeboard','e'],['waterskis','r']]){
 const g=game();g.run('state.crystals=125');g.run('openWatersports()');assert.equal(g.run('activeSubmenu'),'water');assert.equal(g.run('activeMapPanel'),null);
 g.node('#buyWakeboardDock').onclick();g.node('#buyWaterskisDock').onclick();
 assert.equal(g.run('state.crystals'),0);assert.equal(g.run('wakeboardRide'),null);
-g.run('visitWatersportsDock();const sportKey=(key,repeat=false)=>window.listeners.keydown.find(l=>!l.capture).handler({key,repeat,target:{tagName:"CANVAS"},preventDefault(){}})');
-g.run(`sportKey('${key}',true)`);assert.equal(g.run('wakeboardRide'),null);
+g.run('visitWatersportsDock();const sportKey=(key,repeat=false,tagName="BUTTON")=>window.listeners.keydown.find(l=>!l.capture).handler({key,repeat,target:{tagName},preventDefault(){}})');
+g.run(`sportKey('${key}',true);sportKey('${key}',false,'INPUT')`);assert.equal(g.run('wakeboardRide'),null);
 g.run(`sportKey('${key}')`);assert.equal(g.run('wakeboardRide.equipment'),equipment);
 assert.equal(g.node('#mapWakeboardStart').hidden,true);assert.equal(g.node('#mapWaterskisStart').hidden,true);
 g.run('finishWakeboarding();advanceSwimming(700);swimming=false;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;updateWakeboardUI()');
