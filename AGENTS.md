@@ -22,6 +22,8 @@ runtime/test files by default.
   for initialization order and shared state when moving code.
 - Preserve existing question IDs and browser progress. Consult the save document for ownership
   across profiles, age levels, adventure resets, and full profile resets.
+- New activities must use the shared energy scaling and safe exhaustion flow described in
+  `docs/world-and-travel.md`. Walking and boat travel must remain available at zero energy.
 - Changes to an activity should account for its input, update, rendering, save/reload, and cleanup
   paths. Check the relevant area document for integration points.
 - Run `npm run check` for JavaScript changes and relevant tests as described in `docs/testing.md`.

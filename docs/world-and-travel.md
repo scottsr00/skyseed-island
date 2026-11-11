@@ -44,11 +44,27 @@ the camera footprint.
 
 ## Energy
 
-The top energy meter is active. Swimming drains 0.65 energy per second. Riding sharks, marlins, sea
-dragons, or a swimming pet dragon drains 0.325 energy per second, half the swimming rate. Correct
-discovery, repeat-practice, or flash answers restore 25 energy, capped at 100. At zero energy the
-explorer returns safely to land and must solve a problem before swimming or launching a boat again.
-Saved energy stays with the explorer across age changes, resets, and reloads.
+The meter drains throughout active play, including waiting between throws or casts.
+Walking, standing on land, and all boat travel are free and remain available at zero energy.
+`ENERGY_ACTIVITY_EFFORT` scales a 100-energy meter around a three-minute baseline:
+
+| Activity | Energy / second | Full meter |
+| --- | --- | --- |
+| Frisbee (light) | 0.417 | 4 minutes |
+| Fishing, fish/sea creature rides, pet dragon swimming or flying (moderate) | 0.556 | 3 minutes |
+| Swimming, volleyball, surfing, wakeboarding, waterskiing (strenuous) | 0.833 | 2 minutes |
+
+`advancePower()` runs once at the start of the activity dispatcher, before early returns.
+Modal dialogs, paused surfing, and surf results do not drain energy. Admin mode stays unlimited.
+At zero energy, beach games and surfing exit safely, tow sports return to their safe dock,
+creature riders and swimmers return to land, and fishing stops while preserving boat travel.
+A correct discovery, repeat-practice, or flash answer restores 25 energy, capped at 100.
+Energy stays with the explorer across age changes, resets, and reloads.
+
+For each new activity, register effort in `ENERGY_ACTIVITY_EFFORT`, classify it in
+`currentEnergyActivity()`, guard entry with `requireActivityPower()`, and provide a safe exit in
+`finishExhaustedActivity()`. Match effort to physical exertion and test drain timing,
+exhaustion, pauses, and free travel.
 
 ## Sea mounts and pet dragon
 

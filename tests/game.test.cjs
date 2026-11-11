@@ -774,7 +774,7 @@ assert.equal(g.run('state.crystals'),1000);assert.match(g.node('#challengeBody')
 });
 }
 
-test('four age brackets preserve independent progress and the selected bracket across profiles and reloads',()=>{
+test('four age brackets preserve independent progress while retired selected brackets upgrade on reload',()=>{
 const g=game({solved:[0],upgrades:['cottage'],crystals:15});
 for(const [index,level] of ['5-6','7-8','9-10'].entries()){
 g.node('#ageLevel').onchange({target:{value:level}});assert.equal(g.run('ageLevel'),level);
@@ -787,12 +787,50 @@ g.run("switchAge('11-12')");assert.equal(g.run('state.crystals'),15);assert.equa
 g.run("switchAge('5-6')");g.node('#profileName').value='Little explorer';g.run('createProfile()');
 assert.equal(g.run('ageLevel'),'5-6');assert.equal(g.run('state.crystals'),0);
 g.run("switchAge('7-8');state.crystals=45;save()");const restored=game(null,g.snapshot());
-assert.equal(restored.run('ageLevel'),'7-8');assert.equal(restored.run('state.crystals'),45);
-restored.run("switchProfile('legacy')");assert.equal(restored.run('ageLevel'),'5-6');assert.equal(restored.run('state.crystals'),25);
+assert.equal(restored.run('ageLevel'),'9-10');assert.equal(restored.run('state.crystals'),0);
+restored.run("switchProfile('legacy')");assert.equal(restored.run('ageLevel'),'9-10');assert.equal(restored.run('state.crystals'),27);
 restored.run("switchAge('7-8')");assert.equal(restored.run('state.crystals'),26);
 const html=fs.readFileSync('dist/index.html','utf8');
 for(const level of ['5-6','7-8'])assert.ok(html.includes(`<option value="${level}" disabled>`));
 for(const level of ['9-10','11-12'])assert.ok(html.includes(`<option value="${level}">`));
+});
+
+test('legacy younger age preferences upgrade without copying or deleting age progress',()=>{
+for(const level of ['5-6','7-8']){
+const younger=JSON.stringify({solved:[0,1],upgrades:['cottage'],crystals:35});
+const g=game(null,{'skyseed-age':level,[`skyseed-v1-${level}`]:younger});
+assert.equal(g.run('ageLevel'),'9-10');assert.equal(g.run('KEY'),'skyseed-v1-9-10');
+assert.equal(g.run('questions===questionsByAge["9-10"]'),true);
+assert.equal(g.node('#ageLevel').value,'9-10');
+assert.equal(g.run('state.solved.length'),0);assert.equal(g.run('state.crystals'),0);
+const snapshot=g.snapshot();
+assert.equal(snapshot[`skyseed-v1-${level}`],younger);
+assert.equal(JSON.parse(snapshot['skyseed-profiles-v1']).profiles[0].age,'9-10');
+assert.equal(game(null,snapshot).run('ageLevel'),'9-10');
+}
+});
+
+test('all saved profiles upgrade younger ages and preserve existing older progress on reload',()=>{
+const profiles=['5-6','7-8','9-10','11-12'].map((age,i)=>({id:`p${i+1}`,name:`Player ${i+1}`,character:'girl',age}));
+const stored={'skyseed-profiles-v1':JSON.stringify({active:'p1',profiles})};
+for(const [i,p] of profiles.entries()){
+stored[`skyseed-profile-${p.id}-${p.age}`]=JSON.stringify({solved:[i],upgrades:[],crystals:20+i});
+if(i<2)stored[`skyseed-profile-${p.id}-9-10`]=JSON.stringify({solved:[10+i],upgrades:[],crystals:50+i});
+}
+const g=game(null,stored);
+assert.equal(g.run('JSON.stringify(profiles.map(p=>p.age))'),JSON.stringify(['9-10','9-10','9-10','11-12']));
+for(const [i,p] of profiles.entries()){
+g.run(`switchProfile('${p.id}')`);
+assert.equal(g.run('ageLevel'),i===3?'11-12':'9-10');
+assert.equal(g.run('state.crystals'),i<2?50+i:20+i);
+assert.equal(g.run('state.solved[0]'),i<2?10+i:i);
+assert.equal(g.run('currentProfile().character'),'girl');
+}
+const snapshot=g.snapshot();
+for(const p of profiles.slice(0,2))assert.equal(snapshot[`skyseed-profile-${p.id}-${p.age}`],stored[`skyseed-profile-${p.id}-${p.age}`]);
+assert.deepEqual(JSON.parse(snapshot['skyseed-profiles-v1']).profiles.map(p=>p.age),['9-10','9-10','9-10','11-12']);
+const restored=game(null,snapshot);restored.run("switchProfile('p1')");
+assert.equal(restored.run('ageLevel'),'9-10');assert.equal(restored.run('state.crystals'),50);
 });
 
 test('new age brackets use suitable flash arithmetic and keep single-ride tickets separate',()=>{
@@ -1027,22 +1065,66 @@ g.run('state.power=0;openQuestion(0)');g.node('#answer').value='-999';g.run('che
 g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),25);assert.equal(g.run('state.crystals'),5);g.run('checkAnswer()');assert.equal(g.run('state.power'),25);
 g.node('#challenge').close();g.run('startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');assert.equal(g.run('state.power'),50);
 });
-test('power drains in water, returns exhausted swimmers to land, and blocks zero-power launches',()=>{
+test('power drains in water, returns exhausted swimmers to land, and allows free boat launches',()=>{
 const g=game({power:0,solved:[],upgrades:[]});assert.equal(g.run('hasSwimPower()'),false);
-g.run('startDive({x:430,y:310});state.catches={barracuda:5};launchBoat()');assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),false);
-g.run('state.power=1;swimming=true;player.x=600;player.y=350;nextSharkFin=1e9;nextLochDragon=1e9;nextBlueMarlin=1e9;advanceSwimming(1000)');assert.ok(Math.abs(g.run('state.power')-.35)<1e-9);assert.equal(g.run('swimming'),true);
+g.run('startDive({x:430,y:310});state.catches={barracuda:5};launchBoat()');assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),true);
+g.run('boating=false;state.power=1;swimming=true;player.x=600;player.y=350;nextSharkFin=1e9;nextLochDragon=1e9;nextBlueMarlin=1e9;advanceSwimming(1000)');assert.ok(Math.abs(g.run('state.power')-1/6)<1e-9);assert.equal(g.run('swimming'),true);
 g.run('advanceSwimming(1000)');assert.equal(g.run('swimming'),false);assert.equal(g.run('state.power'),0);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.match(g.node('#powerHelp').textContent,/Solve a problem/);
 });
-test('swimming uses twice the energy of fish and swimming dragon rides',()=>{
-const g=game();
-for(const ride of ['null',"{kind:'shark'}","{kind:'marlin'}","{kind:'dragon'}"]){
-g.run(`state.power=100;swimming=true;sharkRide=${ride};advancePower(10000)`);
-assert.ok(Math.abs(g.run('state.power')-(ride==='null'?93.5:96.75))<1e-9);
+test('energy scales around three minutes across all activities',()=>{
+const activities=[['frisbeeGame={}',240],['fishingActive=true',180],['swimming=true;sharkRide={kind:"shark"}',180],['swimming=true;sharkRide={kind:"marlin"}',180],['swimming=true;sharkRide={kind:"dragon"}',180],['dragonFlight={stage:"swimming"}',180],['dragonFlight={stage:"flying"}',180],['swimming=true',120],['volleyball={}',120],['surfSession={phase:"paddling"}',120],['wakeboardRide={equipment:"wakeboard"}',120],['wakeboardRide={equipment:"waterskis"}',120]];
+for(const [setup,seconds] of activities){
+const g=game();g.run(`${setup};if(frisbeeGame)frisbeeGame.exit={x:230,y:176};if(volleyball)volleyball.exit={x:230,y:176};if(surfSession){surfSession.safe={x:230,y:176};surfSession.score=0;}if(dragonFlight)dragonFlight.safe={x:230,y:176};if(wakeboardRide)wakeboardRide.safe={x:230,y:176};advancePower(10000)`);
+assert.ok(Math.abs(g.run('state.power')-(100-1000/seconds))<1e-9,setup);
+assert.equal(g.run('currentProfile().power'),g.run('state.power'));
 }
-g.run("sharkRide=null;swimming=false;dragonFlight={stage:'swimming',safe:{x:230,y:176}};state.power=100;advancePower(10000)");
-assert.ok(Math.abs(g.run('state.power')-96.75)<1e-9);
-g.run("dragonFlight.stage='flying';advancePower(10000)");assert.ok(Math.abs(g.run('state.power')-96.75)<1e-9);
-g.run("dragonFlight=null;swimming=true;advancePower(10000)");assert.ok(Math.abs(g.run('state.power')-90.25)<1e-9);
+});
+
+test('activity dispatcher drains once before game and ride early returns and exhausts on schedule',()=>{
+const cases=[['player.x=frisbeeHost(0).x;player.y=1737;startFrisbee(0)',240],['player.x=500;player.y=1770;startVolleyball(0)',120],['player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;state.surfRental=true;startSurfing()',120],['mountPetDragon();advanceSwimming(650)',180],['state.wakeboard=true;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;startWakeboarding()',120]];
+for(const [setup,seconds] of cases){
+const g=game();g.run(`state.beachPass=true;${setup};state.power=100;advanceSwimming(1000)`);
+assert.ok(Math.abs(g.run('state.power')-(100-100/seconds))<1e-9,setup);
+g.run(`advancePower(${(seconds-1)*1000})`);assert.equal(g.run('state.power'),0,setup);assert.equal(g.run('currentEnergyActivity()'),null,setup);
+}
+});
+
+test('empty energy allows ferry, speedboat, island reboarding and anchored boat transfers',()=>{
+const g=game();g.run('state.power=0;state.ferryTicket=true;boardFerry()');assert.equal(g.run('boating'),true);
+g.run('returnBoat();state.speedboat=true;currentProfile().speedboat=true;launchSpeedboat()');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),'speedboat');
+g.run('boating=false;state.boatIsland=boatIslands[0].id;player.x=boatIslands[0].dock.x;player.y=boatIslands[0].dock.y-18;boatPosition={x:player.x+40,y:player.y+30};boardOwnBoat()');assert.equal(g.run('boating'),true);
+g.run('boating=false;state.boatIsland=null;state.beachPass=true;player.x=1120;player.y=1762;state.beachAnchor={x:1120,y:1650,landing:{x:1120,y:1762}};returnToAnchoredBoat()');assert.equal(g.run('beachTransfer.boarding'),true);assert.equal(g.run('state.power'),0);
+});
+
+test('energy pauses for dialogs, paused surfing, results, idle land and boat travel',()=>{
+const g=game();
+for(const setup of ['keys.add("right");moveExplorer(2,0)','boating=true','boating=false;surfSession={phase:"riding",paused:true}','surfSession={phase:"results"}']){
+g.run(`${setup};advancePower(10000)`);assert.equal(g.run('state.power'),100);
+}
+g.run('surfSession=null;fishingActive=true');g.node('#challenge').showModal();g.run('advancePower(10000)');assert.equal(g.run('state.power'),100);
+g.node('#challenge').close();g.run('adminMode=true;advancePower(10000)');assert.equal(g.run('state.power'),100);
+});
+
+test('energy exhaustion stops fishing on a boat and leaves boat travel available',()=>{
+const g=game();g.run('state.catches={barracuda:5};launchBoat();openFishing();advanceSwimming(180000)');
+assert.equal(g.run('state.power'),0);assert.equal(g.run('fishingActive'),false);assert.equal(g.run('boating'),true);
+g.run('openFishing();advanceSwimming(1000)');assert.equal(g.run('fishingActive'),false);assert.equal(g.run('state.power'),0);
+g.run('restorePower();openFishing()');assert.equal(g.run('fishingActive'),true);
+});
+
+test('energy exhaustion safely exits beach games, surfing, flying and tow sports',()=>{
+for(const activity of ['frisbee','volleyball','surfing','dragon','watersports']){
+const g=game();
+const setup={frisbee:'frisbeeGame={exit:{x:1120,y:1762}}',volleyball:'volleyball={exit:{x:1120,y:1762}}',surfing:'surfSession={phase:"paddling",safe:{x:1120,y:1762},score:0}',dragon:'dragonFlight={stage:"flying",safe:{x:230,y:176}}',watersports:'state.wakeboard=true;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;startWakeboarding()'}[activity];
+g.run('state.beachPass=true');g.run(setup);assert.notEqual(g.run('currentEnergyActivity()'),null,activity);
+g.run('state.power=.01;advancePower(1000)');assert.equal(g.run('state.power'),0);
+assert.equal(g.run('currentEnergyActivity()'),null,activity);assert.equal(g.run('canWalk(player.x,player.y)'),true,activity);
+}
+});
+
+test('zero energy blocks recreational activity entry',()=>{
+const g=game();g.run('state.power=0;mountPetDragon();openFishing();startWakeboarding();startFrisbee();startVolleyball(0);startSurfing()');
+assert.equal(g.run('currentEnergyActivity()'),null);assert.equal(g.run('state.power'),0);
 });
 
 test('legacy power values remain compatible across age changes, resets, and reloads',()=>{
@@ -1096,7 +1178,7 @@ const launchX=g.run('player.x');g.run('moveExplorer(10,0)');assert.equal(g.run('
 g.run('advanceSwimming(650);draw()');assert.equal(g.run('dragonFlight.stage'),'flying');assert.equal(g.run('dragonFlight.altitude'),30);
 assert.equal(g.node('#mapDragonLand').hidden,false);assert.equal(g.node('#mapDragonLand').disabled,false);
 g.run('moveExplorer(50,60)');assert.equal(g.run('player.x'),launchX+50);assert.ok(g.run('dragonFlight.heading')>0);
-g.run('player.x=430;player.y=310;advanceSwimming(1000);draw()');assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),false);assert.equal(g.run('state.power'),100);
+g.run('player.x=430;player.y=310;advanceSwimming(1000);draw()');assert.equal(g.run('swimming'),false);assert.equal(g.run('boating'),false);assert.ok(g.run('state.power')<100);
 g.node('#mapDragonLand').onclick();assert.equal(g.run('dragonFlight.stage'),'splashdown');
 g.run('advanceSwimming(500);landPetDragon();advanceSwimming(650);player.x=500;player.y=150;landPetDragon();draw()');assert.equal(g.run('dragonFlight.stage'),'landing');
 g.run('advanceSwimming(500);draw()');assert.equal(g.run('dragonFlight'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);
@@ -1181,7 +1263,7 @@ g.run('player.x=boatIslands[0].x;player.y=boatIslands[0].y;landPetDragon()');ass
 test('dragon swimming requires power and exhaustion returns its rider safely to land',()=>{
 const g=game();const x=g.run('player.x'),y=g.run('player.y');
 g.run('mountPetDragon();advanceSwimming(650);player.x=430;player.y=310;state.power=0;landPetDragon()');assert.equal(g.run('dragonFlight.stage'),'flying');
-g.run('state.power=.1;landPetDragon();advanceSwimming(500);save()');assert.equal(g.run('state.x'),x);assert.equal(g.run('state.y'),y);
+g.run('state.power=1;landPetDragon();advanceSwimming(500);save()');assert.equal(g.run('state.x'),x);assert.equal(g.run('state.y'),y);g.run('state.power=.1');
 g.run('advanceSwimming(1000);draw()');assert.equal(g.run('dragonFlight'),null);assert.equal(g.run('state.power'),0);assert.equal(g.run('canWalk(player.x,player.y)'),true);
 });
 test('wakeboard costs exactly 25 crystals, cannot be bought twice, and saves per explorer and age',()=>{
@@ -1613,7 +1695,7 @@ const g=game({power:0,solved:[],upgrades:[]});
 g.run('openQuestion(0)');g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');
 assert.equal(game(null,g.snapshot()).run('state.power'),25);
 g.node('#challenge').close();g.run('swimming=true;player.x=600;player.y=350;advancePower(2000)');
-const restored=game(null,g.snapshot());assert.equal(restored.run('state.power'),23.7);
+const restored=game(null,g.snapshot());assert.ok(Math.abs(restored.run('state.power')-(25-5/3))<1e-9);
 g.node('#profileName').value='Refresh explorer';g.run('createProfile();state.power=42;save()');
 const named=game(null,g.snapshot());assert.equal(named.run('profileId'),'p1');assert.equal(named.run('state.power'),42);
 });
@@ -2910,7 +2992,9 @@ g.node('#answer').value='999999';g.run('checkAnswer()');assert.equal(g.run('answ
 g.node('#answer').value=actual.join(',');g.run('checkAnswer();checkAnswer()');assert.equal(g.run('state.solved.length'),id-99);
 }
 assert.equal(g.run('state.crystals'),500);
-const restored=game(null,g.snapshot());assert.equal(restored.run('state.solved.length'),100);assert.equal(restored.run('state.solved.at(-1)'),199);
+const restored=game(null,g.snapshot());
+assert.equal(restored.run('ageLevel'),['5-6','7-8'].includes(level)?'9-10':level);
+restored.run(`switchAge('${level}')`);assert.equal(restored.run('state.solved.length'),100);assert.equal(restored.run('state.solved.at(-1)'),199);
 });
 }
 

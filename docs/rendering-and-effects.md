@@ -24,8 +24,9 @@ shoulders sit behind the chest, elbows bend forward, and arms counter-swing agai
 Full-window browser map with responsive camera proportions, floating crystal/status displays, a
 left-side rail of flat pixel-art icons, grouped submenus, and nonmodal map panels, and fishing
 actions over the map. Permanent bottom-left fish and chest icons open lifetime catch history and the secret stash; fishing
-supplies live beneath Go fishing in the Fishing & travel submenu. Cast feedback sits above the
-normal suggested actions, with no fishing popup panel.
+supplies live beneath Go fishing in the Fishing & travel submenu. Cast feedback and toast messages reserve space above the
+suggested actions, with no fishing popup panel. Suggested action buttons share one horizontal
+row, scrolling sideways on narrow screens instead of stacking beneath messages.
 
 Keyboard (WASD/arrows), touch movement, and tappable destination markers.
 
@@ -125,7 +126,10 @@ speed times turn rate. The speedboat leans most, the ferry least; straightening,
 and anchoring let the hull settle level. The tow boat uses course curvature and preserves its roll
 when releasing the rider. Roll is transient simulation state and pauses with dialogs.
 `beginBoatHull()` projects the deck, motors, chines, and V-shaped keel using heading and roll.
-Back-face culling and water-surface clipping expose only the raised, visible underside, so the
+The shallow chine tapers inward to a raked, varying-depth keel, keeping the exposed bottom V-shaped.
+`boatHullLift()` uses squared sine of bank so lift eases smoothly through level during turn reversals;
+riders, motors, and cabins follow that lift. Back-face culling and water-surface clipping expose only
+the raised, visible underside, so the
 amount of bottom showing depends on the viewing angle. Cabins lean with their hull; seated occupants keep their hips and bent legs planted while
 `beginBoatRiderLean()` leans their upper body into the current turn at every heading.
 Their shorter seated torso uses 55% of hull roll, with turn rate resolving direction during

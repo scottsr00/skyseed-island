@@ -48,12 +48,15 @@ visitors, and three volleyball courts. Walk up to any court and press E / Play v
 doubles match with your selected character and an AI beach teammate against two beach players.
 WASD/arrows move, Space / Enter / Hit times a return, and X / Escape leaves. A landing ring guides
 returns, ball arcs and the net affect play, and the first team to five wins. Matches can be replayed
-and preserve access to your anchored boat.
+and preserve access to your anchored boat. A compact top-center scoreboard shows both team
+scores; play and leave actions remain in the bottom controls. Game messages are announced to
+screen readers without a persistent instruction panel.
 
 ## Frisbee
 
 Some Mainland Beach walkers carry frisbees. Stand near one and press X to play catch. Move with
-WASD/arrows, press X to throw or catch a nearby disc, and Esc to leave.
+WASD/arrows, press X to throw or catch a nearby disc, and Esc to leave. The compact top-center
+scoreboard shows the current catch streak and best streak, with play and leave actions below.
 
 ## Verification
 

@@ -15,6 +15,7 @@ state.crystals-=SURF_RENTAL_COST;state.surfRental=true;surfClock=0;update();upda
 toast('Surfboard rented! The swell is building. Paddle out from the shack, then press Space as a crest reaches you.');
 }
 function startSurfing(){
+if(!requireActivityPower())return;
 if(!nearSurfShack()||!state.surfRental)return;
 stopFishing();closeMapPanel();keys.clear();
 surfSession={phase:'paddling',safe:{x:player.x,y:player.y},remaining:SURF_HEAT_TIME,score:0,wipeouts:0,paused:false,x:.43,y:.48,angle:Math.PI-.12,speed:.4,vx:0,vy:0,paddleTime:0,turn:0,turnCooldown:0,bands:[],waveSize:1,scroll:0,pumpDirection:0,pumpDistance:0,airRequest:0,wake:[],wakeClock:0,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airV:0,airSpin:0,message:'Paddle out with arrows / WASD. Space catches a nearby crest.'};

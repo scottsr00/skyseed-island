@@ -45,6 +45,11 @@ Start again option still resets only the current adventure.
 
 ## Compatibility rules
 
+- On startup, selected ages 5–6 and 7–8 migrate to 9–10 for every saved profile, including
+  inactive players and the legacy `skyseed-age` preference. The next save persists the upgraded
+  profile registry. Ages 9–10 and 11–12 stay unchanged. Each age's progress remains separate:
+  existing 9–10 progress loads normally, and younger-level saves remain untouched rather than
+  copying solved IDs or rewards into a different curriculum. Settings disables the younger levels.
 - Question IDs 0–99 retain their original meaning; expansion adds IDs 100–199. Preserve solved
   progress when changing curriculum. `loadProgress()` filters and deduplicates valid IDs.
 - `travelRules: 2` marks single-ride ferry saves. Old permanent passes are discarded;

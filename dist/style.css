@@ -148,11 +148,17 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 
 .map-app #powerMeter[hidden]{display:none}
 
-.map-app .volleyball-hud{left:auto;right:20px;top:100px;width:min(285px,calc(100vw - 110px));pointer-events:none}.map-app .volleyball-hud h2{font-size:17px}.map-app .volleyball-hud p{font-size:11px}.map-app #volleyballHud[hidden]{display:none}@media(max-width:600px){.map-app .volleyball-hud{right:10px;top:79px;width:calc(100vw - 74px);max-height:180px;padding:12px}.map-app .volleyball-hud p{font-size:10px;margin:6px 0}}
+/* Compact, nonmodal scores leave the beach visible during play. */
+.map-app .beach-scoreboard{position:absolute;top:max(18px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:4;display:flex;flex-direction:column;align-items:center;gap:5px;width:max-content;max-width:calc(100% - 24px);padding:9px 14px;border:2px solid var(--pixel-edge);background:var(--pixel-paper);box-shadow:2px 2px #24473955;color:var(--ink);font:700 13px/1.4 monospace;pointer-events:none}
+.map-app .beach-scoreboard[hidden]{display:none}
+.beach-scoreboard-label{font:700 9px/1.3 var(--pixel-font);letter-spacing:1px}
+.beach-scoreboard strong{font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
+.beach-scoreboard-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media(max-width:1000px){.map-app .beach-scoreboard{top:max(128px,calc(env(safe-area-inset-top) + 110px))}}
+@media(max-width:600px){.map-app .beach-scoreboard{top:max(148px,calc(env(safe-area-inset-top) + 138px));padding:7px 10px;font-size:12px}}
 
 .surf-shop-actions{display:flex;gap:10px;flex-wrap:wrap}.surf-overlay{position:absolute;inset:0;pointer-events:none;z-index:9;color:#193f3c}.surf-overlay[hidden]{display:none}.surf-scoreboard{position:absolute;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(560px,calc(100% - 24px));display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 14px;background:#f8efd5ef;border:2px solid #4c6b57;box-shadow:3px 3px #24473955;font:11px monospace}.surf-scoreboard strong{color:#a46a45}.surf-message{position:absolute;top:58px;left:50%;transform:translateX(-50%);margin:0;width:min(560px,calc(100% - 24px));padding:8px 12px;background:#214c47e8;color:#fff0c8;font:11px/1.5 monospace;min-height:34px}.surf-session-actions{position:absolute;right:14px;top:112px;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:85%;pointer-events:auto}.surf-overlay button{border:2px solid #46644f;background:#f8efd5;color:#214c42;padding:10px 12px;font:11px monospace;box-shadow:2px 2px #24473955;touch-action:none}.surf-overlay button:active{background:#d9e8bf}.surf-touch-controls{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:6px;pointer-events:auto}.surf-touch-controls>div{display:flex;gap:7px;align-items:center}.surf-touch-controls button{min-height:44px;min-width:44px}.surf-touch-controls #surfAction{min-width:150px}.map-stage[data-surf-view="riding"] :is(.map-hud,.map-icon-rail,.map-progress,.water-controls,.boat-map-actions,#interaction,.touch-controls,.map-submenu){display:none!important}.map-stage[data-surf-view="paddling"] :is(.map-hud,.map-icon-rail,.map-progress,.water-controls,.boat-map-actions,#interaction,.touch-controls,.map-submenu){display:none!important}@media(max-width:600px){.surf-scoreboard{gap:7px;font-size:9px;padding:10px 8px;flex-wrap:wrap}.surf-message{top:68px;font-size:10px}.surf-session-actions{top:128px}.surf-overlay button{font-size:10px;padding:9px}.surf-touch-controls #surfAction{min-width:134px}}
 
-.map-app #frisbeeHud[hidden]{display:none}
 
 /* Keep travel instructions in Help instead of a persistent map banner. */
 .map-app #waterControls{display:none}
@@ -335,3 +341,15 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .travel-section-heading{display:flex;align-items:center;gap:12px;margin:8px 0 0;padding:10px;font:inherit;font-size:12px;color:#254e40}
 
 #waterSubmenu .travel-section-heading:has(+ #buyRod[hidden]),#waterSubmenu .travel-section-heading:has(+ #buyLure[hidden]){display:none}
+
+/* Messages reserve their own space above a single, scrollable action row. */
+.map-action-row{display:flex;align-items:center;gap:8px;max-width:100%;overflow-x:auto;pointer-events:auto;padding:0 0 4px;scrollbar-width:thin}
+.map-app .map-stage .map-action-row #interaction{flex:0 0 auto}
+.map-app .map-action-row .boat-map-actions{display:contents}
+.map-app .map-action-row :is(.boat-map-actions button,#interaction button){flex:0 0 auto;white-space:nowrap}
+.map-app .map-suggestions .map-action-row #interaction button{white-space:nowrap}
+.map-app .map-suggestions #toast{position:static;inset:auto;transform:none;display:none;max-width:100%;margin:0;padding:10px 14px;overflow-wrap:anywhere}
+.map-app .map-suggestions #toast.show{display:block;transform:none}
+.map-suggestions{left:180px;right:20px;transform:none;width:auto;max-width:700px;margin-inline:auto}
+@media(max-width:600px){.map-suggestions{left:164px;right:12px}}
+@media(max-height:550px) and (pointer:coarse){.map-suggestions{left:240px}}
