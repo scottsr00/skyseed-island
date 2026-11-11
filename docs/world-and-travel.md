@@ -30,6 +30,11 @@ to reboard. Island visits and the parked boat persist across reloads.
 
 Walk off any island shoreline to dive into the sea with the same animation as a boat dive. Bridges
 and docks keep walkers on the timber; press X or the Dive button to enter the water explicitly.
+`dockDiveTarget()` first checks the facing direction for a clear jump of at least 32 world pixels
+and an eight-pixel landing margin from land, timber, and boat hulls. If blocked, it chooses a
+clear perpendicular side, preferring the nearer opening. The path may cross the launching deck
+but cannot pass through land, a hull, or another structure. With no safe opening the explorer stays
+on the dock. `startDive()` turns the explorer toward the chosen landing point.
 Ordinary shoreline walking enters the water automatically and does not show a Dive suggestion. No
 sponsorship is required. Swimmers and swimming mounts pass underneath bridges, docks, and boat
 hulls, with their bodies and splashes hidden by the structures above. Swim onto land to reach onto

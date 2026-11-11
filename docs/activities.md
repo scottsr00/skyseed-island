@@ -24,15 +24,22 @@ there is no separate equipment popup. Watersports gear is not listed in Island u
 normal bottom-screen actions show Start wakeboarding (E) for an owned wakeboard and Start
 waterskiing (R) for owned waterskis. Both actions appear when both are owned; either launches
 directly without an equipment chooser. E and R work at the dock while a button has keyboard focus.
-Actions disable while the tow boat returns or is exploding. Waterskis appear as twin skis and use the same towing controls. Both purchases save per
+Actions disable while the tow boat returns or is exploding. When the Woodland Bridge crosses the
+usual launch position, the rider starts closer to the tow boat with slack in the rope.
+Waterskis appear as twin skis and use the same towing controls. Both purchases save per
 explorer and age level. The boat automatically follows the center of the island channel to a
 repeating open-water circuit with over 200 pixels of island clearance. WASD/arrows control the
 wakeboarder; momentum and stern-mounted rope tension carry the rider through turns. X / Finish
 wakeboarding animates the rope dropping and the rider settling into the water, then resumes swimming
 at your current position while the empty boat returns to the dock. Hitting an obstacle releases the
 rider while the empty boat finishes its programmed route and docks; land crashes use the shark
-tumble, prone pause, head shake, and get-up animation. The wake stays in world space. Board
-ownership and safe reload positions are saved.
+tumble, prone pause, head shake, and get-up animation. The tow boat uses the same acceleration/coasting helper, hull roll, outboard steering,
+planing waterline, hull spray, spreading whitewater, and prop wash as the owned boats. Its
+own motion and wake samples stay independent of the player's parked vessel. Course lookahead
+slows it before bends; shared swept hull checks stop it before land, timber, or another boat.
+The return approach gives the dock more clearance, brakes before the final low-speed docking
+maneuver, and leaves foam fading in the water after it parks. Dialogs pause the motion and wakes;
+profile, age, and adventure changes clear them. Board ownership and safe reload positions are saved.
 
 ## Beach volleyball
 

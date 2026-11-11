@@ -71,3 +71,9 @@ For future code extraction, prefer explicit inputs/outputs and small owned state
 Persistence and question data are candidates, but extraction should preserve script ordering,
 existing saves, and behavior verified by the VM tests. Documentation does not imply those
 boundaries have already been implemented.
+
+Boat destruction and repair effects advance through `advancePetDragonFire()` at the start of
+`advanceSwimming()`, before activity-specific early returns. The later
+`advancePetDragon(dt, false)` avoids a second fire update. This keeps offscreen repairs running
+during other activities while preserving the modal-dialog pause. See
+[boats and fishing](boats-and-fishing.md) for repair timing and availability rules.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create GitHub Issue"
+  short_description: "Publish issues with context and acceptance criteria"
+  default_prompt: "Use $create-github-issue to turn this idea into a well-documented GitHub issue and publish it."

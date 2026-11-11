@@ -62,6 +62,13 @@ Start again option still resets only the current adventure.
   animation. Parked vessel type, location, heading, beach anchorage, and occupied ferry state
   have separate restoration paths. Test reloads as well as ordinary exits.
 
+Boat explosions and repair crews are session-only. `restoreRebuiltBoat()` clears the destroyed
+vessel's offshore/beach parking and anchor references immediately and returns its position to the
+home dock, so `save()` records safe dock recovery rather than a wreck or mid-build animation.
+Remaining ferry time and tickets, fuel/reserve, ownership, and unlocks retain their usual ownership
+and countdown rules. Reload restores one docked boat; `resetPetDragon()` clears crews on profile,
+age, and adventure/full-profile resets. See [boats and fishing](boats-and-fishing.md).
+
 ## Admin override
 
 Settings → Admin override accepts password `11111` to add 1,000 spendable crystals to the active

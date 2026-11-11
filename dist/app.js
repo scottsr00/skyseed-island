@@ -772,30 +772,78 @@ if(!walkMotion.moving||swimming||boating||dragonFlight||wakeboardRide||surfSessi
 if(Math.hypot(player.x-walkMotion.x,player.y-walkMotion.y)>.001)return 0;
 return Math.sin(walkMotion.phase)*1.5;
 }
+// Character details retain fractional coordinates so joints move smoothly at any zoom.
+function characterRect(x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(x,y,w,h);}
+function characterEllipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill();}
+function characterLimb(points,color,width){
+ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';
+ctx.beginPath();ctx.moveTo(...points[0]);for(const point of points.slice(1))ctx.lineTo(...point);ctx.stroke();
+}
+function characterHead(x,y,hair,skin,facing='down',longHair=false,sway=0){
+const side=facing==='left'||facing==='right',back=facing==='up';
+ctx.save();ctx.translate(x,y);if(facing==='left')ctx.scale(-1,1);
+if(longHair){
+polygon([[-4,-4],[-6,-1],[-6+sway,7],[-2+sway,8],[-1,1]],hair);
+characterLimb([[-4,-1],[-4+sway,5]],'#ffffff22',.7);
+}
+characterEllipse(0,0,4.5,5,back?hair:skin);
+if(!back){
+characterEllipse(side?3.7:-4,.7,1.1,1.6,skin);if(!side)characterEllipse(4,.7,1.1,1.6,skin);
+characterEllipse(side?1.5:-1.4,1,2.2,3,'#ffffff18');
+if(side){characterEllipse(4.2,1,1.5,1.1,skin);characterRect(1.8,-.7,1,1.6,'#354744');}
+else{for(const eye of [-1.8,1.8]){characterRect(eye-.5,-.7,1,1.6,'#354744');characterRect(eye-.3,-.6,.35,.45,'#fff8e5');}characterLimb([[-.9,3],[0,3.3],[.9,3]],'#b47861',.55);}
+}
+polygon([[-4.5,-1],[-4.6,-3.6],[-2.5,-5.4],[1.8,-5.5],[4,-3.8],[4.4,-1.6],[1,-2.7],[-1.1,-1.5],[-2.5,-2.4],[-3.2,.4]],hair);
+characterLimb([[-2.8,-3.6],[0,-4.2],[2,-3.8]],'#ffffff24',.8);
+if(back&&longHair){characterEllipse(0,2,4.4,4.5,hair);characterLimb([[-2,1],[-1,5]],'#ffffff20',.7);}
+ctx.restore();
+}
 function character(x,y,pet=false,stepLift=0){
-const step=walkingStep();ellipse(x,y+3,6,2,'#325c4144');
-if(pet){rect(x-5,y-5,10,7,'#a8c76b');rect(x-3,y-8,7,5,'#bbd880');rect(x-2,y-3,1,1,'#2f5141');rect(x+3,y-3,1,1,'#2f5141');rect(x,y-11,2,4,'#4b7951');rect(x+1,y-12,5,2,'#739e58');return;}
-const colors=characterColors(),facing=player.facing||'down',girl=currentProfile().character==='girl';
+const step=walkingStep(),stride=step/1.5;
+characterEllipse(x,y+3,6,2,'#325c4144');
+if(pet){
 ctx.save();ctx.translate(x,y);
-if(facing==='left'||facing==='right'){
-ctx.scale(facing==='left'?-1:1,1);
-rect(-3-step,-2-stepLift,3,5,'#3e5555');rect(1+step,-3,3,5,'#3e5555');
-rect(-4,-11,8,11,colors.shirt);rect(1,-10,3,5,colors.accent);
-if(girl)rect(-6,-19,4,13,colors.hair);
-rect(-3,-20,7,9,'#f2c992');rect(3,-16,3,3,'#f2c992');
-rect(-4,-21,8,4,colors.hair);rect(-4,-19,2,7,colors.hair);
-
-rect(2,-17,1,2,'#354744');rect(-1+step,-9,3,8,'#e4bd88');
-}else{
-rect(-4,-2+step-stepLift,3,4,'#3e5555');rect(2,-2-step,3,4,'#3e5555');
-rect(-5,-11,11,11,colors.shirt);
-if(facing==='down')rect(-4,-10,8,5,colors.accent);
-else{rect(-4,-10,8,2,colors.accent);rect(0,-7,1,6,colors.accent);}
-rect(-7,-10+step,2,7,'#e4bd88');rect(6,-10-step,2,7,'#e4bd88');
-rect(-4,-20,9,9,facing==='up'?colors.hair:'#f2c992');rect(-5,-21,11,4,colors.hair);
-if(girl){if(facing==='up')rect(-5,-19,11,10,colors.hair);else rect(-8,-18,4,12,colors.hair);}
-
-if(facing==='down'){rect(-2,-16,1,2,'#354744');rect(2,-16,1,2,'#354744');}
+polygon([[-5,1],[-6,-3],[-4,-6],[3,-6],[5,-3],[4,2],[-3,2]],'#92b660');
+characterEllipse(0,-5,4.2,3.4,'#bbd880');characterEllipse(-1,-6,2.6,1.5,'#d6eaa0');
+characterLimb([[0,-8],[1,-11]],'#4b7951',1.5);
+polygon([[1,-10],[2,-13],[6,-12],[4,-10]],'#739e58');
+for(const eye of [-2,2]){characterEllipse(eye,-3.6,.65,.9,'#2f5141');characterEllipse(eye-.15,-3.9,.2,.25,'#fffbe4');}
+characterLimb([[-.8,-1.5],[0,-1.1],[.8,-1.5]],'#4b7951',.5);
+ctx.restore();return;
+}
+const colors=characterColors(),facing=player.facing||'down',girl=currentProfile().character==='girl';
+const side=facing==='left'||facing==='right',back=facing==='up',bob=Math.abs(stride)*.55;
+ctx.save();ctx.translate(x,y);if(facing==='left')ctx.scale(-1,1);
+// Jointed legs bend through the passing pose; shoes stay anchored to the gait.
+for(const leg of [-1,1]){
+const swing=stride*leg,lift=Math.max(0,swing)*1.1+(leg<0?stepLift:0);
+const footX=side?swing*3:leg*2.5,footY=1+(side?0:swing)-lift;
+characterLimb([[side?0:leg*2,-3],[side?swing*1.2:leg*2.3,-.8-lift*.65],[footX,footY]],leg<0?'#354d52':'#49656a',2.7);
+characterRect(footX-1.5,footY-.4,side?4:3,1.8,'#293e43');characterRect(footX-1.3,footY+.9,side?3.7:2.7,.55,'#b1ad93');
+}
+ctx.translate(0,-bob);
+if(side)characterLimb([[-1,-9],[-.5+stride*1.4,-6],[1+stride*3,-3]],'#c99e78',2.1);
+polygon(side?[[-3.8,-10],[-1,-11],[2.7,-10.5],[4,-7.5],[3,-1],[-3,-1]]:[[-3.7,-11],[3.7,-11],[5,-8.5],[4.5,-1],[-4.5,-1],[-5,-8.5]],colors.shirt);
+characterRect(side?1.3:-3.5,side?-9:-9.5,side?2.2:7,back?1.3:3.7,colors.accent);
+characterLimb([[side?-2.7:-3.7,-7],[side?-2.7:-3.7,-2]],'#ffffff25',.7);
+characterRect(side?-3.5:-4.5,-1.8,side?6.8:9,.8,'#35474455');
+if(back){characterRect(-.4,-8,.8,5,colors.accent);}
+else if(!side){characterRect(1,-5.4,2.1,1.6,colors.shirt);characterRect(1,-5.4,2.1,.5,'#ffffff44');}
+characterRect(-1.4,-12,2.8,2,'#d8ac80');
+characterHead(0,-15.8,colors.hair,'#f2c992',side?'right':facing,girl,-stride*.5);
+if(side){
+// The shoulder sits toward the back, the elbow bends toward the face, and the arm opposes the near leg.
+const handX=1-stride*3;
+if(!goggleArmActive()){characterLimb([[-1,-9],[-.5-stride*1.4,-6],[handX,-3]],'#e4bd88',2.5);
+characterEllipse(handX,-3,1.3,1.5,'#f2c992');}
+characterRect(-2.5,-10.1,3,2.5,colors.shirt);
+}
+else for(const arm of [-1,1]){
+const swing=stride*arm;
+if(goggleArmActive()&&arm===(goggleToss.armSide||1)){characterRect(arm<0?-5.7:3.5,-10,2.2,2.5,colors.shirt);continue;}
+characterLimb([[arm*4.6,-9],[arm*5.5,-6+swing],[arm*5.4,-3+swing*1.6]],'#e4bd88',2.2);
+characterEllipse(arm*5.4,-3+swing*1.6,1.2,1.4,'#f2c992');
+characterRect(arm<0?-5.7:3.5,-10,2.2,2.5,colors.shirt);
 }
 ctx.restore();
 }
@@ -1074,8 +1122,8 @@ ctx.fillStyle='#fff7d7';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx
 }
 $('#mapVolleyJoin').onclick=()=>startVolleyball(nearbyVolleyballCourt());$('#mapVolleyHit').onclick=hitVolleyball;$('#mapVolleyLeave').onclick=leaveVolleyball;
 const WATERSPORTS_DOCK={x:550,y:247},WAKEBOARD_COST=25,WATERSKIS_COST=100,WAKEBOARD_ROPE=110,WAKEBOARD_SPEED=.15;
-let wakeboardRide=null,wakeboardBoatTrip=null,wakeboardCrash=null,wakeboardDockHeading=0,waterskiWake=[];
-function resetWatersports(){waterskiWake=[];wakeboardRide=null;wakeboardBoatTrip=null;wakeboardCrash=null;wakeboardDockHeading=0;}
+let wakeboardRide=null,wakeboardBoatTrip=null,wakeboardDockWake=null,wakeboardCrash=null,wakeboardDockHeading=0,waterskiWake=[];
+function resetWatersports(){waterskiWake=[];wakeboardRide=null;wakeboardBoatTrip=null;wakeboardDockWake=null;wakeboardCrash=null;wakeboardDockHeading=0;}
 function nearWatersportsDock(){return !surfSession&&!beachTransfer&&!wakeboardCrash&&!frisbeeGame&&!volleyball&&!wakeboardRide&&!dragonFlight&&!swimming&&!boating&&!voyage&&!shoreClimb&&!shoreRecovery&&!diveAnimation&&Math.hypot(player.x-WATERSPORTS_DOCK.x,player.y-WATERSPORTS_DOCK.y)<42;}
 function updateWakeboardUI(){
 $('#buyWakeboardDock').textContent=state.wakeboard?'Wakeboard owned ✓':'Buy wakeboard · 25 ◆';
@@ -1085,7 +1133,7 @@ $('#buyWaterskisDock').disabled=!!state.waterskis||state.crystals<WATERSKIS_COST
 $('#mapWakeboardStop .suggestion-label').textContent=wakeboardRide?.equipment==='waterskis'?'Finish waterskiing':'Finish wakeboarding';
 for(const [id,equipment] of [['mapWakeboardStart','wakeboard'],['mapWaterskisStart','waterskis']]){
 $('#'+id).hidden=!state[equipment]||!nearWatersportsDock();
-$('#'+id).disabled=!!wakeboardBoatTrip||!!wakeboardCrash||boatExplosions.has('tow');
+$('#'+id).disabled=!!wakeboardBoatTrip||!!wakeboardCrash||boatUnavailable('tow');
 }
 $('#mapWakeboardStop').hidden=!wakeboardRide;
 }
@@ -1106,8 +1154,8 @@ player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;keys.clear();save();u
 }
 const WAKEBOARD_STERN=25,WAKEBOARD_HANDLE=9;
 function wakeboardTowPoint(boat,heading){return {x:boat.x-Math.cos(heading)*WAKEBOARD_STERN,y:boat.y-Math.sin(heading)*WAKEBOARD_STERN};}
-function initialWakeboardRider(boat,heading){
-const anchor=wakeboardTowPoint(boat,heading),reach=WAKEBOARD_ROPE+WAKEBOARD_HANDLE;
+function initialWakeboardRider(boat,heading,reach=WAKEBOARD_ROPE+WAKEBOARD_HANDLE){
+const anchor=wakeboardTowPoint(boat,heading);
 return {x:anchor.x-Math.cos(heading)*reach,y:anchor.y-Math.sin(heading)*reach,vx:Math.cos(heading)*WAKEBOARD_SPEED*1000,vy:Math.sin(heading)*WAKEBOARD_SPEED*1000};
 }
 function predictWakeboardRider(rider,fromBoat,toBoat,fromHeading,toHeading,dt,control={x:0,y:0}){
@@ -1143,15 +1191,20 @@ for(let i=0;i<=steps;i++){const t=i/steps;if(!water(anchor.x+(rider.x-anchor.x)*
 return true;
 }
 function startWakeboarding(equipment='wakeboard'){
-if(boatExplosions.has('tow')){toast('Wait for the tow boat’s smoke to clear.');return;}
+if(boatUnavailable('tow')){toast('The tow boat is being rebuilt at its home dock. Repairs are free.');return;}
 if(!nearWatersportsDock()||wakeboardBoatTrip||wakeboardCrash||document.querySelector('dialog[open]'))return;
 if(!['wakeboard','waterskis'].includes(equipment)||!state[equipment]){openWatersports();return;}
 const boat={x:WATERSPORTS_DOCK.x+40,y:WATERSPORTS_DOCK.y+52};
 const launchHeading=Math.PI;
-if(!wakeboardRigWater(boat.x,boat.y,launchHeading))return;
+let rider=initialWakeboardRider(boat,launchHeading);
+if(!wakeboardRigWater(boat.x,boat.y,launchHeading,rider)){
+// Start with slack so the rider and rope can clear the Woodland Bridge.
+rider=initialWakeboardRider(boat,launchHeading,WAKEBOARD_ROPE*.65+WAKEBOARD_HANDLE);
+if(!wakeboardRigWater(boat.x,boat.y,launchHeading,rider))return;
+}
 stopFishing();closeMapPanel();clearSharkRide();timberStep=null;goggleToss=null;
-wakeboardRide={equipment,boat,heading:launchHeading,courseDistance:0,phase:0,distance:0,wake:[],safe:{x:WATERSPORTS_DOCK.x,y:WATERSPORTS_DOCK.y-18}};
-wakeboardRide.rider=initialWakeboardRider(boat,launchHeading);wakeboardRide.rider.vx=-wakeboardCoursePose(0).speed*1000;syncWakeboardRider(wakeboardRide);keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});
+wakeboardRide={equipment,boat,rider,heading:launchHeading,courseDistance:0,phase:0,velocity:0,steering:0,turnRate:0,power:0,roll:0,rollVelocity:0,engineStage:'running',engineAge:1000,trimStep:0,distance:0,wake:[],bowWake:[],safe:{x:WATERSPORTS_DOCK.x,y:WATERSPORTS_DOCK.y-18}};
+rider.vx=0;syncWakeboardRider(wakeboardRide);keys.clear();save();updateWaterControls();canvas.focus({preventScroll:true});
 toast(`Hold on! Arrows / WASD steer your ${equipment==='waterskis'?'waterskier':'wakeboarder'}. The boat follows its course. X drops the rope so you can swim.`);
 }
 function finishWakeboarding(){
@@ -1201,7 +1254,7 @@ curve([[470,960],[390,960],[325,915],[325,860]]);
 curve([[325,860],[325,805],[390,760],[470,760]]);
 curve([[470,760],[550,760],[530,680],[cx(610),610]]);
 for(let y=610;y>=340;y-=6)add(cx(y),y);
-curve([[cx(340),340],[cx(340),280],[630,280],[630,299]]);
+curve([[cx(340),340],[cx(340),290],[630,290],[630,299]]);
 curve([[630,299],[630,319],[610,299],[590,299]]);
 let length=0;
 for(let i=0;i<points.length;i++){
@@ -1233,27 +1286,64 @@ return null;
 function wakeboardHullClear(boat,heading){
 return [-28,-12,8,30].every(along=>[-11,0,11].every(side=>!wakeboardSolidAt(boat.x+Math.cos(heading)*along-Math.sin(heading)*side,boat.y+Math.sin(heading)*along+Math.cos(heading)*side)));
 }
-function appendTowWake(boat,heading,distance,age=0){
-boat.wakeDistance=(boat.wakeDistance||0)+distance;
-if(boat.wakeDistance>=6){boat.wakeDistance%=6;(boat.wake??=[]).push({x:boat.boat.x-Math.cos(heading)*29,y:boat.boat.y-Math.sin(heading)*29,heading,age,serial:boat.wakeSerial=(boat.wakeSerial||0)+1});}
-boat.wake=boat.wake.filter(w=>w.age<3200).slice(-100);
+function advanceTowBoatSpeed(boat,elapsed){
+// Look ahead far enough to shed speed before a tight bend instead of snapping speed there.
+let target=Math.min(WAKEBOARD_SPEED*1000,boatTopSpeed(0,'tow'));
+for(const ahead of [0,12,24,36])target=Math.min(target,wakeboardCoursePose(boat.courseDistance+ahead).speed*1000);
+if(boat.stage==='returning')target=Math.min(target,Math.sqrt(2*65*Math.max(0,WAKEBOARD_COURSE.length-boat.courseDistance)));
+boat.velocity=boatVelocityStep(boat.velocity||0,1,elapsed/1000,'tow',0,target);
+return boat.velocity*elapsed/1000;
+}
+function advanceTowBoatRoute(boat,elapsed,loop=false){
+const from=boat.boat,oldHeading=boat.heading,distance=advanceTowBoatSpeed(boat,elapsed);
+let courseDistance=boat.courseDistance+distance;
+if(loop&&courseDistance>=WAKEBOARD_COURSE.loopEnd)courseDistance=WAKEBOARD_COURSE.loopStart+(courseDistance-WAKEBOARD_COURSE.loopEnd);
+courseDistance=Math.min(courseDistance,WAKEBOARD_COURSE.length);
+const next=courseDistance===WAKEBOARD_COURSE.length?WAKEBOARD_COURSE.points.at(-1):wakeboardCoursePose(courseDistance);
+const turn=Math.atan2(Math.sin(next.heading-oldHeading),Math.cos(next.heading-oldHeading));
+const steps=Math.max(1,Math.ceil(Math.hypot(next.x-from.x,next.y-from.y)/2),Math.ceil(Math.abs(turn)/.04));
+for(let i=1;i<=steps;i++){
+const t=i/steps;
+if(!boatPoseClear(from.x+(next.x-from.x)*t,from.y+(next.y-from.y)*t,oldHeading+turn*t,'tow')){
+boat.velocity=0;boat.turnRate=0;boat.power=0;
+boat.steering=(boat.steering||0)*Math.exp(-elapsed/120);advanceHullRoll(boat,elapsed,0);return;
+}
+}
+boat.courseDistance=courseDistance;boat.boat={x:next.x,y:next.y};boat.heading=next.heading;
+updateTowBoatMotion(boat,from,oldHeading,elapsed);
+}
+function updateTowBoatMotion(boat,from,oldHeading,elapsed){
+const turn=Math.atan2(Math.sin(boat.heading-oldHeading),Math.cos(boat.heading-oldHeading));
+boat.turnRate=turn*1000/elapsed;
+const motorTarget=-Math.max(-1,Math.min(1,boat.turnRate/1.15))*.48;
+boat.steering=(boat.steering||0)+(motorTarget-(boat.steering||0))*(1-Math.exp(-elapsed/120));
+boat.power=(boat.power||0)+(Math.min(1,boat.velocity/35)-(boat.power||0))*(1-Math.exp(-elapsed/120));
+boat.phase=(boat.phase||0)+elapsed*.06*boat.power;
+advanceTowHullRoll(boat,oldHeading,boat.velocity,elapsed);
+recordHullWake(boat,from,boat.boat,boat.heading,'tow');
 }
 function releaseWakeboardBoat(ride){
-wakeboardBoatTrip={boat:{...ride.boat},heading:ride.heading,courseDistance:ride.courseDistance||0,phase:ride.phase||0,wake:ride.wake.map(w=>({...w})),wakeSerial:ride.wakeSerial||0,stage:'returning',elapsed:0};
+wakeboardBoatTrip={boat:{...ride.boat},heading:ride.heading,courseDistance:ride.courseDistance||0,phase:ride.phase||0,roll:ride.roll||0,rollVelocity:ride.rollVelocity||0,velocity:ride.velocity||0,steering:ride.steering||0,turnRate:ride.turnRate||0,power:ride.power||0,engineStage:'running',engineAge:1000,trimStep:0,distance:ride.distance||0,wake:ride.wake.map(w=>({...w})),bowWake:(ride.bowWake||[]).map(w=>({...w})),wakeSerial:ride.wakeSerial||0,stage:'returning',elapsed:0};
 }
 function advanceReturningWakeboardBoat(dt){
-if(!wakeboardBoatTrip||dt<=0||document.querySelector('dialog[open]'))return;
+if(dt<=0||document.querySelector('dialog[open]'))return;
+if(wakeboardDockWake){ageBoatWake(wakeboardDockWake,dt);if(!wakeboardDockWake.wake.length&&!wakeboardDockWake.bowWake.length)wakeboardDockWake=null;}
+if(!wakeboardBoatTrip)return;
 for(let remaining=dt;remaining>0&&wakeboardBoatTrip;){
-const elapsed=Math.min(16,remaining);remaining-=elapsed;const boat=wakeboardBoatTrip;boat.phase+=elapsed*.01;boat.wake=boat.wake.filter(w=>{w.age+=elapsed;return w.age<3200;});
+const elapsed=Math.min(16,remaining);remaining-=elapsed;const boat=wakeboardBoatTrip;ageBoatWake(boat,elapsed);
 if(boat.stage==='docking'){
-boat.elapsed+=elapsed;const t=Math.min(1,boat.elapsed/1000),ease=t*t*(3-2*t);
-boat.boat={x:590,y:299+(WATERSPORTS_DOCK.y+18-299)*ease};boat.heading=Math.PI+Math.PI/2*ease;
-if(t===1){wakeboardDockHeading=boat.heading;wakeboardBoatTrip=null;updateWaterControls();}
+const t=Math.min(1,(boat.elapsed+elapsed)/2400),ease=t*t*(3-2*t);
+const next={x:590+Math.sin(t*Math.PI)**2*12,y:299+(WATERSPORTS_DOCK.y+18-299)*ease},heading=Math.PI+Math.PI/2*ease;
+if(!boatPoseClear(next.x,next.y,heading,'tow')){boat.velocity=0;boat.power=0;advanceHullRoll(boat,elapsed,0);continue;}
+const from=boat.boat,oldHeading=boat.heading;
+boat.elapsed+=elapsed;boat.boat=next;boat.heading=heading;
+boat.velocity=Math.hypot(next.x-from.x,next.y-from.y)*1000/elapsed;
+updateTowBoatMotion(boat,from,oldHeading,elapsed);
+if(t===1){wakeboardDockHeading=boat.heading;wakeboardDockWake={wake:boat.wake,bowWake:boat.bowWake};wakeboardBoatTrip=null;updateWaterControls();}
 continue;
 }
-const pose=wakeboardCoursePose(boat.courseDistance),distance=pose.speed*elapsed;boat.courseDistance+=distance;
-if(boat.courseDistance>=WAKEBOARD_COURSE.length){boat.stage='docking';boat.elapsed=0;boat.boat={x:590,y:299};continue;}
-const next=wakeboardCoursePose(boat.courseDistance);boat.boat={x:next.x,y:next.y};boat.heading=next.heading;appendTowWake(boat,boat.heading,distance);
+advanceTowBoatRoute(boat,elapsed);
+if(boat.courseDistance>=WAKEBOARD_COURSE.length){boat.stage='docking';boat.elapsed=0;}
 }
 }
 function wakeboardRiderContact(ride,from,to){
@@ -1297,8 +1387,20 @@ else{swimming=true;resetSwimMotion();}
 save();updateWaterControls();
 }
 function drawFastShoreTumble(landing,heading){
-const roll=Math.max(0,Math.min(1,landing.elapsed/landing.duration)),tuck=Math.min(1,roll/.18,(1-roll)/.22);
-rollingCharacter(player.x,player.y-14+4*roll-Math.sin(roll*Math.PI)*4,roll*(Math.PI*2+Math.PI/2)*(Math.cos(heading)>=0?1:-1),tuck);
+const t=Math.max(0,Math.min(1,landing.elapsed/landing.duration)),normal={x:Math.cos(heading),y:Math.sin(heading)};
+const tuck=Math.sin(Math.min(1,t/.78)*Math.PI),angle=Math.min(1,t/.72)*Math.PI*2.5;
+const compact=shorePoseFrame([1,11],[0,7],[-1,3],[[4,6],[3,5]],[[2,8],[1,7]],[[3,9],[3,9]],[[4,8],[4,8]],.7);
+let pose=blendShorePose(standingShorePose(),compact,tuck);
+// Rotate through travel and height, then open the hands to absorb the ground contact.
+for(const key of Object.keys(pose)){
+const [along,across,z]=pose[key],height=z-5;
+pose[key]=[along*Math.cos(angle)+height*Math.sin(angle),across,5+height*Math.cos(angle)-along*Math.sin(angle)+Math.sin(t*Math.PI)*7];
+}
+const settle=Math.max(0,Math.min(1,(t-.7)/.3));pose=blendShorePose(pose,proneShorePose(),settle*settle*(3-2*settle));
+characterEllipse(player.x,player.y+2,6+t*6,2,'#325c4133');
+drawShoreExplorer(pose,normal,0,null,true);
+if(t>.75){ctx.save();ctx.globalAlpha=Math.sin((t-.75)/.25*Math.PI)*.4;
+for(let i=0;i<5;i++)characterEllipse(player.x+(i-2)*3,player.y+1-Math.sin((t-.75)*Math.PI*4)*(2+i%2),.6,.45,'#e9dbac');ctx.restore();}
 }
 function drawWakeboardRelease(release){
 const t=Math.min(1,release.elapsed/release.duration),settle=t*t*(3-2*t),fade=1-settle;
@@ -1331,18 +1433,16 @@ ctx.save();ctx.globalAlpha=Math.sin(t*Math.PI)*.8;ctx.strokeStyle='#e4f8ef';ctx.
 }
 function advanceWakeboarding(dt){
 if(!wakeboardRide||dt<=0||document.querySelector('dialog[open]'))return;
-const ride=wakeboardRide;ride.phase+=dt*.01;ride.wake=ride.wake.filter(w=>{w.age+=dt;return w.age<3200;});
+const ride=wakeboardRide;
 let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0);
 if(dx&&dy){dx/=Math.SQRT2;dy/=Math.SQRT2;}
 for(let remaining=dt;remaining>0&&wakeboardRide;){
 const elapsed=Math.min(16,remaining);remaining-=elapsed;
-const oldBoat=ride.boat,oldHeading=ride.heading,from={...ride.rider},pose=wakeboardCoursePose(ride.courseDistance||0),distance=pose.speed*elapsed;
-ride.courseDistance=((ride.courseDistance||0)+distance)%WAKEBOARD_COURSE.length;
-if(ride.courseDistance>=WAKEBOARD_COURSE.loopEnd)ride.courseDistance=WAKEBOARD_COURSE.loopStart+(ride.courseDistance-WAKEBOARD_COURSE.loopEnd);
-const next=wakeboardCoursePose(ride.courseDistance);ride.boat={x:next.x,y:next.y};ride.heading=next.heading;
+ageBoatWake(ride,elapsed);
+const oldBoat=ride.boat,oldHeading=ride.heading,from={...ride.rider};
+advanceTowBoatRoute(ride,elapsed,true);
 const rider=predictWakeboardRider(from,oldBoat,ride.boat,oldHeading,ride.heading,elapsed,{x:dx,y:dy,carve:0});
 const contact=wakeboardRiderContact(ride,from,rider);
-appendTowWake(ride,ride.heading,distance,remaining);
 if(contact){crashWakeboarder(ride,contact,from,rider);if(remaining>0)advanceReturningWakeboardBoat(remaining);return;}
 if(ride.equipment==='waterskis'){
 ride.skiWakeDistance=(ride.skiWakeDistance||0)+Math.hypot(rider.x-from.x,rider.y-from.y);
@@ -1367,42 +1467,29 @@ ctx.restore();
 }
 function drawWakeboardWake(){
 drawWaterskiWake();
-const wake=wakeboardRide?.wake||wakeboardBoatTrip?.wake;if(!wake?.length)return;
-// Successive world-space sections form connected prop wash and two spreading crests.
-for(let i=1;i<wake.length;i++){
-const a=wake[i-1],b=wake[i];if(Math.hypot(b.x-a.x,b.y-a.y)>18)continue;
-const fade=Math.pow(Math.max(0,1-(a.age+b.age)/6400),1.5);
-const point=(w,side,width)=>[w.x-Math.sin(w.heading)*side*width,w.y+Math.cos(w.heading)*side*width];
-const inner=w=>3+w.age*.004;
-ctx.save();ctx.globalAlpha=fade*.3;
-polygon([point(a,-1,inner(a)),point(b,-1,inner(b)),point(b,1,inner(b)),point(a,1,inner(a))],'#d2f0e5');
-for(const side of [-1,1]){
-const width=w=>8+w.age*.045+Math.sin((w.serial||0)*1.7+w.age*.008)*1.1;
-ctx.globalAlpha=fade*.15;
-polygon([point(a,side,width(a)-3),point(b,side,width(b)-3),point(b,side,width(b)+5),point(a,side,width(a)+5)],'#4c929d');
-ctx.globalAlpha=fade*.65;
-polygon([point(a,side,width(a)),point(b,side,width(b)),point(b,side,width(b)+1.7),point(a,side,width(a)+1.7)],'#e6fbef');
-ctx.globalAlpha=fade*.2;
-polygon([point(a,side,width(a)*.68),point(b,side,width(b)*.68),point(b,side,width(b)*.68+1),point(a,side,width(a)*.68+1)],'#c6e9df');
+const motion=wakeboardRide||wakeboardBoatTrip;
+if(wakeboardDockWake)drawBoatWake(wakeboardDockWake);
+if(motion)drawBoatWake(motion);
 }
-ctx.globalAlpha=fade*.45;
-const jitter=Math.sin((a.serial||i)*2.4)*inner(a)*.7,p=point(a,1,jitter);
-ellipse(p[0],p[1],1.4+fade,1,'#edfff4');ctx.restore();
-}
-}
-function drawWakeboardBoat(x,y,heading,running=false){
-if(boatIsExploding('tow'))return;
+
+function drawWakeboardBoat(x,y,heading,running=false,rebuilding=false){
+if(!rebuilding&&boatUnderConstruction('tow'))return;
 const burning=boatExplosions.get('tow');if(burning){x=burning.x;y=burning.y;heading=burning.heading;}
 drawBoatShadow(x,y,heading,'tow');
-ctx.save();ctx.translate(x,y);ctx.rotate(heading);
-polygon([[-23,-10],[5,-11],[24,0],[5,11],[-23,10]],'#356e79');
-polygon([[-20,-7],[5,-8],[19,0],[5,8],[-20,7]],'#f4db9b');rect(-12,-7,4,14,'#c68353');rect(3,-5,4,10,'#78b5b7');
-rect(-28,-4,6,8,'#3a5156');rect(-27,-3,4,3,'#889994');
-ctx.strokeStyle='#e6e0bd';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-5,-9);ctx.lineTo(-7,-16);ctx.lineTo(3,-16);ctx.lineTo(5,9);ctx.stroke();
-rect(-1,-7,5,7,'#537e62');ellipse(1,-9,3,3,'#e4bd88');rect(-2,-13,6,2,'#496b72');
-if(running){
-for(let i=0;i<4;i++){const flow=((wakeboardRide?.phase||wakeboardBoatTrip?.phase||0)*1.5+i*4)%15;ctx.globalAlpha=(1-flow/18)*.65;ellipse(-29-flow,Math.sin((wakeboardRide?.phase||wakeboardBoatTrip?.phase||0)+i)*2,3+flow*.12,1.3,'#e5f9ed');}
-ctx.globalAlpha=.6;ctx.strokeStyle='#daf2e8';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(12,-10);ctx.quadraticCurveTo(25,-6,28,0);ctx.quadraticCurveTo(25,6,12,10);ctx.stroke();ctx.globalAlpha=1;
+const motion=wakeboardRide||wakeboardBoatTrip;
+const roll=running&&!burning?(motion?.roll||0):0;
+if(running&&motion&&!burning)drawBoatBowWake(x,y,heading,'tow',motion);
+beginBoatHull(x,y,heading,'tow',roll);
+polygon([[-23,-10],[5,-11],[24,0],[5,11],[-23,10]],boatBuildColor(rebuilding,'#356e79'));
+polygon([[-20,-7],[5,-8],[19,0],[5,8],[-20,7]],boatBuildColor(rebuilding,'#f4db9b'));const deckStep=boatBuildPart(rebuilding,'deck');if(deckStep){rect(-12,-7,4,14,deckStep===1?'#c7a16b':'#c68353');rect(3,-5,4,10,deckStep===1?'#c7a16b':'#78b5b7');}
+drawOutboardMotors('tow',running&&!!motion,motion||{trimStep:0},rebuilding);
+const towerStep=boatBuildPart(rebuilding,'tower');if(towerStep){ctx.globalAlpha=towerStep===1?.45:1;ctx.strokeStyle='#e6e0bd';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-5,-9);ctx.lineTo(-7,-16);ctx.lineTo(3,-16);ctx.lineTo(5,9);ctx.stroke();
+ctx.globalAlpha=1;}
+if(!rebuilding){rect(-1,-7,5,7,'#537e62');ellipse(1,-9,3,3,'#e4bd88');rect(-2,-13,6,2,'#496b72');
+}
+drawBoatSteeringWheel(1,-2,0,motion?.steering||0,boatBuildPart(rebuilding,'wheel'));
+if(!rebuilding){
+characterLimb([[2,-5],[4,-4],[6,-6]],'#e4bd88',1.5);
 }
 ctx.restore();const tow=wakeboardTowPoint({x,y},heading);ellipse(tow.x,tow.y-3,2,1.2,'#e9e4bc');
 }
@@ -1435,12 +1522,11 @@ if(currentProfile().character==='girl')rect(player.x-7,player.y-19,3,8,colors.ha
 for(const side of [-1,1]){ctx.strokeStyle='#e4bd88';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x+side*4,player.y-12);ctx.lineTo(handle.x,handle.y);ctx.stroke();}
 ctx.strokeStyle='#385c59';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(handle.x-dy*4,handle.y+dx*4);ctx.lineTo(handle.x+dy*4,handle.y-dx*4);ctx.stroke();
 }
-ctx.fillStyle='#fff0c1';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.fillText('WATERSPORTS',WATERSPORTS_DOCK.x,WATERSPORTS_DOCK.y+43);
 }
 $('#buyWakeboardDock').onclick=buyWakeboard;$('#buyWaterskisDock').onclick=buyWaterskis;$('#mapWaterskisStart').onclick=()=>startWakeboarding('waterskis');$('#mapWakeboardStart').onclick=()=>startWakeboarding('wakeboard');$('#mapWakeboardStop').onclick=finishWakeboarding;
 const PET_DRAGON_HOME={x:268,y:174},FLYING_DRAGON_SPEED=.30,SWIMMING_DRAGON_SPEED=.11;
 let petDragonPosition={...PET_DRAGON_HOME},dragonFlight=null,petDragonPhase=0,petDragonFire=null,petDragonWet=null,playerHairEffect=null,nextPetDragonFire=2000+Math.random()*3000;
-function resetPetDragon(){boatExplosions.clear();for(const t of burnableTrees.values()){t.burnAge=null;t.regrowAge=0;}dragonFlight=null;petDragonPosition={...PET_DRAGON_HOME};petDragonPhase=0;petDragonFire=null;petDragonWet=null;playerHairEffect=null;nextPetDragonFire=2000+Math.random()*3000;}
+function resetPetDragon(){for(const vessel of new Set([...boatExplosions.keys(),...boatRepairs.keys()]))restoreRebuiltBoat(vessel);boatRepairs.clear();boatExplosions.clear();for(const t of [...burnableTrees.values(),...burnableUmbrellas.values()]){t.burnAge=null;t.regrowAge=0;}dragonFlight=null;petDragonPosition={...PET_DRAGON_HOME};petDragonPhase=0;petDragonFire=null;petDragonWet=null;playerHairEffect=null;nextPetDragonFire=2000+Math.random()*3000;}
 function advancePetDragonWet(dt){
 if(!petDragonWet||dt<=0||document.querySelector('dialog[open]'))return;
 petDragonWet.elapsed+=dt;if(petDragonWet.elapsed>=2800)petDragonWet=null;
@@ -1533,9 +1619,9 @@ if(!dragonFlight)return;
 player.x=PET_DRAGON_HOME.x;player.y=PET_DRAGON_HOME.y;
 dragonFlight.stage='landing';dragonFlight.fromSwimming=false;dragonFlight.startAltitude=30;dragonFlight.elapsed=0;dragonFlight.altitude=30;dragonFlight.from={...PET_DRAGON_HOME};dragonFlight.to={...PET_DRAGON_HOME};keys.clear();updateWaterControls();
 }
-function advancePetDragon(dt){
+function advancePetDragon(dt,advanceFire=true){
 if(dt<=0)return;
-petDragonPhase+=dt*.007;advancePetDragonFire(dt);
+petDragonPhase+=dt*.007;if(advanceFire)advancePetDragonFire(dt);
 if(!dragonFlight)return;
 const flight=dragonFlight;flight.elapsed+=dt;
 flight.swimWake=(flight.swimWake||[]).filter(w=>{w.age+=dt;return w.age<1400;});
@@ -1590,17 +1676,25 @@ ctx.beginPath();ctx.moveTo(-5-t*9,-spread);ctx.quadraticCurveTo(-2,-spread*.7,3,
 }
 function advancePetDragonFire(dt){
 if(dt<=0||document.querySelector('dialog[open]'))return;
-for(const [vessel,blast] of boatExplosions){blast.elapsed+=dt;if(blast.elapsed>=BOAT_EXPLOSION_DURATION)boatExplosions.delete(vessel);}
-for(const t of burnableTrees.values())if(t.burnAge!==null){
+advanceBoatRepairs(dt);
+for(const [vessel,blast] of boatExplosions){
+blast.elapsed+=dt;
+if(blast.elapsed>=BOAT_EXPLOSION_DURATION){
+boatExplosions.delete(vessel);
+boatRepairs.set(vessel,createBoatRepair(vessel));
+advanceBoatRepair(boatRepairs.get(vessel),blast.elapsed-BOAT_EXPLOSION_DURATION);
+}
+}
+for(const t of [...burnableTrees.values(),...burnableUmbrellas.values()])if(t.burnAge!==null){
 const elapsed=t.burnAge+dt;
 t.burnAge=Math.min(TREE_BURN_DURATION,elapsed);
-t.regrowAge=Math.min(TREE_REGROW_DURATION,t.regrowAge+Math.max(0,elapsed-TREE_BURN_DURATION));
+if(t.kind!=='umbrella')t.regrowAge=Math.min(TREE_REGROW_DURATION,t.regrowAge+Math.max(0,elapsed-TREE_BURN_DURATION));
 if(t.regrowAge>=TREE_REGROW_DURATION){t.burnAge=null;t.regrowAge=0;}
 }
 if(petDragonFire){
 petDragonFire.elapsed+=dt;
 if(petDragonFire.elapsed>=petDragonFire.duration)petDragonFire=null;
-else{checkPlayerDragonFireHit();checkTreeDragonFireHits();checkBoatDragonFireHits();}
+else{checkPlayerDragonFireHit();checkTreeDragonFireHits();checkDragonFireSceneryHits(burnableUmbrellas);checkBoatDragonFireHits();}
 return;
 }
 nextPetDragonFire-=dt;
@@ -1700,29 +1794,51 @@ ellipse(48+drift*12-Math.sin(heading)*drift*15,-Math.cos(heading)*drift*15*uprig
 }
 ctx.restore();
 }
+function drawPetDragonBody(wing,inWater,shadow=false){
+// Trace all parts into one fill so overlapping wings/body do not darken the shadow.
+const shapePolygon=(points,color)=>{
+if(!shadow){polygon(points,color);return;}
+const area=points.reduce((a,p,i)=>{const q=points[(i+1)%points.length];return a+p[0]*q[1]-q[0]*p[1];},0);
+const contour=area<0?points.slice().reverse():points;
+contour.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
+};
+const shapeEllipse=(x,y,rx,ry,color)=>{
+if(!shadow){ellipse(x,y,rx,ry,color);return;}
+ctx.moveTo(x+rx,y);ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.closePath();
+};
+const shapeRect=(x,y,w,h,color)=>{
+if(!shadow){rect(x,y,w,h,color);return;}
+ctx.rect(Math.round(x),Math.round(y),w,h);
+};
+if(shadow)ctx.beginPath();
+// Violet scales and golden wing membranes distinguish this pet from Nessie.
+for(const side of [-1,1]){
+shapePolygon([[-7,side*3],[-13,side*(wing+9)],[2,side*(wing+5)],[12,side*8],[4,side*3]],'#69528c');
+shapePolygon([[-5,side*4],[-10,side*(wing+5)],[1,side*(wing+2)],[8,side*7]],'#d9b675');
+if(!shadow){ctx.strokeStyle='#8a6b9d';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-5,side*4);ctx.lineTo(1,side*(wing+2));ctx.stroke();}
+}
+shapePolygon([[-13,1],[-28,Math.sin(petDragonPhase*.7)*3],[-34,4+Math.sin(petDragonPhase*.7)*3],[-20,6],[-10,5]],'#7b609c');
+shapeEllipse(-1,1,16,7,'#8e73ad');shapeEllipse(3,3,9,3,'#cfb889');
+for(let i=0;i<4;i++)shapePolygon([[-14+i*6,-3],[-12+i*6,-8],[-10+i*6,-3]],'#d9bd7d');
+for(const side of [-1,1]){const paddle=inWater?Math.sin(petDragonPhase+side)*3:0;shapeRect(-8+paddle,side*7,5,3,'#69528c');shapeRect(6-paddle,side*6,5,3,'#69528c');}
+shapeEllipse(14,-2,8,6,'#977eb7');shapeRect(17,-4,9,6,'#977eb7');shapeRect(13,-10,2,4,'#ebd69a');shapeRect(19,-10,2,4,'#ebd69a');
+shapeEllipse(20,-4,1,1,'#243d40');shapeRect(24,-2,1,1,'#5c4778');shapeRect(19,2,6,1,'#66517e');if(!shadow)drawPetDragonFire();
+shapeRect(-5,-3,8,7,'#69513e');shapeRect(-4,-3,6,2,'#e6c686');
+if(shadow)ctx.fill();
+}
 function drawPetDragon(){
 const flight=dragonFlight,x=flight?player.x:petDragonPosition.x,y=flight?player.y:petDragonPosition.y;
 const inWater=flight?.stage==='swimming',height=flight?flight.altitude:0,heading=flight?flight.heading:0,flap=Math.sin(petDragonPhase),wing=inWater?5+flap*.8:flight?15+flap*8:7;
 drawPetDragonSwimWake();
 if(inWater&&flight.waterEntryAge<650){const t=flight.waterEntryAge/650;ctx.save();ctx.globalAlpha=(1-t)*.65;ctx.strokeStyle='#e0f6ea';ctx.lineWidth=.9;ctx.beginPath();ctx.ellipse(x,y,12+t*16,5+t*6,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
-ellipse(x+height*.2,y+5,flight?22-height*.15:20,flight?7:6,inWater?'#377c8a44':'#315b4844');
+ctx.save();ctx.translate(x+height*.2,y+5);ctx.scale(1,.65);ctx.rotate(heading);
+if(Math.cos(heading)<0)ctx.scale(1,-1);
+ctx.fillStyle=inWater?'#377c8a44':'#315b4844';drawPetDragonBody(wing,inWater,true);ctx.restore();
 const shake=petDragonWet&&petDragonWet.elapsed>=800&&petDragonWet.elapsed<2000?Math.sin((petDragonWet.elapsed-800)*.045)*.12:0;
 ctx.save();ctx.translate(x+shake*12,y-height);ctx.rotate(heading+shake);
 // Mirror the left-facing view so horns, face, and saddle remain upright.
 if(Math.cos(heading)<0)ctx.scale(1,-1);
-// Violet scales and golden wing membranes distinguish this pet from Nessie.
-for(const side of [-1,1]){
-polygon([[-7,side*3],[-13,side*(wing+9)],[2,side*(wing+5)],[12,side*8],[4,side*3]],'#69528c');
-polygon([[-5,side*4],[-10,side*(wing+5)],[1,side*(wing+2)],[8,side*7]],'#d9b675');
-ctx.strokeStyle='#8a6b9d';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-5,side*4);ctx.lineTo(1,side*(wing+2));ctx.stroke();
-}
-polygon([[-13,1],[-28,Math.sin(petDragonPhase*.7)*3],[-34,4+Math.sin(petDragonPhase*.7)*3],[-20,6],[-10,5]],'#7b609c');
-ellipse(-1,1,16,7,'#8e73ad');ellipse(3,3,9,3,'#cfb889');
-for(let i=0;i<4;i++)polygon([[-14+i*6,-3],[-12+i*6,-8],[-10+i*6,-3]],'#d9bd7d');
-for(const side of [-1,1]){const paddle=inWater?Math.sin(petDragonPhase+side)*3:0;rect(-8+paddle,side*7,5,3,'#69528c');rect(6-paddle,side*6,5,3,'#69528c');}
-ellipse(14,-2,8,6,'#977eb7');rect(17,-4,9,6,'#977eb7');rect(13,-10,2,4,'#ebd69a');rect(19,-10,2,4,'#ebd69a');
-ellipse(20,-4,1,1,'#243d40');rect(24,-2,1,1,'#5c4778');rect(19,2,6,1,'#66517e');drawPetDragonFire();
-rect(-5,-3,8,7,'#69513e');rect(-4,-3,6,2,'#e6c686');
+drawPetDragonBody(wing,inWater);
 drawPetDragonWater();
 if(inWater){ctx.globalAlpha=.5;ctx.strokeStyle='#d3efe3';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(0,2,21,7,0,0,Math.PI);ctx.stroke();ctx.globalAlpha=1;}ctx.restore();
 if(flight){character(x,y-height-4);if(inWater)directionalSwimGear(x,y-19);}
@@ -2258,7 +2374,7 @@ const unlocked=speedboatUnlocked(),newUnlock=unlocked&&!state.speedboat&&!curren
 if(unlocked){state.speedboat=true;currentProfile().speedboat=true;}
 if(newUnlock)toast('100-crystal milestone! Your speedboat dock is open — triple outboards and 25% more speed!');
 }
-function outboardOffsets(vessel,spacing){return vessel==='speedboat'?[-spacing,0,spacing]:[-spacing,spacing];}
+function outboardOffsets(vessel,spacing){return vessel==='tow'?[0]:vessel==='speedboat'?[-spacing,0,spacing]:[-spacing,spacing];}
 function vesselPose(vessel){
 if(vessel===activeVessel)return [boatPosition.x,boatPosition.y,boatMotion.heading];
 const position=vessel==='ferry'?ferryPosition:vessel==='speedboat'?speedboatPosition:fishingBoatPosition;
@@ -2271,7 +2387,7 @@ else{fishingBoatPosition={...boatPosition};fishingBoatHeading=boatMotion.heading
 }
 function launchSpeedboat(){
 if(!speedboatUnlocked()){toast('Earn or hold 100 crystals to unlock the speedboat dock.');return;}
-if(boatExplosions.has('speedboat')){toast('Wait for the speedboat’s smoke to clear.');return;}
+if(boatUnavailable('speedboat')){toast('The speedboat is being rebuilt at its home dock. Repairs are free.');return;}
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame||surfSession||beachTransfer||shoreRecovery||voyage||boating)return;
 if(!hasSwimPower()){toast('Solve a problem to restore energy before heading out on the water.');return;}
 stopFishing();parkCurrentVessel();state.beachAnchor=null;state.boatIsland=null;state.parkedBoat=null;
@@ -2280,33 +2396,46 @@ resetBoatMotion();const berth=clearBoatBerth(SPEEDBOAT_MOORING,0,'speedboat');bo
 startBoatEngines();closeMapPanel();keys.clear();save();updateFishing();updateWaterControls();canvas.focus({preventScroll:true});
 showBoatBoardingHint('Triple outboards ready! Your speedboat is 25% faster. WASD steers; Space trims; F fishes; X steps off.');
 }
+function drawDockSign(dock,title){
+const {x,y}=dock,width=Math.max(28,title.length*3+4);
+rect(x-10,y-14,2,7,'#6f6349');rect(x+8,y-14,2,7,'#6f6349');
+rect(x-width/2,y-21,width,10,'#245d72');rect(x-width/2+1,y-20,width-2,1,'#88dcdd');
+ctx.save();ctx.font='5px monospace';ctx.fillStyle='#e8faff';ctx.textAlign='center';ctx.fillText(title,x,y-14);ctx.restore();
+}
 function drawSpeedboatDock(){
 const x=SPEEDBOAT_DOCK.x,y=SPEEDBOAT_DOCK.y;
-rect(x-14,y-21,28,10,'#245d72');rect(x-13,y-20,26,1,'#88dcdd');
-ctx.save();ctx.font='5px monospace';ctx.fillStyle='#e8faff';ctx.textAlign='center';ctx.fillText('SPEEDBOAT',x,y-14);ctx.restore();
+drawDockSign(SPEEDBOAT_DOCK,'SPEEDBOAT');
 for(const side of [-1,1]){rect(x+side*10-1,y+9,2,13,'#425d63');rect(x+side*10-2,y+9,4,2,'#eef0c7');}
 }
-function speedboatArt(x,y){
-if(boatIsExploding('speedboat'))return;
+function speedboatArt(x,y,rebuilding=false){
+if(!rebuilding&&boatUnderConstruction('speedboat'))return;
 const burning=boatExplosions.get('speedboat');if(burning){x=burning.x;y=burning.y;}
 const active=boating&&activeVessel==='speedboat',heading=burning?.heading??(activeVessel==='speedboat'?boatMotion.heading:speedboatHeading);
 if(activeVessel==='speedboat')drawBoatWake();
 drawBoatShadow(x,y,heading,'speedboat');drawBoatBowWake(x,y,heading,'speedboat');drawBoatExhaust(x,y,heading,'speedboat');drawBoatTrimSpray(x,y,heading,'speedboat');
-ctx.save();ctx.translate(x,y);ctx.rotate(heading);
-polygon([[-28,-12],[4,-13],[24,-7],[33,0],[24,7],[4,13],[-28,12]],'#244655');
-polygon([[-26,-10],[4,-11],[23,-6],[30,0],[23,6],[4,11],[-26,10]],'#edf5e9');
-polygon([[-24,-8],[6,-9],[24,-3],[28,0],[24,3],[6,9],[-24,8]],'#3595ac');
-polygon([[1,-8],[24,-3],[28,0],[24,3],[1,8],[9,0]],'#d8f0e7');
-polygon([[7,-6],[24,-2],[27,0],[24,2],[7,6],[13,0]],'#df7049');
-rect(-21,-7,16,14,'#284d60');for(const side of [-4,4]){rect(-18,side-2,8,4,'#faf1d3');rect(-18,side-2,2,4,'#c6d9ca');}
-polygon([[-5,-9],[3,-7],[5,0],[3,7],[-5,9],[-2,0]],'#92dadd');
+const roll=activeVessel==='speedboat'&&!burning?(boatMotion.roll||0):0;
+beginBoatHull(x,y,heading,'speedboat',roll);
+polygon([[-28,-12],[4,-13],[24,-7],[33,0],[24,7],[4,13],[-28,12]],boatBuildColor(rebuilding,'#244655'));
+polygon([[-26,-10],[4,-11],[23,-6],[30,0],[23,6],[4,11],[-26,10]],boatBuildColor(rebuilding,'#edf5e9'));
+polygon([[-24,-8],[6,-9],[24,-3],[28,0],[24,3],[6,9],[-24,8]],boatBuildColor(rebuilding,'#3595ac'));
+polygon([[1,-8],[24,-3],[28,0],[24,3],[1,8],[9,0]],boatBuildColor(rebuilding,'#d8f0e7'));
+polygon([[7,-6],[24,-2],[27,0],[24,2],[7,6],[13,0]],boatBuildColor(rebuilding,'#df7049'));
+const deckStep=boatBuildPart(rebuilding,'deck');if(deckStep){ctx.save();ctx.globalAlpha=deckStep===1?.45:1;rect(-21,-7,16,14,'#284d60');for(const side of [-4,4]){rect(-18,side-2,8,4,'#faf1d3');rect(-18,side-2,2,4,'#c6d9ca');}
+ctx.restore();}
+const screenStep=boatBuildPart(rebuilding,'windscreen');if(screenStep){
+if(screenStep===2)polygon([[-5,-9],[3,-7],[5,0],[3,7],[-5,9],[-2,0]],'#92dadd');
 ctx.strokeStyle='#e3ffff';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(-4,-8);ctx.lineTo(2,-6);ctx.lineTo(4,0);ctx.stroke();
-drawOutboardMotors('speedboat',active);
+}
+drawOutboardMotors('speedboat',active,boatMotion,rebuilding);
 if(active&&boatMotion.power>.1){ctx.globalAlpha=boatMotion.power*.6;for(const side of [-9,0,9])ellipse(-34,side,5,1.8,'#e6fff3');}
-ctx.restore();if(active&&!hookedFish)character(x-Math.cos(heading)*11,y-Math.sin(heading)*11-4);
+ctx.restore();
+if(active&&!fishingActive){
+const riderX=x-Math.cos(heading)*11,riderY=y-Math.sin(heading)*11-2;
+drawSeatedBoatRider(riderX,riderY,heading,roll);
+}else drawBoatSteeringWheel(x-Math.cos(heading)*11,y-Math.sin(heading)*11-2,heading,0,boatBuildPart(rebuilding,'wheel'));
 }
 function launchBoat(){
-if(boatExplosions.has('fishing')){toast('Wait for the boat’s smoke to clear.');return;}
+if(boatUnavailable('fishing')){toast('The boat is being rebuilt at its home dock. Repairs are free.');return;}
 if(beachTransfer||volleyball||frisbeeGame)return;
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame){toast('Finish your current ride first.');return;}
 if(!sponsored()||voyage||boating||shoreRecovery)return;if(!hasSwimPower()){toast('Solve a problem to restore energy before heading out on the water.');return;}stopFishing();
@@ -2316,8 +2445,35 @@ function boatHomeDock(){return activeVessel==='speedboat'?SPEEDBOAT_DOCK:activeV
 function returnBoat(){if(!boating&&!swimming)return;state.beachAnchor=null;state.boatIsland=null;state.parkedBoat=null;const wasSwimming=swimming;stopFishing();boating=false;swimming=false;diveAnimation=null;shoreClimb=null;shoreRecovery=null;timberStep=null;beachTransfer=null;const home=boatHomeDock();boatPosition=activeVessel==='ferry'?ferryBerth(dock):{...(activeVessel==='speedboat'?SPEEDBOAT_MOORING:BOAT_MOORING)};resetBoatMotion();parkCurrentVessel();player.x=home.x;player.y=home.y-(home===fishingDock?8:18);if(wasSwimming)startGoggleToss();keys.clear();save();updateFishing();canvas.focus({preventScroll:true});toast(activeVessel==='speedboat'?'Speedboat safely moored at its dock.':activeVessel==='fishing'&&sponsored()?'Fishing boat safely moored at the fishing dock.':'Back on shore at the main ferry dock.');}
 function openSea(x,y){return x>WORLD.left+10&&x<WORLD.right-10&&y>10&&y<WORLD.height-10&&!islandPolys.some(p=>inside(x,y,p))&&!canWalk(x,y);}
 function canFishAtDock(){return !boating&&!swimming&&!voyage&&!shoreRecovery&&!beachTransfer&&!wakeboardCrash&&!dragonFlight&&!wakeboardRide&&!volleyball&&!frisbeeGame&&!surfSession&&Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)<45;}
+function dockDiveTarget(){
+const timber=[...crossings,...activePiers(),...(state.upgrades.includes('bridge')?[woodlandBridge]:[])];
+const contains=(b,x,y)=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h;
+const launch=timber.filter(b=>contains(b,player.x,player.y));
+const boats=boatObstacles('diver');
+const blocked=(x,y)=>!sharkWater(x,y)||boats.some(poly=>inside(x,y,poly));
+const clearLanding=(x,y)=>Array.from({length:9},(_,i)=>i===8?[x,y]:[x+Math.cos(i*Math.PI/4)*8,y+Math.sin(i*Math.PI/4)*8]).every(([px,py])=>!blocked(px,py)&&!timber.some(b=>contains(b,px,py)));
+const facing=player.facing||'down',forward=facing==='left'?{x:-1,y:0}:facing==='right'?{x:1,y:0}:facing==='up'?{x:0,y:-1}:{x:0,y:1};
+const target=direction=>{
+for(let distance=2;distance<=64;distance+=2){
+const x=player.x+direction.x*distance,y=player.y+direction.y*distance;
+// The airborne path may cross the launching deck, but never land, hulls, or another structure.
+for(const across of [-3,0,3]){
+const px=x-direction.y*across,py=y+direction.x*across;
+if(blocked(px,py)||timber.some(b=>!launch.includes(b)&&contains(b,px,py)))return null;
+}
+if(distance>=32&&clearLanding(x,y))return {x,y};
+}
+return null;
+};
+const ahead=target(forward);if(ahead)return ahead;
+const sides=[target({x:forward.y,y:-forward.x}),target({x:-forward.y,y:forward.x})].filter(Boolean);
+// Prefer the nearer clear side; equal openings consistently choose the character's left.
+sides.sort((a,b)=>Math.hypot(a.x-player.x,a.y-player.y)-Math.hypot(b.x-player.x,b.y-player.y));
+return sides[0]||null;
+}
 function shoreDiveTarget(){
 if(wakeboardCrash||frisbeeGame||volleyball||wakeboardRide||dragonFlight||!hasSwimPower()||boating||swimming||voyage||fishingActive||diveAnimation||shoreClimb||shoreRecovery||!canWalk(player.x,player.y))return null;
+if(walkableTimberAt(player.x,player.y))return dockDiveTarget();
 for(let distance=8;distance<=32;distance+=8)for(let i=0;i<32;i++){
 const angle=i*Math.PI/16,x=player.x+Math.cos(angle)*distance,y=player.y+Math.sin(angle)*distance;
 if(openSea(x,y))return {x,y};
@@ -2380,11 +2536,11 @@ return false;
 }
 function boatObstacles(vessel=activeVessel){
 const boats=[];
-if(vessel!=='ferry')boats.push(boatHull(...vesselPose('ferry'),'ferry'));
-if(vessel!=='fishing'&&sponsored())boats.push(boatHull(...vesselPose('fishing'),'fishing'));
-if(vessel!=='speedboat'&&speedboatUnlocked())boats.push(boatHull(...vesselPose('speedboat'),'speedboat'));
+if(vessel!=='ferry'&&!boatIsExploding('ferry'))boats.push(boatHull(...vesselPose('ferry'),'ferry'));
+if(vessel!=='fishing'&&sponsored()&&!boatIsExploding('fishing'))boats.push(boatHull(...vesselPose('fishing'),'fishing'));
+if(vessel!=='speedboat'&&speedboatUnlocked()&&!boatIsExploding('speedboat'))boats.push(boatHull(...vesselPose('speedboat'),'speedboat'));
 const tow=wakeboardRide||wakeboardBoatTrip;
-if(vessel!=='tow')boats.push(boatHull(tow?.boat.x??WATERSPORTS_DOCK.x+40,tow?.boat.y??WATERSPORTS_DOCK.y+18,tow?.heading??wakeboardDockHeading,'tow'));
+if(vessel!=='tow'&&!boatIsExploding('tow'))boats.push(boatHull(tow?.boat.x??WATERSPORTS_DOCK.x+40,tow?.boat.y??WATERSPORTS_DOCK.y+18,tow?.heading??wakeboardDockHeading,'tow'));
 return boats;
 }
 function boatPoseClear(x,y,heading,vessel=activeVessel){
@@ -2438,14 +2594,25 @@ player.x=x;player.y=y;
 recordBoatMovement(from,target);boatPosition={x:player.x,y:player.y};advanceSwimming(0);
 }
 function boatTrimLevel(){const step=boatMotion.trimStep||0;return step<=5?step:10-step;}
-function boatTopSpeed(trim=boatTrimLevel()){
+function boatTopSpeed(trim=boatTrimLevel(),vessel=activeVessel){
 // Trim 4 is the sweet spot; at 5 the raised props lose their grip.
-return 140*(activeVessel==='speedboat'?1.25:1)*(trim===5?.75:1+.18*trim/4);
+return 140*(vessel==='speedboat'?1.25:1)*(trim===5?.75:1+.18*trim/4);
 }
 function cycleBoatTrim(){
 if(!boating||fishingActive||boatAnchorBusy()||beachTransfer||voyage)return;
 boatMotion.trimStep=((boatMotion.trimStep||0)+1)%10;
 updateWaterControls();
+}
+function boatVelocityStep(velocity,throttle,step,vessel,trim=0,maxForward=boatTopSpeed(trim,vessel)){
+if(throttle){
+const braking=velocity*throttle<0,grip=trim===5?.15:1;
+// Nearly exposed props churn water instead of building speed from a stop.
+const acceleration=braking?110:(throttle>0?65*(vessel==='speedboat'?1.25:1):45)*grip;
+const next=velocity>maxForward&&throttle>0?Math.max(maxForward,velocity-65*step):velocity+throttle*acceleration*step;
+// Opposite thrust must cancel momentum before engaging the other direction.
+velocity=braking&&next*velocity<0?0:Math.max(-65,velocity>maxForward&&throttle>0?next:Math.min(maxForward,next));
+}else{velocity*=Math.exp(-.85*step);if(Math.abs(velocity)<.15)velocity=0;}
+return velocity;
 }
 function driveBoat(dt,throttle,steer){
 const previousThrottle=boatMotion.throttle;
@@ -2459,15 +2626,7 @@ boatMotion.throttle=throttle;
 for(let remaining=dt/1000;remaining>0;){
 const step=Math.min(.01,remaining);remaining-=step;
 let velocity=boatMotion.velocity||0;
-if(throttle){
-const braking=velocity*throttle<0,grip=boatTrimLevel()===5?.15:1;
-// Nearly exposed props churn water instead of building speed from a stop.
-const acceleration=braking?110:(throttle>0?65*(activeVessel==='speedboat'?1.25:1):45)*grip;
-const maxForward=boatTopSpeed();
-const next=velocity>maxForward&&throttle>0?Math.max(maxForward,velocity-65*step):velocity+throttle*acceleration*step;
-// Opposite thrust must cancel momentum before engaging the other direction.
-velocity=braking&&next*velocity<0?0:Math.max(-65,velocity>maxForward&&throttle>0?next:Math.min(maxForward,next));
-}else{velocity*=Math.exp(-.85*step);if(Math.abs(velocity)<.15)velocity=0;}
+velocity=boatVelocityStep(velocity,throttle,step,activeVessel,boatTrimLevel());
 // Outboards push the stern opposite the bow's turn; reverse thrust flips this.
 const thrustDirection=velocity<-.5?-1:velocity>.5?1:throttle<0?-1:1;
 const speedboat=activeVessel==='speedboat';
@@ -2619,6 +2778,7 @@ else{const offset=[[24,10],[-24,10],[0,25],[0,-25]].find(([x,y])=>openSea(player
 save();updateFishing();canvas.focus({preventScroll:true});
 }
 function boardOwnBoat(){
+if(boatUnavailable(activeVessel)){toast('Repairs are underway at the home dock.');return;}
 if(state.beachAnchor&&!swimming){returnToAnchoredBoat();return;}
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame){toast('Finish your current ride first.');return;}
 if(!hasSwimPower()||!canUseCurrentVessel()||(!swimming&&!canBoardIslandBoat())||diveAnimation||shoreClimb||sharkRide?.landing||Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)>(swimming?44:75))return;
@@ -2667,7 +2827,7 @@ const anchor=state.beachAnchor;
 return !!anchor&&canUseCurrentVessel()&&!surfSession&&!volleyball&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!beachTransfer&&onMainlandBeach()&&Math.hypot(player.x-anchor.landing.x,player.y-anchor.landing.y)<70;
 }
 function returnToAnchoredBoat(){
-if(boatExplosions.has(activeVessel))return;
+if(boatUnavailable(activeVessel))return;
 if(!canReturnToAnchoredBoat()||!canUseCurrentVessel())return;
 if(!hasSwimPower()){toast('Solve a problem to restore energy before heading back onto the water.');return;}
 stopFishing();keys.clear();const anchor=state.beachAnchor;
@@ -2698,7 +2858,7 @@ ctx.save();
 const {x,y}=anchor.landing;rect(x-1,y-14,2,17,'#846a46');polygon([[x+1,y-14],[x+13,y-11],[x+1,y-7]],'#df9b62');ctx.restore();
 }
 $('#mapBeachPass').onclick=openBeachPassShop;$('#buyBeachPass').onclick=buyBeachPass;$('#mapAnchor').onclick=anchorBoatAtBeach;$('#mapBeachBoat').onclick=returnToAnchoredBoat;
-function canUseCurrentVessel(){if(boatExplosions.has(activeVessel))return false;return activeVessel==='speedboat'?speedboatUnlocked():activeVessel==='ferry'?state.ferryRemaining>0:sponsored();}
+function canUseCurrentVessel(){if(boatUnavailable(activeVessel))return false;return activeVessel==='speedboat'?speedboatUnlocked():activeVessel==='ferry'?state.ferryRemaining>0:sponsored();}
 function canBoardIslandBoat(){
 if(state.beachAnchor)return false;
 return !swimming&&!boating&&(!!state.boatIsland||activeVessel==='ferry'&&state.ferryRemaining>0)&&canUseCurrentVessel()&&Math.hypot(player.x-boatPosition.x,player.y-boatPosition.y)<75;
@@ -2719,6 +2879,7 @@ stopFishing();keys.clear();openQuestion(island.practice);
 $('#challengeCategory').textContent=`${island.name} / ${questions[island.practice].skill}`;
 }
 function advanceSwimming(dt){
+advancePetDragonFire(dt);
 advanceFerryRide(dt);
 if(dt>0&&!document.querySelector('dialog[open]'))waterskiWake=waterskiWake.filter(w=>{w.age+=dt;return w.age<1800;});
 advanceSunbathers(dt);
@@ -2739,7 +2900,7 @@ if(frisbeeGame){advanceFrisbee(dt);updateWaterControls();return;}
 if(volleyball){advanceVolleyball(dt);updateWaterControls();return;}
 advanceBeachTransfer(dt);
 if(wakeboardRide){advanceWakeboarding(dt);updateWaterControls();return;}
-const dragonWasSwimming=dragonFlight?.stage==='swimming';advancePetDragon(dt);if(dragonFlight){if(dragonWasSwimming&&dragonFlight.stage==='swimming')advancePower(dt);updateWaterControls();return;}
+const dragonWasSwimming=dragonFlight?.stage==='swimming';advancePetDragon(dt,false);if(dragonFlight){if(dragonWasSwimming&&dragonFlight.stage==='swimming')advancePower(dt);updateWaterControls();return;}
 advancePower(dt);
 advanceGoggleToss(dt);
 advanceTimberStep(dt);
@@ -2902,15 +3063,20 @@ const dx=bait.x-tip.x,dy=bait.y-tip.y,length=Math.hypot(dx,dy)||1;
 return Array.from({length:33},(_,i)=>{const u=i/32,envelope=Math.sin(Math.PI*u),wave=Math.sin(u*Math.PI*3-flight*12)*loop*envelope;return {x:tip.x+dx*u-dy/length*wave,y:tip.y+dy*u+dx/length*wave+envelope*length*.08*(1-flight)};});
 }
 function fishingCastPose(cast){
-const t=Math.max(0,Math.min(1,cast.elapsed/FISH_CAST_DURATION)),hand=cast.origin||{x:player.x+4,y:player.y-9};
-const heading=Math.atan2(cast.y-hand.y,cast.x-hand.x),windup=Math.min(1,t/.22),flight=Math.max(0,Math.min(1,(t-.22)/.78));
-const angle=t<.22?heading-1.4-Math.sin(windup*Math.PI/2)*1.3:heading-2.7*Math.exp(-flight*9)+Math.sin(flight*11)*.18*Math.exp(-flight*4);
+const t=Math.max(0,Math.min(1,cast.elapsed/FISH_CAST_DURATION)),origin=cast.origin||{x:fishingAngler().x+4,y:fishingAngler().y-9};
+const heading=Math.atan2(cast.y-origin.y,cast.x-origin.x),windup=Math.min(1,t/.22),flight=Math.max(0,Math.min(1,(t-.22)/.78));
+const side=Math.cos(heading)>=0?1:-1;
+const angle=t<.22?heading-side*(1.4+Math.sin(windup*Math.PI/2)*1.3):heading+side*(-2.7*Math.exp(-flight*9)+Math.sin(flight*11)*.18*Math.exp(-flight*4));
+// Both hands travel with the rod through the backswing and forward release.
+const baseY=fishingAngler().y-(boating?6:0);
+const hand={x:origin.x+(side-1)*4+Math.cos(angle)*5-Math.cos(heading)*3,y:baseY-12+Math.sin(angle)*5};
+const lean=-Math.sin(t*Math.PI*2)*.16;
 const tip={x:hand.x+Math.cos(angle)*25,y:hand.y+Math.sin(angle)*25};
-const start={x:hand.x+Math.cos(heading-2.7)*28,y:hand.y+Math.sin(heading-2.7)*28};
+const start={x:hand.x+Math.cos(heading-side*2.7)*28,y:hand.y+Math.sin(heading-side*2.7)*28};
 const bait=t<.22?{x:tip.x+Math.cos(angle-.8)*5,y:tip.y+Math.sin(angle-.8)*5}:{x:start.x+(cast.x-start.x)*flight,y:start.y+(cast.y-start.y)*flight-Math.sin(flight*Math.PI)*Math.min(45,Math.hypot(cast.x-start.x,cast.y-start.y)*.3)};
 const loop=t<.22?6:Math.sin(flight*Math.PI)*18+Math.sin(flight*16)*7*(1-flight);
 const line=fishingLinePoints(tip,bait,flight,loop);
-return {t,hand,tip,bait,line,bend:Math.sin(t*Math.PI*2)*8};
+return {t,hand,tip,bait,line,side,lean,bend:Math.sin(t*Math.PI*2)*8};
 }
 // Species anatomy is drawn in local coordinates so fins, tails, and arms move independently.
 function drawFishAnatomy(f){
@@ -2991,29 +3157,55 @@ const angler=fishingAngler(),h=hookedFish,pull=Math.max(0,1-(h.elapsed-h.lastPul
 const dx=h.from.x-angler.x,dy=h.from.y-angler.y,length=Math.hypot(dx,dy)||1,side=dx>=0?1:-1;
 const struggle=(Math.sin(time*19)*4+Math.sin(time*31)*2)*(1-h.progress*.65);
 const fish={...h.fish,x:h.from.x+(angler.x+side*20-h.from.x)*h.progress-dy/length*struggle,y:h.from.y+(angler.y+12-h.from.y)*h.progress+dx/length*struggle,tail:Math.sin(time*28),surface:1,nearSurface:true};
-const lean=.12+pull*.32,hand={x:angler.x+side*(5-lean*9),y:angler.y-12-pull*6};
+const lean=.12+pull*.32,hand={x:angler.x+side*(5-lean*9),y:angler.y-(boating?6:0)-12-pull*6};
 const tip={x:hand.x+side*(17-pull*12),y:hand.y-19-pull*15};
 return {fish,pull,lean,side,hand,tip,time};
 }
+// One detailed angler supplies idle, casting, and reeling poses on shore and every boat.
+function drawFishingAngler(p,reeling=false){
+const angler=fishingAngler(),baseY=angler.y-(boating?6:0),colors=characterColors(),side=p.side;
+const angle=-side*p.lean,pivot={x:angler.x,y:baseY-3};
+const bodyPoint=(x,y)=>[pivot.x+x*Math.cos(angle)-y*Math.sin(angle),pivot.y+x*Math.sin(angle)+y*Math.cos(angle)];
+const reel={x:p.hand.x-side*2,y:p.hand.y+2};
+const crank=reeling?(1-p.pull)*Math.PI*3:0;
+const reelHand={x:reel.x+Math.cos(crank)*2.7,y:reel.y+Math.sin(crank)*2.7};
+const arm=(shoulder,hand,bend,color)=>{
+const dx=hand.x-shoulder[0],dy=hand.y-shoulder[1],length=Math.hypot(dx,dy)||1;
+const elbow=[(shoulder[0]+hand.x)/2-dy/length*bend,(shoulder[1]+hand.y)/2+dx/length*bend];
+characterLimb([shoulder,elbow,[hand.x,hand.y]],color,2.4);
+characterEllipse(hand.x,hand.y,1.3,1.45,'#f2c992');
+};
+characterEllipse(angler.x,baseY+3,6.5,1.8,'#325c4144');
+// Braced knees and shaded shoes remain planted as the torso follows the rod.
+for(const leg of [-1,1]){
+characterLimb([[angler.x+leg*2,baseY-4],[angler.x+leg*3-side*p.lean*2,baseY-1],[angler.x+leg*3.5,baseY+2]],leg<0?'#354d52':'#49656a',2.7);
+characterRect(angler.x+leg*3.5-1.5,baseY+1,3.5,1.8,'#293e43');
+characterRect(angler.x+leg*3.5-1.3,baseY+2.3,3.1,.55,'#b1ad93');
+}
+arm(bodyPoint(-side*3,-9),reelHand,side*3,'#c99e78');
+ctx.save();ctx.translate(pivot.x,pivot.y);ctx.rotate(angle);
+polygon([[-3.5,-11],[3.5,-11],[4.6,-8],[4.3,0],[-4.3,0],[-4.6,-8]],colors.shirt);
+characterRect(-3.2,-9.5,6.4,3.7,colors.accent);
+characterLimb([[-3.5,-6.5],[-3.5,-1]],'#ffffff25',.7);
+characterRect(-4.2,-.8,8.4,.8,'#35474455');
+characterRect(1,-4,2,1.5,colors.shirt);characterRect(1,-4,2,.5,'#ffffff44');
+characterRect(-1.4,-12,2.8,2,'#d8ac80');
+characterHead(0,-15.8,colors.hair,'#f2c992',side>0?'right':'left',currentProfile().character==='girl',p.lean*2);
+ctx.restore();
+arm(bodyPoint(side*3.6,-9),p.hand,-side*3,'#e4bd88');
+// Reel drum and turning handle stay attached to the gripping hand.
+characterLimb([[p.hand.x,p.hand.y],[reel.x,reel.y]],'#705439',1.4);
+characterEllipse(reel.x,reel.y,2.2,2.2,'#8e815c');
+characterEllipse(reel.x-.35,reel.y-.35,1.4,1.4,'#dbc997');
+characterLimb([[reel.x,reel.y],[reelHand.x,reelHand.y]],'#506063',.8);
+characterEllipse(reelHand.x,reelHand.y,.85,1,'#f2c992');
+}
 function drawHookedFishing(){
-const angler=fishingAngler(),c=ctx,p=hookedFishingPose(),baseY=angler.y-(boating?6:0);
-// Feet stay planted while the back and shoulders lean away from the fish.
-rect(angler.x-5,baseY-3,4,6,'#3e5555');rect(angler.x+2,baseY-3,4,6,'#3e5555');
-c.save();c.translate(angler.x,baseY-3);c.rotate(-p.side*p.lean);
-const colors=characterColors();
-rect(-5,-11,11,11,colors.shirt);rect(-4,-10,8,5,colors.accent);
-if(currentProfile().character==='girl')rect(-8,-19,4,12,colors.hair);
-rect(-4,-20,9,9,'#f2c992');rect(-5,-21,11,4,colors.hair);
-rect(2,-16,1,2,'#354744');c.restore();
-c.strokeStyle='#f2c992';c.lineWidth=3;
-c.beginPath();c.moveTo(angler.x-p.side*p.lean*14,baseY-15);c.lineTo(p.hand.x-p.side*5,p.hand.y+4);c.lineTo(p.hand.x,p.hand.y);c.stroke();
-// The other hand turns the reel handle during each deliberate pull.
-const crank=(1-p.pull)*Math.PI*3;
-c.beginPath();c.moveTo(angler.x-p.side*4,baseY-11);c.lineTo(p.hand.x-p.side*3+Math.cos(crank)*3,p.hand.y+4+Math.sin(crank)*3);c.stroke();
+const angler=fishingAngler(),c=ctx,p=hookedFishingPose();
+drawFishingAngler(p,true);
 // A high, loaded rod curves toward the struggling fish.
 c.strokeStyle='#705439';c.lineWidth=1.8;c.beginPath();c.moveTo(p.hand.x,p.hand.y);
 c.bezierCurveTo(p.hand.x-p.side*9,p.hand.y-28-p.pull*13,p.tip.x-p.side*14,p.tip.y-15,p.tip.x,p.tip.y);c.stroke();
-ellipse(p.hand.x-p.side*2,p.hand.y+2,2.5,2.5,'#c5b17b');
 const mouth={x:p.fish.x-p.side*18,y:p.fish.y};
 c.strokeStyle='#f5edcf';c.lineWidth=.8;c.beginPath();c.moveTo(p.tip.x,p.tip.y);c.quadraticCurveTo((p.tip.x+mouth.x)/2,(p.tip.y+mouth.y)/2+(1-p.pull)*4,mouth.x,mouth.y);c.stroke();
 c.save();c.translate(p.fish.x,p.fish.y);c.rotate(Math.sin(p.time*17)*.25);c.scale(-p.side,1);drawFishAnatomy(p.fish);c.restore();
@@ -3027,6 +3219,8 @@ fishingTargets().filter(f=>!hookedFish||f.id!==hookedFish.fish.id).forEach(drawS
 if(hookedFish){c.save();drawHookedFishing();c.restore();return;}
 c.save();c.strokeStyle='#e4f1dc88';c.lineWidth=.65;c.beginPath();c.arc(fishingAim.x,fishingAim.y,5,0,Math.PI*2);c.stroke();
 const cast=pendingCast||{x:fishingAim.x,y:fishingAim.y,elapsed:FISH_CAST_DURATION,origin:{x:fishingAngler().x+4,y:fishingAngler().y-9}},pose=fishingCastPose(cast);
+drawFishingAngler(pose);
+c.lineCap='round';c.lineJoin='round';
 c.strokeStyle='#705439';c.lineWidth=1.7;c.beginPath();c.moveTo(pose.hand.x,pose.hand.y);c.quadraticCurveTo((pose.hand.x+pose.tip.x)/2+pose.bend,(pose.hand.y+pose.tip.y)/2-pose.bend,pose.tip.x,pose.tip.y);c.stroke();
 if(pendingCast){
 c.strokeStyle='#f5edcfcc';c.lineWidth=.65;c.beginPath();pose.line.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.stroke();
@@ -3109,6 +3303,168 @@ const islandTreeLayouts=[
 // Track every planted tree independently of camera visibility or rendering.
 const BOAT_IGNITION_DURATION=1800,BOAT_EXPLOSION_DURATION=11800;
 const boatExplosions=new Map();
+// Session-only repair clocks, in active simulation milliseconds.
+const BOAT_REPAIR_TIMING=Object.freeze({arrival:3000,departure:7000,jump:800,fishing:20000,tow:30000,speedboat:40000,ferry:60000});
+const boatRepairs=new Map();
+function boatUnavailable(vessel){return boatExplosions.has(vessel)||!!boatRepairs.get(vessel)&&!boatRepairs.get(vessel).complete;}
+function boatUnderConstruction(vessel){return boatIsExploding(vessel)||!!boatRepairs.get(vessel)&&!boatRepairs.get(vessel).complete;}
+function boatRepairHome(vessel){
+return vessel==='ferry'?{dock,berth:ferryBerth(dock)}:vessel==='speedboat'?{dock:SPEEDBOAT_DOCK,berth:SPEEDBOAT_MOORING}:vessel==='tow'?{dock:WATERSPORTS_DOCK,berth:{x:WATERSPORTS_DOCK.x+40,y:WATERSPORTS_DOCK.y+18}}:{dock:fishingDock,berth:BOAT_MOORING};
+}
+function restoreRebuiltBoat(vessel){
+const {berth}=boatRepairHome(vessel);
+if(vessel==='tow'){wakeboardDockHeading=0;wakeboardDockWake=null;return;}
+if(vessel==='ferry'){ferryPosition={...berth};ferryHeading=0;state.ferryAboard=false;delete state.ferryPose;}
+else if(vessel==='speedboat'){speedboatPosition={...berth};speedboatHeading=0;}
+else{fishingBoatPosition={...berth};fishingBoatHeading=0;}
+if(state.parkedBoat?.vessel===vessel)state.parkedBoat=null;
+if(state.beachAnchor?.vessel===vessel)state.beachAnchor=null;
+if(activeVessel===vessel){
+boatPosition={...berth};resetBoatMotion();state.boatIsland=null;
+if(beachTransfer){beachTransfer=null;swimming=!canWalk(player.x,player.y);}
+}
+}
+function advanceBoatRepair(repair,dt){
+repair.elapsed+=dt;
+const finish=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[repair.vessel];
+if(!repair.complete&&repair.elapsed>=finish){
+repair.complete=true;
+// Destruction already cleared parking. Do not disturb a different vessel now in use.
+restoreRebuiltBoat(repair.vessel);save();updateWaterControls();
+toast('Repair complete! Your '+(repair.vessel==='tow'?'tow boat':repair.vessel==='fishing'?'fishing boat':repair.vessel)+' is ready at its home dock.');
+}
+if(repair.elapsed>=finish+BOAT_REPAIR_TIMING.departure)boatRepairs.delete(repair.vessel);
+}
+function advanceBoatRepairs(dt){for(const repair of boatRepairs.values())advanceBoatRepair(repair,dt);}
+function boatBuildPlan(vessel){
+const features=['hull','paint','deck'];
+if(vessel==='ferry')features.push('cabin','roof','windows','chimney','pole','flag');
+if(vessel==='speedboat')features.push('windscreen');
+if(vessel==='tow')features.push('tower');
+features.push('wheel');
+for(let i=0;i<outboardOffsets(vessel,1).length;i++)features.push('engine'+i);
+return features;
+}
+function boatBuildPart(build,feature){
+if(!build||build===true)return 2;
+const index=build.plan.indexOf(feature);
+return index<0?0:Math.max(0,Math.min(2,build.step-index*2+1));
+}
+function boatBuildColor(build,color){
+const paint=boatBuildPart(build,'paint');
+return paint===0?'#c7a16b':paint===1?'#e3ddd0':color;
+}
+function boatRepairFrame(repair){
+const buildTime=repair.elapsed-BOAT_REPAIR_TIMING.arrival,duration=BOAT_REPAIR_TIMING[repair.vessel];
+const progress=Math.max(0,Math.min(1,buildTime/duration)),plan=boatBuildPlan(repair.vessel),step=Math.min(plan.length*2-1,Math.floor(progress*plan.length*2));
+return {phase:buildTime<0?'arriving':buildTime<duration?'building':'departing',progress,travel:buildTime<0?1-repair.elapsed/BOAT_REPAIR_TIMING.arrival:buildTime<duration?0:Math.min(1,(buildTime-duration)/BOAT_REPAIR_TIMING.departure),build:{plan,step},feature:plan[Math.floor(step/2)],featureStep:step%2+1};
+}
+function boatRepairWindsurfRoute(vessel,index){
+const {dock:home,berth}=boatRepairHome(vessel),side=berth.x<home.x?1:-1;
+const from={x:home.x+side*(17+index*13),y:home.y+34+index*3};
+const obstacles=boatObstacles('crew');
+const clear=(x,y)=>openSea(x,y)&&!obstacles.some(poly=>inside(x,y,poly));
+let best={from,heading:Math.PI/2,distance:0};
+// Pick a clear sea lane away from the pier and the rebuilt hull, never across an island.
+for(const offset of [0,.3,-.3,.6,-.6,.9,-.9,1.2,-1.2,1.5,-1.5]){
+const heading=Math.PI/2+offset*side;let distance=0;
+for(let d=0;d<=240;d+=6){
+const x=from.x+Math.cos(heading)*d,y=from.y+Math.sin(heading)*d;
+if(![-5,0,5].every(across=>clear(x-Math.sin(heading)*across,y+Math.cos(heading)*across)))break;
+distance=d;
+}
+if(distance>best.distance)best={from,heading,distance};
+if(distance===240)break;
+}
+return best;
+}
+function createBoatRepair(vessel){return {vessel,elapsed:0,complete:false,crewRoutes:[0,1].map(i=>boatRepairWindsurfRoute(vessel,i))};}
+function boatRepairCrewPose(repair,index){
+const clamp=t=>Math.max(0,Math.min(1,t)),{dock:home,berth}=boatRepairHome(repair.vessel),side=berth.x<home.x?-1:1;
+const ground={x:home.x+side*(index?-3:3),y:home.y+12-index*16};
+const buildEnd=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[repair.vessel];
+if(repair.elapsed<BOAT_REPAIR_TIMING.arrival){
+const t=clamp((repair.elapsed-index*180)/(BOAT_REPAIR_TIMING.arrival-600-index*180));
+return {mode:'parachute',x:ground.x+Math.sin(repair.elapsed*.004+index)*9*(1-t),y:ground.y-120*(1-t)*(1-t),ground,canopy:1-clamp((repair.elapsed-BOAT_REPAIR_TIMING.arrival+600)/600),height:120*(1-t)*(1-t),heading:0,alpha:1};
+}
+if(repair.elapsed<buildEnd)return {mode:'work',...ground,ground,height:0,alpha:1};
+const elapsed=repair.elapsed-buildEnd,route=repair.crewRoutes?.[index]||boatRepairWindsurfRoute(repair.vessel,index);
+const jump=clamp(elapsed/BOAT_REPAIR_TIMING.jump),sail=clamp((elapsed-BOAT_REPAIR_TIMING.jump)/(BOAT_REPAIR_TIMING.departure-BOAT_REPAIR_TIMING.jump));
+const distance=route.distance*sail*sail;
+const board={x:route.from.x+Math.cos(route.heading)*distance,y:route.from.y+Math.sin(route.heading)*distance};
+const height=jump<1?Math.sin(jump*Math.PI)*24:0;
+return {mode:jump<1?'jump':'windsurf',x:jump<1?ground.x+(board.x-ground.x)*jump:board.x,y:(jump<1?ground.y+(board.y-ground.y)*jump:board.y)-height,ground:board,board,heading:route.heading,height,alpha:1-clamp((sail-.85)/.15),sail};
+}
+function drawRepairParachute(crew,index){
+if(crew.canopy<=0)return;
+const {x,y}=crew,spread=28*crew.canopy,top=y-48*crew.canopy;
+ctx.save();ctx.globalAlpha=crew.canopy;
+for(const side of [-1,1])characterLimb([[x+side*3,y-18],[x+side*spread,top]],'#ece5ce',.65);
+ctx.fillStyle=index?'#ed9251':'#71b9d2';ctx.beginPath();ctx.ellipse(x,top,spread,18*crew.canopy,0,Math.PI,Math.PI*2);
+for(let i=3;i>=0;i--){const right=x-spread+i*spread/2;ctx.quadraticCurveTo(right+spread/4,top-5*crew.canopy,right,top);}
+ctx.closePath();ctx.fill();
+for(const side of [-1,0,1])characterLimb([[x,top-18*crew.canopy],[x+side*spread*.55,top]],'#fff4cb',.65);
+ctx.restore();
+}
+function drawRepairWindsurfer(crew,clock,index){
+const {x,y}=crew.board,heading=crew.heading;
+ctx.save();ctx.globalAlpha=crew.alpha;
+// A water-fixed wake follows the board; it never follows the worker's jump arc.
+if(crew.mode==='windsurf'){
+ctx.save();ctx.translate(x,y);ctx.rotate(heading);ctx.strokeStyle='#e3fff1';ctx.lineWidth=.8;
+for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(-5,side*3);ctx.quadraticCurveTo(-16,side*5,-30,side*9);ctx.stroke();}ctx.restore();
+}
+ctx.save();ctx.translate(x,y);ctx.rotate(heading);
+polygon([[-16,-3],[10,-4],[18,0],[10,4],[-16,3],[-19,0]],index?'#f0bf63':'#69bcc5');rect(-13,-1,26,2,'#f6f2cf');ctx.restore();
+// Upright mast, a filled triangular sail, and a reachable boom distinguish windsurfing.
+const lean=Math.sin(clock*.004+index)*2,mastX=x+4;
+characterLimb([[mastX,y-1],[mastX+lean,y-43]],'#e8eedb',1.1);
+polygon([[mastX+lean,y-43],[mastX+25+lean,y-12],[mastX,y-7]],index?'#ed965abf':'#78b9dfbf');
+polygon([[mastX+lean+3,y-36],[mastX+18+lean,y-15],[mastX+3,y-12]],'#fff2c680');
+characterLimb([[x-4,y-19],[mastX+17,y-15]],'#526b6d',1);
+ctx.restore();
+}
+function drawBoatRepairWorker(x,y,pose,clock,index,workFacing='right'){
+const mode=pose.workerPose||'work';
+drawLifeguardSprite(x,y,index?'#c9916c':'#e9bc8f',workFacing,0,false,false,{shirt:'#ed9f35',trousers:'#304a60',hat:'#f7ce43',pose:mode,work:mode==='work'?clock+index*200:null});
+}
+function drawBoatRepairCrew(repair,pose,direction){
+for(let i=1;i>=0;i--){
+const crew=boatRepairCrewPose(repair,i);
+ctx.save();ctx.globalAlpha=crew.alpha;
+if(crew.mode==='parachute'){ellipse(crew.ground.x,crew.ground.y+2,5,1.5,'#284b4555');drawRepairParachute(crew,i);}
+if(crew.board)drawRepairWindsurfer(crew,repair.elapsed,i);
+if(crew.mode==='work')ellipse(crew.x,crew.y+2,5,1.5,'#284b4555');
+drawBoatRepairWorker(crew.x,crew.y,{...pose,workerPose:crew.mode},repair.elapsed,i,crew.mode==='parachute'?'down':crew.board?'right':direction<0?'left':'right');
+ctx.restore();
+}
+}
+function drawBoatRepairs(){
+for(const repair of boatRepairs.values()){
+const {vessel}=repair,{dock:home,berth}=boatRepairHome(vessel),pose=boatRepairFrame(repair),{progress,phase,travel,build}=pose;
+if(phase==='building'){
+const [back,front,width]=vessel==='ferry'?[40,40,17]:vessel==='speedboat'?[28,33,12]:vessel==='tow'?[23,24,10]:[25,25,10];
+for(const dx of [-18,18]){rect(berth.x+dx-2,berth.y-16,4,35,'#72573c');rect(berth.x+dx-6,berth.y+16,12,3,'#b59663');}
+if(boatBuildPart(build,'hull')===1){
+rect(berth.x-back,berth.y-1,back+front,2,'#dfb473');
+for(let rib=-back+5;rib<front-4;rib+=8){ctx.strokeStyle='#e6c58a';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(berth.x+rib-2,berth.y-width);ctx.lineTo(berth.x+rib,berth.y+width);ctx.stroke();}
+}else if(vessel==='ferry')ferryArt(berth.x,berth.y,build);
+else if(vessel==='speedboat')speedboatArt(berth.x,berth.y,build);
+else if(vessel==='tow')drawWakeboardBoat(berth.x,berth.y,0,false,build);
+else fishingBoatArt(berth.x,berth.y,build);
+}
+const direction=berth.x<home.x?-1:1;
+drawBoatRepairCrew(repair,pose,direction);
+if(phase==='building'){
+rect(home.x-7,home.y-3,12,5,'#9b663c');rect(home.x-6,home.y-4,10,1,'#dfb77b');
+const feature=pose.feature.startsWith('engine')?'ENGINE '+(Number(pose.feature.slice(6))+1):pose.feature.toUpperCase();
+ctx.save();ctx.font='bold 6px monospace';ctx.textAlign='center';ctx.fillStyle='#fff2ba';ctx.fillText(feature+' '+pose.featureStep+'/2',berth.x,berth.y-42);ctx.restore();
+}else if(phase==='arriving'){
+ctx.save();ctx.font='6px monospace';ctx.textAlign='center';ctx.fillStyle='#fff2ba';ctx.fillText('REPAIR CREW',home.x,home.y-75-travel*120);ctx.restore();
+}
+}
+}
+
 function boatBlastRandom(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
 function createBoatBlast(boat){
 const random=boatBlastRandom((boat.x*7919+boat.y*104729)>>>0),c=Math.cos(boat.heading),s=Math.sin(boat.heading);
@@ -3166,16 +3522,17 @@ const boats=[{...ferry,heading:activeVessel==='ferry'?boatMotion.heading:ferryHe
 ...(speedboatUnlocked()?[{...speed,heading:activeVessel==='speedboat'?boatMotion.heading:speedboatHeading,vessel:'speedboat'}]:[]),
 {x:tow?.boat.x??WATERSPORTS_DOCK.x+40,y:tow?.boat.y??WATERSPORTS_DOCK.y+18,heading:tow?.heading??wakeboardDockHeading,vessel:'tow'}];
 for(const boat of boats){
-if(boatExplosions.has(boat.vessel)||!dragonFireTouchesBoat(boat))continue;
+if(boatExplosions.has(boat.vessel)||boatRepairs.has(boat.vessel)||!dragonFireTouchesBoat(boat))continue;
 boatExplosions.set(boat.vessel,createBoatBlast(boat));
 if(boat.vessel===activeVessel&&boating){
-stopFishing();boating=false;swimming=true;diveAnimation=null;resetBoatMotion();keys.clear();save();updateWaterControls();
+stopFishing();boating=false;swimming=true;diveAnimation=null;resetBoatMotion();keys.clear();
 }
 if(boat.vessel==='tow'){
 if(wakeboardRide){stopFishing();wakeboardRide=null;swimming=true;keys.clear();save();updateWaterControls();}
-wakeboardBoatTrip=null;waterskiWake=[];
+wakeboardBoatTrip=null;wakeboardDockWake=null;waterskiWake=[];
 }
-toast('The boat is catching fire! Stand clear…');
+restoreRebuiltBoat(boat.vessel);save();updateWaterControls();
+toast('The boat is catching fire! A free repair crew will rebuild it at its home dock.');
 }
 }
 function drawBoatDebris(p,time){
@@ -3280,15 +3637,16 @@ const t={x,y,scale,kind,burnAge:null,regrowAge:0};burnableTrees.set(`${x},${y}`,
 }
 islandTreeLayouts.forEach((layout,i)=>layout.forEach(([dx,dy,scale])=>registerBurnableTree(locations[i].x+dx,locations[i].y+dy,scale)));
 for(const island of boatIslands)if(island.biome!=='crystal')for(const [dx,dy] of [[-57,-29],[38,-38],[62,16],[-51,37]])registerBurnableTree(island.x+dx,island.y+dy,island.biome==='pine'||island.biome==='palm'?1:.65,island.biome);
-function checkTreeDragonFireHits(){
+function checkTreeDragonFireHits(){checkDragonFireSceneryHits(burnableTrees);}
+function checkDragonFireSceneryHits(targets){
 const length=58*petDragonFireEnvelope();if(length<3)return;
 // Match the translated, rotated, upright dragon sprite, including its altitude.
 const flight=dragonFlight,heading=flight?.heading||0,upright=Math.cos(heading)<0?-1:1;
 const origin=flight?player:petDragonPosition,c=Math.cos(heading),sn=Math.sin(heading),time=petDragonFire.elapsed/1000;
-for(const t of burnableTrees.values()){
+for(const t of targets.values()){
 if(t.burnAge!==null)continue;
-const halfWidth=(t.kind==='palm'?18:t.kind==='pine'?9:13)*t.scale;
-const top=t.y-(t.kind==='palm'?13:t.kind==='pine'?20:28)*t.scale,bottom=t.y+(t.kind==='palm'?18:13)*t.scale;
+const halfWidth=(t.kind==='umbrella'?18:t.kind==='palm'?18:t.kind==='pine'?9:13)*t.scale;
+const top=t.y-(t.kind==='umbrella'?22:t.kind==='palm'?13:t.kind==='pine'?20:28)*t.scale,bottom=t.y+(t.kind==='umbrella'?7:t.kind==='palm'?18:13)*t.scale;
 for(let d=0;d<=Math.ceil(length);d++){
 const distance=Math.min(d,length),s=distance/length;
 const curl=Math.sin(s*13-time*16)*s*2.5+Math.sin(s*29-time*24)*s*s*1.7;
@@ -3303,10 +3661,12 @@ if(hit){t.burnAge=0;break;}
 }
 }
 }
-function drawBurningTree(x,y){
-const t=burnableTrees.get(`${x},${y}`);if(!t||t.burnAge===null)return false;
+function drawBurningTree(x,y){return drawBurningScenery(burnableTrees.get(`${x},${y}`));}
+function drawBurningScenery(t){
+if(!t||t.burnAge===null)return false;
+const {x,y}=t;
 const progress=t.burnAge/TREE_BURN_DURATION,s=t.scale;
-const base=y+(t.kind==='palm'?18:13)*s,top=y-(t.kind==='palm'?13:t.kind==='pine'?20:28)*s;
+const base=y+(t.kind==='umbrella'?7:t.kind==='palm'?18:13)*s,top=y-(t.kind==='umbrella'?22:t.kind==='palm'?13:t.kind==='pine'?20:28)*s;
 // Keep the original geometry; progressively consume it from the crown downward.
 const consumed=Math.max(0,(progress-.3)/.7),burnLine=top+(base-top)*consumed;
 ctx.save();
@@ -3320,7 +3680,8 @@ if(progress>=1&&t.regrowAge>0){
 const growth=.04+.96*t.regrowAge/TREE_REGROW_DURATION;
 // Anchor the new tree at its roots as its original sprite grows back.
 ctx.save();ctx.translate(x,base);ctx.scale(growth,growth);ctx.translate(-x,-base);
-if(t.kind==='palm')drawPalmSprite(x,y);
+if(t.kind==='umbrella')drawBeachUmbrellaSprite(x,y,t.color);
+else if(t.kind==='palm')drawPalmSprite(x,y);
 else if(t.kind==='pine')drawPineSprite(x,y);
 else drawTreeSprite(x,y,s);
 ctx.restore();
@@ -3328,7 +3689,8 @@ ctx.restore();
 if(progress<1){
 ctx.save();ctx.beginPath();ctx.rect(x-22*s,burnLine,44*s,base-burnLine+5*s);ctx.clip();
 ctx.filter=`brightness(${1-progress*.75}) saturate(${1-progress*.9})`;
-if(t.kind==='palm')drawPalmSprite(x,y);
+if(t.kind==='umbrella')drawBeachUmbrellaSprite(x,y,t.color);
+else if(t.kind==='palm')drawPalmSprite(x,y);
 else if(t.kind==='pine')drawPineSprite(x,y);
 else drawTreeSprite(x,y,s);
 ctx.restore();
@@ -3363,6 +3725,7 @@ $('#useFerryPass').textContent=active?(boating&&activeVessel==='ferry'?'Aboard f
 $('#useFerryPass').disabled=boating||!!beachTransfer;
 }
 function openFerry(boardImmediately=false){
+if(boatUnavailable('ferry')){toast('The ferry is being rebuilt at its home dock. Repairs are free.');return;}
 if(beachTransfer||volleyball||frisbeeGame)return;
 if(wakeboardCrash||dragonFlight||wakeboardRide||surfSession){toast('Finish your current ride first.');return;}
 if(voyage||shoreRecovery||boating)return;
@@ -3379,7 +3742,7 @@ openMapPanel('ferry');canvas.focus({preventScroll:true});
 function confirmFerryBoarding(){
 if(activeMapPanel!=='ferry')return;
 if(!hasSwimPower()){closeMapPanel();toast('Solve a problem to restore energy before boarding.');return;}
-if(boatExplosions.has('ferry')){closeMapPanel();toast('Wait for the ferry’s smoke to clear.');return;}
+if(boatUnavailable('ferry')){closeMapPanel();toast('The ferry is being rebuilt at its home dock. Repairs are free.');return;}
 if(!state.ferryTicket){if(state.crystals<FERRY_PRICE)return;buyFerryTicket();}
 boardFerry();
 }
@@ -3389,7 +3752,7 @@ state.crystals-=FERRY_PRICE;state.ferryTicket=true;update();chime();
 }
 function ferryBerth(departure){return {x:departure.x+(departure===dock?-55:55),y:departure.y+15};}
 function boardFerry(){
-if(boatExplosions.has('ferry')){toast('Wait for the boat’s smoke to clear.');return;}
+if(boatUnavailable('ferry')){toast('The boat is being rebuilt at its home dock. Repairs are free.');return;}
 if(beachTransfer||volleyball||frisbeeGame)return;
 if(wakeboardCrash||dragonFlight||wakeboardRide||volleyball||frisbeeGame){toast('Finish your current ride first.');return;}
 if(shoreRecovery||boating)return;
@@ -3410,12 +3773,16 @@ const berth=clearBoatBerth(parkedClose?boatPosition:ferryBerth(departure),ferryH
 resetBoatMotion();boatMotion.heading=ferryHeading;startBoatEngines();keys.clear();closeMapPanel('ferry');save();updateFishing();canvas.focus({preventScroll:true});
 toast('Drive the ferry: Up/W forward, Down/S brake then reverse, Left/Right or A/D steer. F fishes; X steps off or dives.');
 }
-function cavernFlag(x,y,height=36,travelHeading=null){
+function cavernFlag(x,y,height=36,travelHeading=null,poleStep=2,flagStep=2){
+if(!poleStep)return;
+if(poleStep===1){rect(x-1,y-height/2,2,height/2,"#705d43");return;}
 // Keep the pole upright; a moving ferry's pennant streams aft in world space.
 const top=y-height,wave=Math.sin(frame/12)*2;
 const direction=travelHeading===null?0:travelHeading+Math.PI;
 const point=(along,down)=>[x+Math.cos(direction)*along,top+down+Math.sin(direction)*along*.55];
 rect(x-1,top,2,height,'#705d43');rect(x-2,top-2,4,3,'#e9cc80');
+if(!flagStep)return;
+if(flagStep===1){polygon([point(1,2),point(6,5),point(1,14)],'#8266aa');return;}
 polygon([point(1,2),point(20,3+wave),point(19,15+wave),point(1,14)],'#8266aa');
 polygon([point(2,3),point(4,3),point(4,13),point(2,13)],'#bda6db');
 polygon([point(10,5),point(14,9),point(10,13),point(7,9)],'#f6e5ab');
@@ -3495,55 +3862,207 @@ ellipse(px,py,1.8+t*6,1.4+t*5,i%2?'#d5ded6':'#a4b3ac');
 }
 ctx.restore();
 }
-function drawOutboardMotors(vessel,active){
+function drawOutboardMotors(vessel,active,motion=boatMotion,build=false){
 const stern=vessel==='ferry'?35:vessel==='speedboat'?26:20,spacing=vessel==='ferry'?8:vessel==='speedboat'?9:6;
-const trim=active?boatTrimLevel()/5:0;
-for(const side of outboardOffsets(vessel,spacing)){
+const trimStep=motion.trimStep||0,trim=active?(trimStep<=5?trimStep:10-trimStep)/5:0;
+for(const [index,side] of outboardOffsets(vessel,spacing).entries()){
+const step=boatBuildPart(build,"engine"+index);if(!step)continue;
 ctx.save();
-const vibration=active?(boatMotion.engineStage==='starting'?Math.sin(boatMotion.engineAge*.075)*.55:boatMotion.engineStage==='running'?Math.sin(frame*.9+side)*(.12+boatMotion.power*.2):0):0;
+const vibration=active?(motion.engineStage==='starting'?Math.sin(motion.engineAge*.075)*.55:motion.engineStage==='running'?Math.sin(frame*.9+side)*(.12+motion.power*.2):0):0;
 ctx.translate(-stern+vibration,side);
 // Stern brackets, separate engine cowlings, and trimmed lower units.
 rect(-1,-4,4,8,'#526261');
-ctx.save();ctx.rotate(active?(boatMotion.steering||0):0);ctx.translate(-trim*2,0);
+ctx.save();ctx.rotate(active?(motion.steering||0):0);ctx.translate(-trim*2,0);
 const size=vessel==='ferry'?1.4:1;ctx.scale(size*(1-trim*.12),size);
+if(step===2){
 polygon([[-5,-4],[1,-4],[3,-2],[3,3],[-5,4],[-7,2],[-7,-2]],'#34494f');
 rect(-5,-3,5,2,'#879795');rect(-5,0,5,1,'#c9d2c5');
+}
 rect(-6,1,3,5-trim*2,'#4b6369');rect(-8,4-trim*2,5,1,'#9bb4b0');
 ctx.restore();ctx.restore();
 }
+}
+// Roll is a damped spring driven by lateral acceleration, in radians.
+function advanceHullRoll(motion,dt,target){
+for(let remaining=dt/1000;remaining>0;){
+const step=Math.min(.01,remaining);remaining-=step;
+motion.rollVelocity=(motion.rollVelocity||0)+(70*(target-(motion.roll||0))-12*(motion.rollVelocity||0))*step;
+motion.roll=(motion.roll||0)+motion.rollVelocity*step;
+}
+}
+function advanceTowHullRoll(motion,oldHeading,velocity,dt){
+const turn=Math.atan2(Math.sin(motion.heading-oldHeading),Math.cos(motion.heading-oldHeading));
+advanceHullRoll(motion,dt,boatRollTarget('fishing',velocity,turn*1000/dt));
+}
+function boatRollTarget(vessel,velocity,turnRate){
+const limit=vessel==='speedboat'?.48:vessel==='ferry'?.22:.36;
+return Math.max(-limit,Math.min(limit,velocity*turnRate*.0018));
+}
+function boatHullProjection(heading,roll){
+const c=Math.cos(heading),s=Math.sin(heading),cr=Math.cos(roll),sr=Math.sin(roll);
+// Elevation projects vertically on screen; the low gunwale leans into the turn.
+return (along,across,height=2)=>{
+const side=across*cr+height*sr,z=height*cr-across*sr;
+return [c*along-s*side,s*along+c*side-z*.85];
+};
+}
+function beginBoatHull(x,y,heading,vessel,roll=0){
+const edge=BOAT_WAKE_HULLS[vessel].edge;
+const outline=[...edge.map(([a,b])=>[a,-b]),...edge.slice(1).reverse()];
+const project=boatHullProjection(heading,roll),cr=Math.cos(roll),sr=Math.sin(roll);
+// Clip facets at the water surface so submerged keel faces never show through water.
+const aboveWater=vertices=>{
+const result=[];
+for(let i=0;i<vertices.length;i++){
+const a=vertices[i],b=vertices[(i+1)%vertices.length],az=a[2]*cr-a[1]*sr,bz=b[2]*cr-b[1]*sr;
+if(az>=0)result.push(a);
+if((az>=0)!==(bz>=0)){const t=az/(az-bz);result.push(a.map((v,j)=>v+(b[j]-v)*t));}
+}
+return result.map(p=>project(...p));
+};
+ctx.save();ctx.translate(x,y);
+const faces=[];
+for(let i=0;i<outline.length;i++){
+const a=outline[i],b=outline[(i+1)%outline.length];
+// Each chine descends toward a narrow center keel: a true V cross-section.
+const chine=p=>[p[0],p[1]*.94,-1],keel=p=>[p[0],0,p[0]===edge[0][0]?0:-(vessel==='speedboat'?6:4)];
+for(const [vertices,color] of [
+[[[...a,2],[...b,2],chine(b),chine(a)],'#417d83'],
+[[chine(a),chine(b),keel(b),keel(a)],a[1]+b[1]<0?'#c2cead':'#8eafa4']]){
+const points=aboveWater(vertices);
+const area=points.reduce((sum,p,j)=>{const q=points[(j+1)%points.length];return sum+p[0]*q[1]-q[0]*p[1];},0);
+if(points.length>=3&&area>0.01)faces.push({points,color,depth:Math.max(...points.map(p=>p[1]))});
+}
+}
+faces.sort((a,b)=>a.depth-b.depth).forEach(face=>polygon(face.points,face.color));
+const origin=project(0,0),along=project(1,0),across=project(0,1);
+ctx.transform(along[0]-origin[0],along[1]-origin[1],across[0]-origin[0],across[1]-origin[1],origin[0],origin[1]);
+}
+function drawSeatedBoatRider(x,y,heading,roll){
+const colors=characterColors(),girl=currentProfile().character==='girl';
+const c=Math.cos(heading),s=Math.sin(heading),side=Math.abs(c)>.55;
+const facing=side?(c<0?'left':'right'):(s<0?'up':'down');
+const point=(along,across,height=0)=>[x+c*along-s*across,y+s*along+c*across-height];
+// The seat and bent legs stay planted; only the upper body leans into the turn.
+characterLimb([point(-2,-4,-1),point(-2,4,-1)],'#344f58',3.5);
+for(const leg of [-1,1]){
+characterLimb([point(0,leg*2),point(4,leg*2,-1),point(5,leg*2,-4)],leg<0?'#354d52':'#49656a',2.6);
+characterLimb([point(5,leg*2,-4),point(7,leg*2,-4)],'#293e43',2.8);
+}
+// Use the current turn direction even while the hull is settling from the previous turn.
+const turn=boating?boatMotion.turnRate:0;
+const lean=Math.abs(turn)>.05?Math.sign(turn)*Math.abs(roll):roll;
+const rearWheel=facing==='up'?drawBoatSteeringWheel(x,y,heading,boatMotion.steering||0):null;
+beginBoatRiderLean(x,y,heading,lean*.55);
+ctx.translate(x,y);if(facing==='left')ctx.scale(-1,1);
+polygon(side?[[-3,-7],[1,-8],[3,-6],[3,0],[-3,0]]:[[-3.5,-7],[3.5,-7],[4.3,-4],[4,0],[-4,0],[-4.3,-4]],colors.shirt);
+characterRect(side?.5:-3,-6,side?2:6,2.4,colors.accent);
+characterRect(-1.2,-8.5,2.4,2,'#d8ac80');
+characterHead(0,-11.8,colors.hair,'#f2c992',side?'right':facing,girl);
+ctx.restore();
+const wheel=rearWheel||drawBoatSteeringWheel(x,y,heading,boatMotion.steering||0);
+const shear=Math.sin(lean*.55)*.7;
+const shoulder=(dx,dy)=>[x+dx+Math.sin(heading)*shear*dy,y+(1-Math.cos(heading)*shear)*dy];
+// Hands stay on the rim while elbows absorb the rider's gentle upper-body lean.
+for(const arm of [-1,1]){
+const hand=wheel.point(arm<0?Math.PI*.25:Math.PI*.75);
+const from=shoulder(side?-Math.sign(c):arm*3.7,-6);
+characterLimb([from,[(from[0]+hand[0])/2,(from[1]+hand[1])/2+1.8],hand],'#e4bd88',2.2);
+characterEllipse(from[0],from[1],1.4,1.4,colors.shirt);
+characterEllipse(hand[0],hand[1],1.2,1.3,'#f2c992');
+}
+if(facing==='up'){
+beginBoatRiderLean(x,y,heading,lean*.55);
+characterHead(x,y-11.8,colors.hair,'#f2c992','up',girl);ctx.restore();
+}
+}
+function drawBoatSteeringWheel(x,y,heading,steering=0,buildStep=2){
+if(!buildStep)return;
+const c=Math.cos(heading),s=Math.sin(heading),radius=3.5;
+const center=[x+c*5.5,y+s*5.5-5];
+// An upright, slightly raked wheel projects differently from each viewing angle.
+const point=angle=>{
+const across=Math.cos(angle)*radius,along=Math.sin(angle)*1.2;
+return [center[0]-s*across+c*along,center[1]+c*across+s*along-Math.sin(angle)*2.8];
+};
+ctx.save();
+characterLimb([[x+c*7,y+s*7+1],center],'#52676c',1.8);
+if(buildStep===1){ctx.restore();return {point};}
+const rim=Array.from({length:33},(_,i)=>point(i*Math.PI/16));
+characterLimb(rim,'#263e48',1.8);characterLimb(rim,'#b5c7bd',.65);
+for(let i=0;i<3;i++)characterLimb([center,point(i*Math.PI*2/3+steering*1.5)],'#d5d9bd',.9);
+characterEllipse(center[0],center[1],1.15,1.15,'#415e66');
+ctx.restore();return {point};
+}
+
+function beginBoatRiderLean(x,y,heading,roll){
+// A seated character's head is above its hip pivot (negative screen Y).
+// Project that lean toward the inside of the turn: (-sin heading, cos heading).
+const lean=Math.sin(roll)*.7;
+ctx.save();ctx.translate(x,y);
+ctx.transform(1,0,Math.sin(heading)*lean,1-Math.cos(heading)*lean,0,0);
+ctx.translate(-x,-y);
+}
+function beginBoatSuperstructure(x,y,heading,roll){
+// Raised cabins and occupants lean with the hull rather than floating above it.
+const s=Math.sin(heading),sr=Math.sin(roll),cr=Math.cos(roll);
+ctx.save();ctx.translate(x,y);ctx.transform(1,0,-s*sr*.7,cr,0,0);ctx.translate(-x,-y);
 }
 function drawBoatShadow(x,y,heading,vessel){
 // Project the turning hull with a fixed sun offset and a gentle water drift.
 const drift=Math.sin(frame*.035+x*.012+y*.009);
 const hull=vessel==='speedboat'?[[-28,-12],[4,-13],[24,-7],[33,0],[24,7],[4,13],[-28,12]]:vessel==='ferry'?[[-37,-13],[10,-16],[29,-8],[39,0],[29,8],[10,16],[-37,13]]:
 [[-23,-9],[6,-11],[17,-6],[25,0],[17,6],[6,11],[-23,9]];
-ctx.save();ctx.translate(x+5+drift*.7,y+8+drift*.9);ctx.rotate(heading);
+ctx.save();ctx.translate(x+2.5+drift*.35,y+4+drift*.45);ctx.rotate(heading);
 ctx.globalAlpha=.2;ctx.save();ctx.scale(1.08,1.14);polygon(hull,'#275b67');ctx.restore();
 ctx.globalAlpha=.22;polygon(hull,'#285d68');ctx.restore();
 }
-function drawBoatBowWake(x,y,heading,vessel){
-if(!boating||activeVessel!==vessel||boatMotion.velocity<=.5)return;
-const speed=Math.min(1,boatMotion.velocity/boatTopSpeed(4)),ferry=vessel==='ferry';
-const bow=ferry?39:vessel==='speedboat'?33:25,shoulder=ferry?29:vessel==='speedboat'?24:17,beam=ferry?16:vessel==='speedboat'?13:11;
+const BOAT_WAKE_HULLS={
+ferry:{edge:[[39,0],[29,8],[10,16],[-37,13]],planingContact:-8},
+fishing:{edge:[[25,0],[17,6],[6,11],[-23,9]],planingContact:-10},
+speedboat:{edge:[[33,0],[24,7],[4,13],[-28,12]],planingContact:-15},
+tow:{edge:[[24,0],[5,11],[-23,10]],planingContact:-10}
+};
+function boatHullWake(vessel,motion=boatMotion){
+const speed=Math.min(1,Math.max(0,(motion.velocity||0)/boatTopSpeed(4,vessel)));
+const {edge,planingContact}=BOAT_WAKE_HULLS[vessel],bow=edge[0][0],stern=edge.at(-1)[0];
+// The bow clears the water gradually as the hull comes onto plane.
+const rise=Math.max(0,Math.min(1,(speed-.18)/.58));
+const contact=bow+(planingContact-bow)*rise*rise*(3-2*rise);
+const strength=Math.sqrt(speed);
+return {speed,strength,point(t){
+const along=contact+(stern-9-contact)*t;
+const segment=edge.findIndex(([x])=>x<=along);
+let across=edge.at(-1)[1];
+if(segment>0){
+const [frontX,frontY]=edge[segment-1],[rearX,rearY]=edge[segment];
+across=frontY+(rearY-frontY)*(frontX-along)/(frontX-rearX);
+}else if(segment===0)across=edge[0][1];
+return [along,across+.6+t*(5+speed*9)];
+}};
+}
+function drawBoatBowWake(x,y,heading,vessel,motion=boatMotion){
+if((motion===boatMotion&&(!boating||activeVessel!==vessel))||!(motion.velocity>.5))return;
+const {speed,strength,point}=boatHullWake(vessel,motion);
 ctx.save();ctx.translate(x,y);ctx.rotate(heading);ctx.lineCap='round';
-// Water piles up at the stem, breaks at the shoulders, then washes down the hull.
 for(const side of [-1,1]){
-ctx.globalAlpha=speed*.34;ctx.strokeStyle='#438e9d';ctx.lineWidth=3+speed*4;
-ctx.beginPath();ctx.moveTo(bow,.3*side);ctx.quadraticCurveTo(shoulder+2,side*beam*.5,shoulder-9,side*(beam+1));ctx.stroke();
+ctx.globalAlpha=strength*.34;ctx.strokeStyle='#438e9d';ctx.lineWidth=3+speed*4;
+const [along,across]=point(0);
+ctx.beginPath();ctx.moveTo(along,side*across);
+for(let j=1;j<=4;j++){const [x,y]=point(j/14);ctx.lineTo(x,side*y);}
+ctx.stroke();
 for(let j=0;j<7;j++){
-const t=j/7,next=(j+1)/7;
-const point=u=>[bow-(bow+(ferry?38:27))*u,side*(beam*Math.sin(u*Math.PI/2)+u*(5+speed*9))];
-const a=point(t),b=point(next);
-ctx.globalAlpha=speed*(1-t)*(.5+.12*Math.sin(boatMotion.phase*.7+j*2+side));
+const t=j/7,a=point(t),b=point((j+.72)/7);
+ctx.globalAlpha=strength*(1-t)*(.5+.12*Math.sin(motion.phase*.7+j*2+side));
 ctx.strokeStyle=j<3?'#edfff5':'#c2e8df';ctx.lineWidth=(1.3+speed*2.5)*(1-t*.55);
-ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
-if(j>0&&j<5){ctx.globalAlpha=speed*(1-t)*.6;ellipse(a[0]-1.5,a[1]+side*(1+speed*2),1.4+speed*1.4,.8+speed*.4,'#f2fff8');}
+ctx.beginPath();ctx.moveTo(a[0],side*a[1]);ctx.lineTo(b[0],side*b[1]);ctx.stroke();
+if(j>0&&j<5){ctx.globalAlpha=strength*(1-t)*.6;ellipse(a[0]-1.5,side*(a[1]+1+speed*2),1.4+speed*1.4,.8+speed*.4,'#f2fff8');}
 }
 }
 ctx.restore();
 }
-function ferryArt(x,y){
-if(boatIsExploding('ferry'))return;
+function ferryArt(x,y,rebuilding=false){
+if(!rebuilding&&boatUnderConstruction('ferry'))return;
 const burning=boatExplosions.get('ferry');if(burning){x=burning.x;y=burning.y;}
 const active=boating&&activeVessel==='ferry',heading=burning?.heading??(activeVessel==='ferry'?boatMotion.heading:ferryHeading);
 if(activeVessel==='ferry')drawBoatWake();
@@ -3551,28 +4070,35 @@ drawBoatShadow(x,y,heading,'ferry');
 drawBoatBowWake(x,y,heading,'ferry');
 drawBoatExhaust(x,y,heading,'ferry');
 drawBoatTrimSpray(x,y,heading,'ferry');
-ctx.save();ctx.translate(x,y);ctx.rotate(heading);
-polygon([[-37,-13],[10,-16],[29,-8],[39,0],[29,8],[10,16],[-37,13]],'#315d66');
-polygon([[-34,-10],[10,-13],[28,-6],[35,0],[28,6],[10,13],[-34,10]],'#e7b965');
-polygon([[-30,-7],[8,-10],[25,-4],[29,0],[25,4],[8,10],[-30,7]],'#f4d790');
-rect(-31,-9,5,18,'#fff0c6');
-drawOutboardMotors('ferry',active);
+const roll=activeVessel==='ferry'&&!burning?(boatMotion.roll||0):0;
+beginBoatHull(x,y,heading,'ferry',roll);
+polygon([[-37,-13],[10,-16],[29,-8],[39,0],[29,8],[10,16],[-37,13]],boatBuildColor(rebuilding,'#315d66'));
+polygon([[-34,-10],[10,-13],[28,-6],[35,0],[28,6],[10,13],[-34,10]],boatBuildColor(rebuilding,'#e7b965'));
+polygon([[-30,-7],[8,-10],[25,-4],[29,0],[25,4],[8,10],[-30,7]],boatBuildColor(rebuilding,'#f4d790'));
+const deckStep=boatBuildPart(rebuilding,'deck');if(deckStep)rect(-31,-9,5,18,deckStep===1?'#c7a16b':'#fff0c6');
+drawOutboardMotors('ferry',active,boatMotion,rebuilding);
 if(active&&boatMotion.power>.1){ctx.globalAlpha=boatMotion.power*.6;for(const side of [-8,8]){
 const churn=Math.sin(boatMotion.phase+side)*1.4;
 ellipse(-43,side+churn,9,3.8,'#d2f4ec');
 ellipse(-47,side-churn*.6,6,2.5,'#f3fff7');
 for(let i=0;i<3;i++)ellipse(-42-i*4,side+Math.sin(boatMotion.phase*1.7+i+side)*3,1.7,1,'#ffffff');
-}ctx.strokeStyle='#d6f1e4';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(23,-10);ctx.quadraticCurveTo(36,-5,39,0);ctx.quadraticCurveTo(36,5,23,10);ctx.stroke();}
+}}
 ctx.restore();
-// Keep the raised cabin upright while its hull follows the travel heading.
+beginBoatSuperstructure(x,y,heading,roll);
+// Cabin stays aligned to the screen while leaning with the hull.
 const cx=x+Math.cos(heading)*10,cy=y+Math.sin(heading)*10;
-rect(cx-13,cy-20,27,19,'#fff0c6');rect(cx-16,cy-23,33,5,'#bc7056');
-for(let i=0;i<3;i++)rect(cx-9+i*8,cy-15,5,8,'#7bb8bc');
-rect(cx+5,cy-31,5,9,'#535f59');cavernFlag(cx-9,cy-22,26,active?(boatMotion.travelHeading??heading):heading);
-if(active&&!hookedFish){const angler=fishingAngler();character(angler.x,angler.y-4);}
+const cabinStep=boatBuildPart(rebuilding,'cabin');if(cabinStep)rect(cx-13,cy-20,27,19,cabinStep===1?'#c7a16b':'#fff0c6');
+const roofStep=boatBuildPart(rebuilding,'roof');if(roofStep)rect(cx-16,cy-23,33,5,roofStep===1?'#c7a16b':'#bc7056');
+const windowStep=boatBuildPart(rebuilding,'windows');if(windowStep)for(let i=0;i<3;i++)rect(cx-9+i*8,cy-15,5,8,windowStep===1?'#52676c':'#7bb8bc');
+const chimneyStep=boatBuildPart(rebuilding,'chimney');if(chimneyStep)rect(cx+5,cy-(chimneyStep===1?27:31),5,chimneyStep===1?5:9,'#535f59');
+cavernFlag(cx-9,cy-22,26,active?(boatMotion.travelHeading??heading):heading,boatBuildPart(rebuilding,'pole'),boatBuildPart(rebuilding,'flag'));
+ctx.restore();
+if(active&&!fishingActive){
+const angler=fishingAngler();drawSeatedBoatRider(angler.x,angler.y-2,heading,roll);
+}else drawBoatSteeringWheel(x-Math.cos(heading)*19,y-Math.sin(heading)*19-2,heading,0,boatBuildPart(rebuilding,'wheel'));
 }
-let boatMotion={heading:state.parkedBoat?.heading||0,phase:0,movingFor:0,power:0,velocity:0,turnRate:0,steering:0,engineStage:'running',engineAge:1000,throttle:0,trimStep:0,distance:0,wake:[],bowWake:[],spray:[],sprayClock:0,spraySerial:0};
-function resetBoatMotion(){deepWaterHintShown=false;boatAnchor=null;boatMotion={heading:0,phase:0,movingFor:0,power:0,velocity:0,turnRate:0,steering:0,engineStage:'running',engineAge:1000,throttle:0,trimStep:0,distance:0,wake:[],bowWake:[],spray:[],sprayClock:0,spraySerial:0};}
+let boatMotion={heading:state.parkedBoat?.heading||0,phase:0,movingFor:0,power:0,velocity:0,turnRate:0,roll:0,rollVelocity:0,steering:0,engineStage:'running',engineAge:1000,throttle:0,trimStep:0,distance:0,wake:[],bowWake:[],spray:[],sprayClock:0,spraySerial:0};
+function resetBoatMotion(){deepWaterHintShown=false;boatAnchor=null;boatMotion={heading:0,phase:0,movingFor:0,power:0,velocity:0,turnRate:0,roll:0,rollVelocity:0,steering:0,engineStage:'running',engineAge:1000,throttle:0,trimStep:0,distance:0,wake:[],bowWake:[],spray:[],sprayClock:0,spraySerial:0};}
 function startBoatEngines(boarding=true){
 if(boarding)applyReserveGas();
 if(!vesselHasPower()){stopBoatPropulsion();return;}
@@ -3588,12 +4114,13 @@ boatMotion.engineAge=Math.min(1000,(boatMotion.engineAge??1000)+dt);
 if(boatMotion.engineStage==='starting'&&boatMotion.engineAge>=550)boatMotion.engineStage='running';
 }
 if(!boating||fishingActive||boatAnchorBusy()){boatMotion.velocity=0;boatMotion.turnRate=0;boatMotion.throttle=0;}
+const rollTarget=boating&&!fishingActive&&!boatAnchorBusy()&&vesselHasPower()?boatRollTarget(activeVessel,boatMotion.velocity,boatMotion.turnRate):0;
+advanceHullRoll(boatMotion,dt,rollTarget);
 boatMotion.movingFor=boating?Math.max(0,boatMotion.movingFor-dt):0;
 const powered=boatMotion.movingFor>0?1:0;
 boatMotion.power+=(powered-boatMotion.power)*(1-Math.exp(-dt/120));
 boatMotion.phase+=dt*.06*boatMotion.power;
-boatMotion.wake=boatMotion.wake.filter(w=>{w.age+=dt;return w.age<1800;});
-boatMotion.bowWake=boatMotion.bowWake.filter(w=>{w.age+=dt;return w.age<3600;});
+ageBoatWake(boatMotion,dt);
 advanceBoatSpray(dt);
 }
 function recordBoatMovement(from,hullHeading=null){
@@ -3603,59 +4130,119 @@ if(distance<.001)return;
 const heading=hullHeading??Math.atan2(dy,dx);boatMotion.heading=heading;boatMotion.movingFor=100;
 boatMotion.travelHeading=Math.atan2(dy,dx);
 faceMovement(dx,dy);
-for(let d=6-boatMotion.distance;d<=distance;d+=6){
-const stern=activeVessel==='ferry'?41:activeVessel==='speedboat'?32:25,spacing=activeVessel==='ferry'?8:activeVessel==='speedboat'?9:6;
-if(boatMotion.velocity>.5){
-const ferry=activeVessel==='ferry',bow=ferry?28:activeVessel==='speedboat'?24:16,beam=ferry?10:activeVessel==='speedboat'?9:7;
+recordHullWake(boatMotion,from,player,heading,activeVessel,boatTrimLevel());
+}
+function ageBoatWake(motion,dt){
+motion.wake=(motion.wake||[]).filter(w=>{w.age+=dt;return w.age<1800;});
+motion.bowWake=(motion.bowWake||[]).filter(w=>{w.age+=dt;return w.age<3600;});
+}
+function recordHullWake(motion,from,to,heading,vessel,trim=0,age=0){
+const dx=to.x-from.x,dy=to.y-from.y,distance=Math.hypot(dx,dy);
+if(distance<.001)return;
+motion.wake??=[];motion.bowWake??=[];motion.distance??=0;
+const hullWake=motion.velocity>.5?boatHullWake(vessel,motion):null;
+const stern=vessel==='ferry'?41:vessel==='speedboat'?32:25,spacing=vessel==='ferry'?8:vessel==='speedboat'?9:6;
+const c=Math.cos(heading),s=Math.sin(heading);
+for(let d=6-motion.distance;d<=distance;d+=6){
+const sampleX=from.x+dx*d/distance,sampleY=from.y+dy*d/distance;
+if(hullWake){
+const [along,across]=hullWake.point(.12);
 for(const side of [-1,1]){
-const x=from.x+dx*d/distance+Math.cos(heading)*bow-Math.sin(heading)*side*beam;
-const y=from.y+dy*d/distance+Math.sin(heading)*bow+Math.cos(heading)*side*beam;
-if(sharkWater(x,y))boatMotion.bowWake.push({x,y,heading,side,age:0,speed:Math.min(1,boatMotion.velocity/boatTopSpeed(4))});
+const x=sampleX+c*along-s*side*across;
+const y=sampleY+s*along+c*side*across;
+if(sharkWater(x,y))motion.bowWake.push({x,y,heading,side,age,speed:hullWake.speed,velocity:motion.velocity});
 }
 }
-for(const side of outboardOffsets(activeVessel,spacing)){
-const x=from.x+dx*d/distance-Math.cos(heading)*stern-Math.sin(heading)*side;
-const y=from.y+dy*d/distance-Math.sin(heading)*stern+Math.cos(heading)*side;
-if(sharkWater(x,y))boatMotion.wake.push({x,y,heading:heading+(boatMotion.steering||0),age:0,trim:boatTrimLevel()});
+for(const side of outboardOffsets(vessel,spacing)){
+const x=sampleX-c*stern-s*side;
+const y=sampleY-s*stern+c*side;
+if(sharkWater(x,y))motion.wake.push({x,y,heading:heading+(motion.steering||0),age,trim,serial:motion.wakeSerial=(motion.wakeSerial||0)+1});
 }
 }
-boatMotion.distance=(boatMotion.distance+distance)%6;
-boatMotion.wake=boatMotion.wake.slice(-112);
-boatMotion.bowWake=boatMotion.bowWake.slice(-256);
+motion.distance=(motion.distance+distance)%6;
+motion.wake=motion.wake.slice(-112);
+motion.bowWake=motion.bowWake.slice(-256);
 }
-function drawBoatWake(){
-// Wave fragments remain in world space, preserving the trail through turns.
-for(const w of boatMotion.bowWake){
-const t=w.age/3600,spread=w.age*.001*(16+w.speed*40),fade=(1-t)*(1-t);
-ctx.save();ctx.translate(w.x-Math.sin(w.heading)*w.side*spread,w.y+Math.cos(w.heading)*w.side*spread);ctx.rotate(w.heading);
-ctx.globalAlpha=fade*w.speed*.5;ctx.strokeStyle=t<.2?'#d7f4e9':'#b3ddd6';ctx.lineWidth=1.2+fade*w.speed*2;
-ctx.beginPath();ctx.moveTo(-6-t*12,w.side*(4+t*6));ctx.quadraticCurveTo(0,0,6+t*6,-w.side*2);ctx.stroke();
+function drawBoatHullSpray(w,seed){
+if(w.speed<.12)return;
+const life=.24+w.speed*.2,age=w.age/1000;
+if(age>life)return;
+const count=2+Math.floor(w.speed*4);
+const c=Math.cos(w.heading),s=Math.sin(w.heading);
+for(let i=0;i<count;i++){
+const variation=(Math.sin(seed+i*17.3)+1)/2;
+const duration=life*(.65+variation*.35),t=age/duration;
+if(t>=1)continue;
+const height=(2+w.speed*10)*(.5+variation*.5);
+const forward=(w.velocity??w.speed*140)*.3-14,lateral=w.side*(12+w.speed*35)*(.6+variation*.8);
+const vx=c*forward-s*lateral,vy=s*forward+c*lateral;
+const x=w.x-c*i*.7-s*w.side*i*.5,y=w.y-s*i*.7+c*w.side*i*.5;
+const z=4*height*t*(1-t),tail=Math.max(0,t-.09);
+const previousZ=4*height*tail*(1-tail),previousAge=tail*duration;
+ctx.globalAlpha=w.speed*(1-t)*.65;ctx.strokeStyle='#f1fff9';ctx.lineWidth=.65+w.speed*.7;
+ctx.beginPath();ctx.moveTo(x+vx*previousAge,y+vy*previousAge-previousZ);ctx.lineTo(x+vx*age,y+vy*age-z);ctx.stroke();
+ellipse(x+vx*age,y+vy*age-z,.6+w.speed*.65,.5+w.speed*.35,'#f4fffc');
+}
+}
+function drawBoatWakeArm(side,motion=boatMotion){
+const points=(motion.bowWake||[]).filter(w=>w.side===side).map(w=>{
+const age=w.age/1000,t=w.age/3600,spread=age*(4+w.speed*20);
+const seed=w.x*.73+w.y*1.17+side*2.3;
+const ripple=Math.sin(seed+age*3)*(.35+t);
+return {x:w.x-Math.sin(w.heading)*side*(spread+ripple),
+y:w.y+Math.cos(w.heading)*side*(spread+ripple),
+width:2+w.speed*3+t*7,fade:Math.pow(1-t,1.2)*Math.sqrt(w.speed),seed,w};
+});
+ctx.save();
+// Overlapping sections join into the long whitewater arms left by the hull.
+for(let layer=0;layer<2;layer++)for(let i=1;i<points.length;i++){
+const a=points[i-1],b=points[i];
+if(Math.hypot(b.x-a.x,b.y-a.y)>40)continue;
+ctx.globalAlpha=b.fade*(layer?.55:.22);
+const aw=a.width*(layer?.5:1.25),bw=b.width*(layer?.5:1.25);
+const ax=-Math.sin(a.w.heading)*aw,ay=Math.cos(a.w.heading)*aw;
+const bx=-Math.sin(b.w.heading)*bw,by=Math.cos(b.w.heading)*bw;
+polygon([[a.x+ax,a.y+ay],[b.x+bx,b.y+by],[b.x-bx,b.y-by],[a.x-ax,a.y-ay]],layer?'#dff6eb':'#83c5c5');
+}
+for(const p of points){
+const {w,seed,width,fade}=p,c=Math.cos(w.heading),s=Math.sin(w.heading);
+// Fine, uneven foam spills outward from the connected crest into the surrounding water.
+for(let i=0;i<7;i++){
+const noise=(Math.sin(seed+i*31.7)+1)/2;
+const along=(i/6-.5)*8,across=side*(noise-.25)*width*1.6;
+const x=p.x+c*along-s*across,y=p.y+s*along+c*across;
+ctx.globalAlpha=fade*(.35+noise*.4);
+ellipse(x,y,.45+noise*.8,.4+noise*.55,i%3?'#effff6':'#aedfd8');
+}
+}
 ctx.restore();
 }
-for(const w of boatMotion.wake){
-const ferry=activeVessel==='ferry',trim=(w.trim||0)/5,t=w.age/1800,spread=(ferry?3+t*8:1.5+t*3)*(1+trim*.65),length=(ferry?6+t*25:3+t*17)*(1+trim*.35);
-ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);
-ctx.strokeStyle='#e3f8ed';ctx.lineWidth=(ferry?2:1.2)+trim;ctx.globalAlpha=(1-t)*(1-t)*Math.min(1,(ferry?.85:.6)+trim*.2);
-ctx.beginPath();ctx.moveTo(-length,-spread);ctx.quadraticCurveTo(-length*.3,-spread*.7,2,-1);
-ctx.moveTo(-length,spread);ctx.quadraticCurveTo(-length*.3,spread*.7,2,1);ctx.stroke();
-if(ferry){
-// Expanding eddies and broken foam churn along both propeller trails.
-const fade=(1-t)*(1-t),seed=w.x*.31+w.y*.47;
-for(let i=0;i<4;i++){
-const swirl=seed+i*2.4+w.age*.006,along=-length*(.15+i*.23);
-const across=Math.sin(swirl)*spread*.75,radius=1.3+t*2+i*.25;
-ctx.globalAlpha=fade*(.6-i*.07);
-ellipse(along,across,radius*1.7,radius*.7,i%2?'#f4fff9':'#c4eae4');
-ctx.strokeStyle='#f1fff7';ctx.lineWidth=1;ctx.beginPath();
-ctx.ellipse(along-1,across,radius*2.3,radius,Math.sin(swirl)*.4,.2,Math.PI*1.45);ctx.stroke();
+function drawBoatWake(motion=boatMotion){
+drawBoatWakeArm(-1,motion);drawBoatWakeArm(1,motion);
+ctx.save();
+for(const w of (motion.bowWake||[]))drawBoatHullSpray(w,w.x*.73+w.y*1.17+w.side*2.3);
+ctx.restore();
+// The propeller wash broadens into an aerated, turbulent streak between the outer arms.
+for(const w of (motion.wake||[])){
+const trim=(w.trim||0)/5,t=w.age/1800,fade=(1-t)*(1-t);
+const width=(2.5+t*6)*(1+trim*.5),length=8+t*14;
+const seed=w.x*.31+w.y*.47;
+ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.lineCap='butt';
+ctx.globalAlpha=fade*.22;ctx.strokeStyle='#a3d9d2';ctx.lineWidth=width*2;
+ctx.beginPath();ctx.moveTo(-length,0);ctx.lineTo(3,0);ctx.stroke();
+ctx.globalAlpha=fade*.42;ctx.strokeStyle='#e2f8ee';ctx.lineWidth=width;
+ctx.beginPath();ctx.moveTo(-length,.5*Math.sin(seed));ctx.lineTo(3,0);ctx.stroke();
+for(let i=0;i<8;i++){
+const noise=(Math.sin(seed+i*23.1)+1)/2;
+const along=3-length*i/7,across=Math.sin(seed+i*7.4+w.age*.002)*width*.8;
+ctx.globalAlpha=fade*(.3+noise*.35);
+ellipse(along,across,.5+noise, .4+noise*.6,i%3?'#ecfff5':'#b4e2db');
 }
-}
-ctx.globalAlpha*=.65;ellipse(-length*.3,Math.sin(w.x+w.y)*2,2.2+t,1,'#eefff3');
 ctx.restore();
 }
 }
-function fishingBoatArt(x,y){
-if(boatIsExploding('fishing'))return;
+function fishingBoatArt(x,y,rebuilding=false){
+if(!rebuilding&&boatUnderConstruction('fishing'))return;
 const burning=boatExplosions.get('fishing');if(burning){x=burning.x;y=burning.y;}
 const active=boating&&activeVessel==='fishing',heading=burning?.heading??(activeVessel==='fishing'?boatMotion.heading:fishingBoatHeading);
 if(activeVessel==='fishing')drawBoatWake();
@@ -3663,19 +4250,22 @@ drawBoatShadow(x,y,heading,'fishing');
 drawBoatBowWake(x,y,heading,'fishing');
 drawBoatExhaust(x,y,heading,'fishing');
 drawBoatTrimSpray(x,y,heading,'fishing');
-ctx.save();ctx.translate(x,y);ctx.rotate(heading);
+const roll=activeVessel==='fishing'&&!burning?(boatMotion.roll||0):0;
+beginBoatHull(x,y,heading,'fishing',roll);
 // Pointed bow leads; twin outboards sit on the stern brackets.
-polygon([[-23,-9],[6,-11],[17,-6],[25,0],[17,6],[6,11],[-23,9]],'#436b67');
-polygon([[-20,-7],[6,-8],[16,-4],[21,0],[16,4],[6,8],[-20,7]],'#f1c67a');
-polygon([[-17,-4],[5,-6],[15,0],[5,6],[-17,4]],'#d7a769');
-rect(-10,-7,4,14,'#fff1cf');rect(5,-5,3,10,'#fff1cf');
-drawOutboardMotors('fishing',active);
+polygon([[-23,-9],[6,-11],[17,-6],[25,0],[17,6],[6,11],[-23,9]],boatBuildColor(rebuilding,'#436b67'));
+polygon([[-20,-7],[6,-8],[16,-4],[21,0],[16,4],[6,8],[-20,7]],boatBuildColor(rebuilding,'#f1c67a'));
+polygon([[-17,-4],[5,-6],[15,0],[5,6],[-17,4]],boatBuildColor(rebuilding,'#d7a769'));
+const deckStep=boatBuildPart(rebuilding,'deck');if(deckStep){rect(-10,-7,4,14,deckStep===1?'#c7a16b':'#fff1cf');rect(5,-5,3,10,deckStep===1?'#c7a16b':'#fff1cf');}
+drawOutboardMotors('fishing',active,boatMotion,rebuilding);
 if(active&&boatMotion.power>.1){
 ctx.globalAlpha=boatMotion.power*.55;for(const side of [-6,6])ellipse(-26,side+Math.sin(boatMotion.phase)*.4,3,1.5,'#eafff2');
-ctx.strokeStyle='#d6f1e4';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(12,-8);ctx.quadraticCurveTo(23,-5,26,0);ctx.quadraticCurveTo(23,5,12,8);ctx.stroke();
 }
 ctx.restore();
-if(active&&!hookedFish)character(x-Math.cos(heading)*3,y-Math.sin(heading)*3-4);
+if(active&&!fishingActive){
+const riderX=x-Math.cos(heading)*3,riderY=y-Math.sin(heading)*3-2;
+drawSeatedBoatRider(riderX,riderY,heading,roll);
+}else drawBoatSteeringWheel(x-Math.cos(heading)*3,y-Math.sin(heading)*3-2,heading,0,boatBuildPart(rebuilding,'wheel'));
 }
 function swimSnorkel(x,y,side=1){
 // Slim J-shaped tube follows the cheek, with a small angled air opening.
@@ -3779,10 +4369,42 @@ ctx.beginPath();ctx.ellipse(x,y,2+i*1.5,1.2+i*.8,0,0,Math.PI*2);ctx.stroke();
 }
 ctx.restore();
 }
+function swimmingLegPose(phase,effort,side,onBoard=false){
+// Flutter stays in a vertical plane: y is lateral spacing, z is height above the water.
+const cycle=phase*2.8+(side<0?Math.PI:0),power=effort*(onBoard?.45:1);
+const thigh=Math.sin(cycle)*(.025+power*.22);
+const bend=Math.max(0,Math.sin(cycle-.55))*(.05+power*.38);
+const shin=thigh+bend,hip={x:-5.5,y:side*1.65,z:0};
+const knee={x:hip.x-Math.cos(thigh)*6.3,y:hip.y,z:Math.sin(thigh)*6.3};
+const ankle={x:knee.x-Math.cos(shin)*5.8,y:hip.y,z:knee.z+Math.sin(shin)*5.8};
+const footAngle=shin*.65+Math.sin(cycle-.8)*power*.18;
+const toe={x:ankle.x-Math.cos(footAngle)*3,y:hip.y,z:ankle.z+Math.sin(footAngle)*3};
+return {hip,knee,ankle,toe,cycle};
+}
+function projectSwimmingLeg(leg,heading){
+// Cancel the heading rotation for elevation, so raised feet always move up the screen.
+const project=p=>({x:p.x-Math.sin(heading)*p.z,y:p.y-Math.cos(heading)*p.z});
+return {...leg,hip:project(leg.hip),knee:project(leg.knee),ankle:project(leg.ankle),toe:project(leg.toe)};
+}
+function drawSwimmingLeg(p,side){
+const segment=(from,to,fromWidth,toWidth,color)=>{
+const dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy)||1,nx=-dy/length,ny=dx/length;
+polygon([[from.x+nx*fromWidth,from.y+ny*fromWidth],[to.x+nx*toWidth,to.y+ny*toWidth],
+[to.x-nx*toWidth,to.y-ny*toWidth],[from.x-nx*fromWidth,from.y-ny*fromWidth]],color);
+};
+segment(p.hip,p.knee,1.55,1.15,side<0?'#354d52':'#3e5555');
+characterEllipse(p.knee.x,p.knee.y,1.2,1.15,'#3e5555');
+segment(p.knee,p.ankle,1.1,.65,side<0?'#3e5555':'#49656a');
+characterLimb([[p.hip.x-.8,p.hip.y-.55],[p.knee.x,p.knee.y-.4],[p.ankle.x+.5,p.ankle.y-.3]],'#ffffff20',.55);
+// A narrow heel and tapered, pointed toes replace the old sliding oval feet.
+segment(p.ankle,p.toe,.85,.35,'#dfb88b');
+characterEllipse(p.ankle.x,p.ankle.y,.85,.85,'#e9c496');
+characterLimb([[p.ankle.x-.4,p.ankle.y-.4],[p.toe.x+.3,p.toe.y-.2]],'#f7d6a8',.6);
+}
 function drawSwimmingCharacter(x,y,motion=swimMotion,onBoard=false){
 const colors=characterColors(),phase=motion.phase,effort=motion.effort;
 const bodyVisibility=onBoard?1:Math.max(0,Math.min(1,(effort-.025)/.6));
-const kick=Math.sin(phase*2.8),roll=Math.sin(phase)*effort,bob=Math.sin(motion.time*.002)*.5;
+const roll=Math.sin(phase)*effort,bob=Math.sin(motion.time*.002)*.5;
 if(!onBoard)drawSwimmerWake();
 ctx.save();ctx.translate(x,y+bob);ctx.rotate(motion.heading);
 if(!onBoard)clipBeachWaveOccupant(x,y);
@@ -3791,13 +4413,25 @@ if(bodyVisibility>0){
 if(!onBoard){ctx.globalAlpha=.35*bodyVisibility;ellipse(-2,1,17,6,'#467f82');}
 ctx.globalAlpha=(onBoard?1:.65)*bodyVisibility;
 for(const side of [-1,1]){
-const foot=-15+kick*side*(onBoard ? .35+effort : 1+effort*2),spread=side*(2.5+Math.cos(phase*2.8)*side*effort*(onBoard ? .2 : 1));
-polygon([[-5,side*2],[-10,spread-1],[foot,spread-1],[foot-1,spread+1],[-10,spread+1],[-4,side*3]],'#3e5555');
-ellipse(foot-1,spread,2,1,'#d9b78d');
-drawSwimKickSplash(foot,spread,side,phase,effort,onBoard);
+const leg=swimmingLegPose(phase,effort,side,onBoard);
+// Alternate which foot is nearer the surface without changing the stroke timing.
+ctx.globalAlpha=(onBoard?1:.58+.18*Math.sin(leg.cycle))*bodyVisibility;
+drawSwimmingLeg(projectSwimmingLeg(leg,motion.heading),side);
+drawSwimKickSplash(leg.toe.x,leg.toe.y,side,phase,effort,onBoard);
 }
-ctx.globalAlpha=(onBoard?1:.9)*bodyVisibility;ellipse(-1,roll*.6,9,4,colors.shirt);
-ellipse(0,-.5+roll*.6,6,2,colors.accent);
+ctx.globalAlpha=(onBoard?1:.9)*bodyVisibility;
+// Defined hips, a tapered waist, broad shoulders, and a small neck join the existing arms.
+const twist=roll*.5;
+polygon([[-7,-2],[-4,-2.35],[-2,-2.5+twist],[1,-3.8+twist],[3,-3.6],[5,-2.5],[5.8,-1.25],
+[7,-1.1],[7,1.1],[5.8,1.25],[5,2.5],[3,3.6],[1,3.8+twist],[-2,2.5+twist],[-4,2.35],[-7,2]],colors.shirt);
+polygon([[-4,-1.9],[-1,-2.05+twist],[1,-3.05+twist],[3.4,-2.9],[2.8,-1.1+twist],[-1.4,-.6+twist],[-4,-.8]],colors.accent);
+characterLimb([[-3.8,1.6+twist],[-.5,2.5+twist],[2,2.8]],'#35474444',.65);
+characterLimb([[-3.5,-1.75],[-1,-1.9+twist],[1.2,-2.9+twist]],'#ffffff33',.6);
+// Waistband and centre seam keep the hips distinct from the shirt and legs.
+polygon([[-7,-2],[-5.6,-2.2],[-5.6,2.2],[-7,2]],'#354d52');
+characterLimb([[-6.5,0],[-4.7,0]],'#739092',.5);
+characterLimb([[4.8,-1.3],[6.7,-1]],'#f2c992',1.6);
+characterLimb([[4.8,1.3],[6.7,1]],'#dfb88b',1.6);
 // Opposite arms cycle through forward recovery, catch, and underwater pull.
 for(const side of [-1,1]){
 const cycle=(phase+(side<0?Math.PI:0))%(Math.PI*2),reach=Math.cos(cycle),sweep=Math.sin(cycle);
@@ -3824,88 +4458,145 @@ if(bodyVisibility<1){ctx.globalAlpha=(1-bodyVisibility)*(1-ripple)*.3;ctx.beginP
 }
 ctx.restore();
 }
+function airborneExplorerNormal(){
+const facing=player.facing||'down';
+return facing==='left'?{x:-1,y:0}:facing==='right'?{x:1,y:0}:facing==='up'?{x:0,y:-1}:{x:0,y:1};
+}
+function airborneExplorerPose(style,amount){
+if(style==='dive'){
+const ready=shorePoseFrame([0,13],[0,7],[-1,1],[[1,0],[1,0]],[[0,-2],[0,-2]],[[1,10],[1,10]],[[2,14],[2,14]],.8);
+const extended=shorePoseFrame([0,16],[0,9],[0,1.5],[[0,-1],[0,-1]],[[0,-3.5],[0,-3.5]],[[0,21],[0,21]],[[0,28],[0,28]],.75);
+// Hands meet above the head while elbows and shoulders straighten into a narrow entry.
+extended.elbow0[1]=-1.8;extended.elbow1[1]=1.8;extended.hand0[1]=-.65;extended.hand1[1]=.65;
+return blendShorePose(ready,extended,amount);
+}
+const compact=shorePoseFrame([2,12],[0,7],[-1,3],[[1.4,5],[1,5]],[[-.3,6.7],[-.7,6.7]],[[3,8],[2.7,8]],[[1.8,5.5],[1.4,5.5]],.7);
+return blendShorePose(standingShorePose(),compact,amount);
+}
+function drawAirborneExplorer(pose,x,y,angle){
+ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.translate(-player.x,-player.y);
+drawShoreExplorer(pose,airborneExplorerNormal(),0,null,true);ctx.restore();
+}
 function rollingCharacter(x,y,angle,tuck){
-// Curl around the torso: knees against the chest, hands around the shins.
-const colors=characterColors(),bend=Math.max(0,Math.min(1,tuck)),headX=3*bend,headY=-7+4*bend;
-ctx.save();ctx.translate(x,y);ctx.rotate(angle);
-if(currentProfile().character==='girl')rect(headX-7,headY-4,4,10-4*bend,colors.hair);
-ellipse(-bend,0,6,7-2*bend,colors.shirt);
-rect(-4,-4,7,4,colors.accent);
-for(const offset of [-2,2]){
-const kneeX=offset+5*bend,kneeY=7-6*bend,footX=offset-3*bend,footY=11-5*bend;
-polygon([[offset-2,3],[kneeX+2,kneeY-2],[kneeX+2,kneeY+2],[offset-2,7]],'#3e5555');
-polygon([[kneeX-2,kneeY],[kneeX+2,kneeY],[footX+2,footY],[footX-2,footY]],'#3e5555');
-rect(footX-2,footY-1,4,3,'#354744');
+drawAirborneExplorer(airborneExplorerPose('roll',Math.max(0,Math.min(1,tuck))),x,y+7,angle);
 }
-polygon([[-6,-3],[-3,-3],[4*bend,5-2*bend],[7*bend,4-2*bend],[7*bend,7-2*bend],[-3,8-2*bend],[-6,2]],'#e4bd88');
-rect(4*bend,3-2*bend,4,3,'#f2c992');
-rect(headX-4,headY-5,9,8,'#f2c992');
-rect(headX-5,headY-7,10,3,colors.hair);
-
-swimGoggles(headX,headY-2);
-ctx.restore();
+function divingCharacter(x,y,angle,extension=1){
+drawAirborneExplorer(airborneExplorerPose('dive',Math.max(0,Math.min(1,extension))),x,y,angle);
 }
-function divingCharacter(x,y,angle){
-const colors=characterColors();
-ctx.save();ctx.translate(x,y);ctx.rotate(angle);
-// Straight legs and arms reaching past the head make a headfirst dive.
-rect(-4,3,3,10,'#3e5555');rect(1,3,3,10,'#3e5555');
-rect(-5,-6,10,11,colors.shirt);rect(-4,-5,8,4,colors.accent);
-if(currentProfile().character==='girl')rect(-7,-14,3,10,colors.hair);
-rect(-4,-15,9,8,'#f2c992');rect(-5,-17,10,3,colors.hair);
-polygon([[-7,-4],[-4,-5],[-5,-24],[-7,-26],[-9,-24]],'#e4bd88');
-polygon([[4,-5],[7,-4],[9,-24],[7,-26],[5,-24]],'#f2c992');
-swimGoggles(0,-12);ctx.restore();
+function waterEntryFrame(dive){
+const flight=Math.min(1,Math.max(0,dive.elapsed/434)),style=dive.style||'roll';
+const direction=dive.to.x>=dive.from.x?1:-1;
+const smooth=t=>t*t*(3-2*t);
+const extension=smooth(Math.min(1,flight/.5));
+const tuck=Math.max(0,Math.min(1,flight/.2,(1-flight)/.25));
+const pose=airborneExplorerPose(style,style==='dive'?extension:tuck);
+const angle=style==='dive'?smooth(flight)*Math.PI*direction:(style==='backflip'?-1:1)*flight*Math.PI*2*direction;
+const normal=airborneExplorerNormal();let bottom=-Infinity,top=Infinity;
+// Fit the airborne pose to its arc, then carry it through the waterline at contact.
+for(const [key,p] of Object.entries(pose)){
+const projected=shoreScreenPoint(p,normal),dx=projected[0]-player.x,dy=projected[1]-player.y;
+const y=dx*Math.sin(angle)+dy*Math.cos(angle),radius=key==='head'?5:key.startsWith('foot')?1.8:1.4;
+bottom=Math.max(bottom,y+radius);top=Math.min(top,y-radius);
+}
+const entry=Math.max(0,Math.min(1,(dive.elapsed-434)/180)),sink=entry*(bottom-top+5);
+const arc=Math.sin(flight*Math.PI)*(style==='backflip'?25:style==='roll'?16:12);
+return {pose,angle,x:player.x,y:player.y-bottom-arc+sink,flight,entry,bottom,top};
 }
 function drawWaterEntry(){
-const x=player.x,y=player.y,t=Math.min(1,diveAnimation.elapsed/700);
-if(t<.62){
-const progress=t/.62,direction=diveAnimation.to.x>=diveAnimation.from.x?1:-1;
-const style=diveAnimation.style||'roll';
-if(style==='dive'){
-const tilt=progress*progress*(3-2*progress);
-divingCharacter(x,y-10-Math.sin(progress*Math.PI)*12+progress*14,tilt*Math.PI*direction);
-}else if(style==='backflip'){
-const tuck=Math.min(1,progress/.18,(1-progress)/.25);
-rollingCharacter(x,y-10-Math.sin(progress*Math.PI)*25,-progress*Math.PI*2*direction,tuck);
-}else{
-rollingCharacter(x,y-10-Math.sin(progress*Math.PI)*16,progress*Math.PI*2*direction,Math.min(1,progress/.2));
+const dive=diveAnimation,t=Math.min(1,dive.elapsed/700),frame=waterEntryFrame(dive);
+if(frame.entry<1){
+ctx.save();
+if(dive.elapsed>=434){
+// Keep the remaining airborne body above the surface as it slips under the impact foam.
+ctx.beginPath();ctx.rect(dive.to.x-100,dive.to.y-180,200,181);ctx.clip();
 }
-}else{
-// The head rises through the settling foam as the swimmer resurfaces.
-if(t>.8){ctx.save();ctx.globalAlpha=(t-.8)/.2;drawSwimmingCharacter(x,y);ctx.restore();}
+drawAirborneExplorer(frame.pose,frame.x,frame.y,frame.angle);ctx.restore();
 }
+if(t>.8){ctx.save();ctx.globalAlpha=Math.min(1,(t-.8)/.2);drawSwimmingCharacter(player.x,player.y);ctx.restore();}
+}
+// Shore poses use travel, lateral spacing, and height, keeping elevation upright at every coast.
+function shorePoseFrame(head,chest,hip,knees,feet,elbows,hands,width=1){
+const pose={head:[head[0],0,head[1]],chest:[chest[0],0,chest[1]],hip:[hip[0],0,hip[1]]};
+for(let i=0;i<2;i++){
+const side=i?1:-1;
+pose['shoulder'+i]=[chest[0],side*4*width,chest[1]];
+pose['hip'+i]=[hip[0],side*2*width,hip[1]];
+for(const [name,pair,across] of [['knee',knees,2.5],['foot',feet,2.5],['elbow',elbows,5],['hand',hands,5.4]])pose[name+i]=[pair[i][0],side*across*width,pair[i][1]];
+}
+return pose;
+}
+function blendShorePose(a,b,t){
+const pose={};for(const key of Object.keys(a))pose[key]=a[key].map((value,i)=>value+(b[key][i]-value)*t);return pose;
+}
+function shorePoseTrack(frames,t){
+for(let i=1;i<frames.length;i++)if(t<=frames[i][0]){
+const u=Math.max(0,Math.min(1,(t-frames[i-1][0])/(frames[i][0]-frames[i-1][0])));
+return blendShorePose(frames[i-1][1],frames[i][1],u*u*(3-2*u));
+}
+return frames.at(-1)[1];
+}
+function standingShorePose(){return shorePoseFrame([0,15.8],[0,8.5],[0,1.5],[[0,0],[0,0]],[[0,-1],[0,-1]],[[0,6],[0,6]],[[0,3],[0,3]]);}
+function proneShorePose(breath=0){return shorePoseFrame([9,5.5+breath],[2,3+breath],[-4,2],[[-8,1],[-8,1]],[[-13,0],[-13,0]],[[5,1],[3,1]],[[8,0],[6,0]],.65);}
+function shoreScreenPoint(p,normal){
+// Keep a little body thickness in side views; height always projects straight up.
+const acrossX=(normal.y>0?-1:1)*(.7+.3*Math.abs(normal.y)),acrossY=normal.x*.3;
+return [player.x+normal.x*p[0]+acrossX*p[1],player.y+normal.y*p[0]+acrossY*p[1]-p[2]];
+}
+function drawShoreExplorer(pose,normal,headShake=0,grips=null,gear=false){
+const tangent={x:(normal.y>0?-1:1)*(.7+.3*Math.abs(normal.y)),y:normal.x*.3},colors=characterColors();
+const point=p=>shoreScreenPoint(p,normal);
+const p={};for(const key of Object.keys(pose))p[key]=point(pose[key]);
+if(grips)for(let i=0;i<2;i++)p['hand'+i]=grips[i];
+const limb=(a,b,c,color,width)=>characterLimb([a,b,c],color,width);
+ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+for(let i=0;i<2;i++){
+limb(p['hip'+i],p['knee'+i],p['foot'+i],i?'#49656a':'#354d52',2.8);
+characterEllipse(...p['knee'+i],1.35,1.25,'#3e5555');
+characterRect(p['foot'+i][0]-1.6,p['foot'+i][1]-.6,3.6,1.8,'#293e43');
+characterRect(p['foot'+i][0]-1.3,p['foot'+i][1]+.7,3,.5,'#b1ad93');
+}
+limb(p.shoulder0,p.elbow0,p.hand0,'#c99e78',2.3);
+characterEllipse(...p.hand0,1.3,1.3,'#f2c992');
+// The shirt follows the articulated chest and hips instead of stretching an oval.
+polygon([p.shoulder0,p.shoulder1,[p.hip1[0]+tangent.x*1.7,p.hip1[1]+tangent.y*1.7],[p.hip0[0]-tangent.x*1.7,p.hip0[1]-tangent.y*1.7]],colors.shirt);
+const panel=(side,amount)=>[p.chest[0]+tangent.x*side*3+(p.hip[0]-p.chest[0])*amount,p.chest[1]+tangent.y*side*3+(p.hip[1]-p.chest[1])*amount];
+polygon([panel(-1,.1),panel(1,.1),panel(1,.5),panel(-1,.5)],colors.accent);
+characterLimb([panel(-1,.2),panel(-1,.85)],'#ffffff30',.65);
+characterLimb([[p.hip[0]-tangent.x*3.5,p.hip[1]-tangent.y*3.5],[p.hip[0]+tangent.x*3.5,p.hip[1]+tangent.y*3.5]],'#35474466',.8);
+const facing=Math.abs(normal.x)>Math.abs(normal.y)?(normal.x<0?'left':'right'):(normal.y<0?'up':'down');
+characterLimb([p.chest,p.head],'#dfb88b',2.5);
+ctx.save();ctx.translate(...p.head);ctx.rotate(headShake*.14);
+characterHead(headShake*.7,0,colors.hair,'#f2c992',facing,currentProfile().character==='girl',headShake*.4);
+if(gear)directionalSwimGear(0,0,false);ctx.restore();
+if(!(shoreRecovery&&goggleArmActive())){limb(p.shoulder1,p.elbow1,p.hand1,'#e4bd88',2.5);characterEllipse(...p.hand1,1.3,1.4,'#f2c992');}
+ctx.restore();
 }
 function drawShoreClimb(){
-const t=Math.min(1,shoreClimb.elapsed/650),lift=Math.max(0,Math.min(1,(t-.3)/.6)),colors=characterColors();
-const x=player.x,y=player.y,bodyY=y+1-lift*9;
-const reach=Math.min(1,t/.25),normal=shoreClimb.normal,tangent={x:-normal.y,y:normal.x};
-if(t<.7){ctx.strokeStyle='#e2f8ee99';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(x,y+3,10*(1-t)+3,3,0,0,Math.PI*2);ctx.stroke();}
-if(lift>.35){
-const knee=1-lift;
-rect(x-5,y-3-knee*5,4,6,'#3e5555');rect(x+2,y-3-knee*3,4,6,'#3e5555');
+const climb=shoreClimb,t=Math.min(1,climb.elapsed/650),normal=climb.normal,tangent={x:-normal.y,y:normal.x};
+const pose=shorePoseTrack([
+[0,shorePoseFrame([7,3],[2,0],[-5,-1],[[-7.5,-1.5],[-7,-1.5]],[[-10,-2],[-9.5,-2]],[[3,0],[3,0]],[[5,0],[5,0]],.7)],
+[.28,shorePoseFrame([7,7],[3,3],[-4,0],[[-6.5,-.5],[-6.5,-.5]],[[-9,-1],[-9,-1]],[[4,2],[4,2]],[[6,0],[6,0]],.8)],
+// Lift the near knee onto the bank while the other leg is still extended in the water.
+[.46,shorePoseFrame([5,10],[2,5],[-3,2],[[-5.5,1],[-.2,3]],[[-8,-.2],[-1,0]],[[3,3],[3,3]],[[5,0],[5,0]],.9)],
+// Transfer weight onto that knee and plant its foot before bringing the trailing leg through.
+[.64,shorePoseFrame([3,12],[1,8],[-1,3.5],[[-3.5,1.8],[1,1.7]],[[-6,.1],[1,0]],[[3,3],[3,3]],[[5,0],[5,0]],.95)],
+[.82,shorePoseFrame([1,15],[0,10],[0,4],[[-1.5,2.5],[1,1]],[[-4,.4],[1,-1]],[[2,4],[1,5]],[[4,0],[3,2]])],
+[.94,shorePoseFrame([0,15.8],[0,8.5],[0,2],[[0,1],[0,0]],[[-1,0],[0,-1]],[[0,6],[0,6]],[[0,3],[0,3]])],
+[1,standingShorePose()]],t);
+// Hands stay on the actual edge during the pull, then release individually for the knee plant.
+const grips=[];
+for(let i=0;i<2;i++){
+const side=i?1:-1,grip={x:climb.edge.x+tangent.x*side*3,y:climb.edge.y+tangent.y*side*3};
+const start={x:climb.from.x+normal.x*4+tangent.x*side*3,y:climb.from.y+normal.y*4+tangent.y*side*3};
+const reach=Math.min(1,t/.23),release=Math.max(0,Math.min(1,(t-(i?.63:.72))/(i?.25:.2)));
+const hand=[start.x+(grip.x-start.x)*reach,start.y+(grip.y-start.y)*reach];
+const resting=shoreScreenPoint(pose['hand'+i],normal);
+grips.push(hand.map((v,j)=>v+(resting[j]-v)*release));
 }
-ellipse(x,bodyY+2,6,4+lift*2,colors.shirt);rect(x-4,bodyY-2,8,4,colors.accent);
-if(currentProfile().character==='girl')rect(x-7,bodyY-10,3,9,colors.hair);
-rect(x-4,bodyY-12,9,8,'#f2c992');rect(x-5,bodyY-14,10,3,colors.hair);
-swimGoggles(x,bodyY-9);
-// Hands grip the actual shoreline first; the landing point lies farther inland.
-for(const side of [-1,1]){
-const release=Math.max(0,Math.min(1,(t-.7)/.3));
-const grip={x:shoreClimb.edge.x+tangent.x*side*3,y:shoreClimb.edge.y+tangent.y*side*3};
-const start={x:shoreClimb.from.x+normal.x*4+tangent.x*side*3,y:shoreClimb.from.y+normal.y*4+tangent.y*side*3};
-const hx=start.x+(grip.x-start.x)*reach,hy=start.y+(grip.y-start.y)*reach;
-const targetX=hx+(x+side*6-hx)*release,targetY=hy+(bodyY+5-hy)*release;
-const shoulderX=x+(normal.x*4+tangent.x*side*3)*(1-release)+side*5*release;
-const shoulderY=(y+normal.y*4+tangent.y*side*3)*(1-release)+bodyY*release;
-const desiredElbowX=(shoulderX+targetX)/2+tangent.x*side*lift,desiredElbowY=(shoulderY+targetY)/2+tangent.y*side*lift;
-const upperArmLength=Math.hypot(desiredElbowX-shoulderX,desiredElbowY-shoulderY),upperReach=Math.min(1,4/Math.max(1,upperArmLength));
-const elbowX=shoulderX+(desiredElbowX-shoulderX)*upperReach,elbowY=shoulderY+(desiredElbowY-shoulderY)*upperReach;
-const forearmLength=Math.hypot(targetX-elbowX,targetY-elbowY),reachScale=Math.min(1,5/Math.max(1,forearmLength));
-const endX=elbowX+(targetX-elbowX)*reachScale,endY=elbowY+(targetY-elbowY)*reachScale;
-ctx.strokeStyle='#f2c992';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(shoulderX,shoulderY);
-ctx.lineTo(elbowX,elbowY);ctx.lineTo(endX,endY);ctx.stroke();rect(endX-2,endY-1,4,3,'#f2c992');
-}
+if(t<.72){ctx.save();ctx.globalAlpha=(1-t)*.5;ctx.strokeStyle='#e2f8ee';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(climb.from.x,climb.from.y+2,5+t*12,2+t*3,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+ctx.save();ctx.globalAlpha=1-Math.max(0,(t-.92)/.08);drawShoreExplorer(pose,normal,0,grips,true);ctx.restore();
+// Blend the last small settle into the ordinary explorer so walking starts in the same silhouette.
+if(t>.92){ctx.save();ctx.globalAlpha=(t-.92)/.08;character(player.x,player.y);ctx.restore();}
 }
 function swimmerArt(){
 const x=player.x,y=player.y;
@@ -3927,27 +4618,55 @@ if(openSea(x,y)){to={x,y};break;}
 }
 if(!to)return;
 const from=shoreRecovery?{x:player.x+9*(Math.cos(shoreRecovery.heading)>=0?1:-1),y:player.y-6}:{x:player.x,y:player.y-16};
-goggleToss={elapsed:0,from,to,owner:profileId};
+goggleToss={elapsed:0,from,to,owner:profileId,armSide:to.x<player.x?-1:1};
 }
 function advanceGoggleToss(dt){
 if(!goggleToss)return;
+if(goggleToss.elapsed<280&&goggleToss.elapsed+dt>=280)goggleToss.releaseFrom={...goggleRemovalPose(goggleToss,280).gear};
 goggleToss.elapsed+=dt;
 if(goggleToss.elapsed>=1300||goggleToss.owner!==profileId)goggleToss=null;
 }
+function goggleArmActive(){return !!goggleToss&&goggleToss.elapsed<460&&!swimming&&!boating&&!fishingActive;}
+function goggleRemovalPose(toss=goggleToss,elapsed=toss.elapsed){
+const side=toss.armSide||1,facing=player.facing||'down',profile=facing==='left'||facing==='right';
+let head,shoulder,rest;
+if(shoreRecovery){
+const normal={x:Math.cos(shoreRecovery.heading),y:Math.sin(shoreRecovery.heading)},pose=proneShorePose();
+head=shoreScreenPoint(pose.head,normal);shoulder=shoreScreenPoint(pose.shoulder1,normal);rest=shoreScreenPoint(pose.hand1,normal);
+}else{
+const direction=facing==='left'?-1:1,bob=Math.abs(walkingStep()/1.5)*.55,elevation=walkableTimberAt(player.x,player.y)?3:0;
+head=[player.x,player.y-15.8-bob-elevation];
+shoulder=[player.x+(profile?-direction:side*4.6),player.y-9-bob-elevation];
+rest=[player.x+(profile?direction*(1-walkingStep()*2):side*5.4),player.y-3-bob-elevation];
+}
+const dx=toss.to.x-player.x,dy=toss.to.y-player.y,length=Math.hypot(dx,dy)||1;
+const contact=[head[0]+side*3,head[1]],lift=[head[0]+side*3,head[1]-5];
+const release=[shoulder[0]+dx/length*9,shoulder[1]-8+dy/length*3];
+const interpolate=(a,b,t)=>{const u=Math.max(0,Math.min(1,t)),ease=u*u*(3-2*u);return a.map((v,i)=>v+(b[i]-v)*ease);};
+const hand=elapsed<100?interpolate(rest,contact,elapsed/100):elapsed<180?interpolate(contact,lift,(elapsed-100)/80):elapsed<280?interpolate(lift,release,(elapsed-180)/100):interpolate(release,rest,(elapsed-280)/180);
+const raised=elapsed<100?Math.min(1,elapsed/100):elapsed<280?1:Math.max(0,1-(elapsed-280)/180);
+const elbow=[shoulder[0]+(hand[0]-shoulder[0])*.5+side*2*raised,shoulder[1]+(hand[1]-shoulder[1])*.5];
+const gear=elapsed<=100?{x:head[0],y:head[1]}:{x:hand[0]-side*3,y:hand[1]};
+return {head,shoulder,elbow,hand,gear,released:elapsed>=280};
+}
 function drawGoggleToss(){
 if(!goggleToss)return;
-const toss=goggleToss,t=Math.min(1,toss.elapsed/600);
-if(t<1){
-const x=toss.from.x+(toss.to.x-toss.from.x)*t,y=toss.from.y+(toss.to.y-toss.from.y)*t-Math.sin(t*Math.PI)*18;
-// A short outward arm flick accompanies the release, without stopping walking.
-if(toss.elapsed<180&&!swimming&&!boating&&!shoreRecovery){
-const reach=toss.elapsed/180,dx=toss.to.x-toss.from.x,dy=toss.to.y-(toss.from.y+16),length=Math.hypot(dx,dy)||1;
-ctx.strokeStyle='#e4bd88';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(player.x,player.y-10);ctx.lineTo(player.x+dx/length*(5+reach*5),player.y-13+dy/length*reach*5);ctx.stroke();
+const toss=goggleToss,pose=goggleRemovalPose(toss);
+if(goggleArmActive()){
+characterLimb([pose.shoulder,pose.elbow,pose.hand],'#e4bd88',2.4);
+characterEllipse(...pose.hand,1.35,1.45,'#f2c992');
 }
-ctx.save();ctx.translate(x,y);ctx.rotate(t*Math.PI*3);ctx.scale(1-t*.25,1-t*.25);swimGoggles(0,0,true);ctx.restore();
-}else{
-drawWaterSplash(toss.to.x,toss.to.y,(toss.elapsed-600)/1000);
-}
+if(toss.elapsed<600){
+const flight=Math.max(0,(toss.elapsed-280)/320),origin=toss.releaseFrom||goggleRemovalPose(toss,280).gear;
+const x=pose.released?origin.x+(toss.to.x-origin.x)*flight:pose.gear.x;
+const y=pose.released?origin.y+(toss.to.y-origin.y)*flight-Math.sin(flight*Math.PI)*18:pose.gear.y;
+ctx.save();ctx.translate(x,y);
+if(toss.elapsed<=100)directionalSwimGear(0,0,true);
+else{ctx.rotate(pose.released?flight*Math.PI*3:Math.min(1,(toss.elapsed-100)/180)*.35);ctx.scale(1-flight*.25,1-flight*.25);swimGoggles(0,0,true);}
+ctx.restore();
+// Fingertips overlap the strap until release, making the grip visible.
+if(!pose.released)characterEllipse(...pose.hand,.9,1.25,'#f7d6a8');
+}else drawWaterSplash(toss.to.x,toss.to.y,(toss.elapsed-600)/1000);
 }
 function drawWaterSplash(x,y,age,scale=1){
 if(age<0||age>=.7)return;
@@ -3996,28 +4715,20 @@ shoreRecovery.elapsed+=dt;
 if(shoreRecovery.elapsed>=1900){shoreRecovery=null;keys.clear();}
 }
 function drawShoreRecovery(){
-const recovery=shoreRecovery,colors=characterColors(),direction=Math.cos(recovery.heading)>=0?1:-1;
-const rise=Math.max(0,Math.min(1,(recovery.elapsed-1450)/450)),ease=rise*rise*(3-2*rise);
-const shake=recovery.elapsed>=1000&&recovery.elapsed<1450?Math.sin((recovery.elapsed-1000)/450*Math.PI*6):0;
-const x=player.x,y=player.y,headX=9*direction*(1-ease),headY=-6-10*ease;
-ellipse(x,y+2,12-5*ease,3,'#325c4144');
-ctx.save();ctx.translate(x,y);
-// Prone legs straighten, then tuck beneath the torso as the hands push up.
-for(const side of [-1,1]){
-const footX=-12*direction*(1-ease)+side*3*ease,footY=side*2*(1-ease)+2*ease;
-ctx.strokeStyle='#3e5555';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-3*direction*(1-ease),-3-2*ease);ctx.lineTo(footX,footY);ctx.stroke();
-rect(footX-2,footY-1,4,2,'#354744');
-}
-ellipse(0,-4-3*ease,7-2*ease,3+3*ease,colors.shirt);
-rect(-3,-5-4*ease,6,2,colors.accent);
-for(const side of [-1,1]){
-ctx.strokeStyle='#e4bd88';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(2*direction*(1-ease)+side*4*ease,-4-4*ease);ctx.lineTo(side*6,-1-2*ease);ctx.lineTo(side*7,1-2*ease);ctx.stroke();
-}
-ctx.save();ctx.translate(headX+shake*1.2,headY);ctx.rotate(shake*.18);
-if(currentProfile().character==='girl')rect(-6,-4,4,9,colors.hair);
-rect(-4,-4,9,8,'#f2c992');rect(-5,-5,11,3,colors.hair);
-
-rect(-2,-1,1,2,'#354744');rect(2,-1,1,2,'#354744');ctx.restore();ctx.restore();
+const r=shoreRecovery,normal={x:Math.cos(r.heading),y:Math.sin(r.heading)};
+const shake=r.elapsed>=1000&&r.elapsed<1450?Math.sin((r.elapsed-1000)/450*Math.PI*6):0;
+const breath=Math.sin(Math.min(1000,r.elapsed)*.012)*.25*Math.min(1,r.elapsed/150);
+const pose=shorePoseTrack([
+[0,proneShorePose()],
+[1000,proneShorePose(breath)],
+[1450,proneShorePose()],
+[1570,shorePoseFrame([6,9],[1,6],[-3,3],[[-6,1],[-5,1]],[[-10,0],[-9,0]],[[4,2],[4,2]],[[7,0],[6,0]],.8)],
+[1740,shorePoseFrame([2,13],[0,9],[-1,4],[[2,1],[-2,2]],[[-1,0],[-4,0]],[[3,3],[1,5]],[[6,0],[3,2]])],
+[1900,standingShorePose()]],r.elapsed);
+characterEllipse(player.x,player.y+2,12-5*Math.max(0,(r.elapsed-1450)/450),2.4,'#325c4144');
+const settle=Math.max(0,Math.min(1,(r.elapsed-1864)/36));
+ctx.save();ctx.globalAlpha=1-settle;drawShoreExplorer(pose,normal,shake);ctx.restore();
+if(settle>0){ctx.save();ctx.globalAlpha=settle;character(player.x,player.y);ctx.restore();}
 }
 function walkableTimberAt(x,y){
 const spans=[...crossings,...activePiers(),...(state.upgrades.includes('bridge')?[woodlandBridge]:[])];
@@ -4094,14 +4805,31 @@ ctx.font='6px monospace';ctx.fillStyle='#365746';ctx.fillText('BOAT ONLY · PRAC
 }
 }
 function beachPerson(x,y,shirt,skin,pose=0){
-ellipse(x,y+2,5,1.8,'#a48e6344');
+characterEllipse(x,y+2,5,1.8,'#a48e6344');
 const step=Math.sin(frame*.1+x)*1.1;
-rect(x-3,y-4+step,2.5,5,'#4e6b74');rect(x+1,y-4-step,2.5,5,'#4e6b74');
-rect(x-4,y-11,8,8,shirt);rect(x-3,y-17,6,6,skin);rect(x-3,y-18,6,2,'#66513e');
-ctx.strokeStyle=skin;ctx.lineWidth=2;ctx.beginPath();
-for(const side of [-1,1]){ctx.moveTo(x+side*4,y-10);ctx.lineTo(x+side*6,y-7-pose*5);ctx.lineTo(x+side*5,y-4-pose*11);}ctx.stroke();
+ctx.save();ctx.translate(x,y);
+for(const side of [-1,1]){
+const lift=step*side;
+characterLimb([[side*2,-4],[side*2.2,-1+lift*.5],[side*2.5,1+lift]],'#4e6b74',2.4);
+characterRect(side*2.5-1.4,.4+lift,3,1.3,'#354744');
 }
+polygon([[-3,-11],[3,-11],[4,-8],[3.5,-3],[-3.5,-3],[-4,-8]],shirt);
+characterLimb([[-2.6,-9.5],[-2.8,-5]],'#ffffff33',.7);
+characterHead(0,-14,'#66513e',skin);
+for(const side of [-1,1]){
+characterLimb([[side*3.5,-9],[side*5.5,-7-pose*5],[side*5,-4-pose*11]],skin,2);
+characterEllipse(side*5,-4-pose*11,1.1,1.2,skin);
+}
+ctx.restore();
+}
+const burnableUmbrellas=new Map(beachSunbathers().map(({x,y,i})=>{
+x+=29;y-=7;
+return [`${x},${y}`,{x,y,scale:1,kind:'umbrella',color:['#d58f80','#85adb8','#a7b87c','#d8b96e'][i%4],burnAge:null,regrowAge:0}];
+}));
 function beachUmbrella(x,y,color){
+if(!drawBurningScenery(burnableUmbrellas.get(`${x},${y}`)))drawBeachUmbrellaSprite(x,y,color);
+}
+function drawBeachUmbrellaSprite(x,y,color){
 ellipse(x+6,y+4,17,5,'#aa96604d');rect(x-1,y-13,2,20,'#947448');
 ellipse(x,y-14,18,6,'#e9d9a6');
 for(let i=0;i<6;i++){
@@ -4361,27 +5089,40 @@ if(t<.2)return {x:station.x+10.5*t/.2,y:station.y-27+t/.2};
 if(t<.9){const down=(t-.2)/.7;return {x:station.x+10.5+10*down,y:station.y-26+26*down};}
 return {x:station.x+20.5+3.5*(t-.9)/.1,y:station.y};
 }
-function drawLifeguardSprite(x,y,skin,facing,gait=0,waving=false,seated=false){
+function drawLifeguardSprite(x,y,skin,facing,gait=0,waving=false,seated=false,uniform=null){
 const sideView=facing==='left'||facing==='right',back=facing==='up',side=facing==='left'?-1:1;
+const working=uniform?.work!=null,airborne=uniform?.pose==='parachute'||uniform?.pose==='jump',sailing=uniform?.pose==='windsurf';
 const stride=Math.sin(gait*.34),bob=Math.abs(Math.sin(gait*.34))*1;
-ctx.save();ctx.translate(x,y-bob);
+ctx.save();ctx.translate(x,y-bob);ctx.lineCap='round';ctx.lineJoin='round';
 const limb=(points,color,width)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...points[0]);for(const p of points.slice(1))ctx.lineTo(...p);ctx.stroke();};
 // The far limbs sit behind a narrower profile torso; front/back feet alternate in depth.
 for(const leg of [-1,1]){
 const offset=stride*leg;
-if(sideView)limb([[0,-8],[offset*3,-4],[offset*5,-1]],skin,2.6);
-else limb([[leg*2,-8],[leg*2+offset,-4-offset],[leg*2,-offset*2]],skin,2.6);
-rect((sideView?offset*5:leg*2)-1.8,-1-(sideView?0:offset*2),3.5,2,'#775342');
+if(airborne)limb([[leg*2,-8],[leg*4,-4],[leg*3,-1]],uniform.trousers,2.6);
+else if(sailing)limb([[0,-8],[leg*4,-5],[leg*6,-1]],uniform.trousers,2.6);
+else if(sideView)limb([[0,-8],[offset*3,-4],[offset*5,-1]],uniform?.trousers||skin,2.6);
+else limb([[leg*2,-8],[leg*2+offset,-4-offset],[leg*2,-offset*2]],uniform?.trousers||skin,2.6);
+characterRect((airborne?leg*3:sailing?leg*6:sideView?offset*5:leg*2)-1.8,-1-(sideView?0:offset*2),3.5,2,uniform?'#293e43':'#775342');
 }
-if(sideView)limb([[0,-16],[-stride*4,-12],[-stride*6,-9]],skin,2.3);
-rect(sideView?-3:-4,-18,sideView?6:8,9,'#f7edce');rect(sideView?-3:-4,-10,sideView?6:8,4,'#c94d43');
-if(!sideView){rect(-1,-17,2,6,'#c9473d');rect(-3,-15,6,2,'#c9473d');}
-rect(-3,-24,6,6,skin);
-if(back){rect(-3,-24,6,4,'#775342');rect(-3,-20,6,1,'#775342');}
-else if(sideView){rect(side>0?-3:1,-24,2,5,'#775342');rect(side*3-(side<0?2:0),-22,2,3,skin);rect(side>0?1:-3,-23,2,2,'#36535b');}
-else rect(-2,-22,5,2,'#36535b');
-rect(-4,-26,8,3,'#d94f43');rect(sideView?(side<0?-6:-3):-5,-24,sideView?9:10,1,'#fff1ce');
-if(sideView)limb([[side,-16],[stride*4,-12],[stride*6,-9]],skin,2.5);
+if(sideView&&!airborne&&!sailing)limb([[0,-16],[-stride*4,-12],[-stride*6,-9]],skin,2.3);
+characterRect(sideView?-3:-4,-18,sideView?6:8,9,uniform?.shirt||'#f7edce');characterRect(sideView?-3:-4,-10,sideView?6:8,4,uniform?.trousers||'#c94d43');
+if(uniform){for(const stripe of [-2,2])characterRect(stripe,-17,1,7,'#fff3a2');}
+else if(!sideView){characterRect(-1,-17,2,6,'#c9473d');characterRect(-3,-15,6,2,'#c9473d');}
+characterEllipse(0,-21,3.4,3.8,skin);characterEllipse(-.8,-21.5,1.6,2,'#ffffff20');
+if(back){characterRect(-3,-24,6,4,'#775342');characterRect(-3,-20,6,1,'#775342');}
+else if(sideView){characterRect(side>0?-3:1,-24,2,5,'#775342');characterRect(side*3-(side<0?2:0),-22,2,3,skin);characterRect(side>0?1:-3,-23,2,2,'#36535b');}
+else characterRect(-2,-22,5,2,'#36535b');
+characterRect(-4,-26,8,3,uniform?.hat||'#d94f43');characterRect(sideView?(side<0?-6:-3):-5,-24,sideView?9:10,1,uniform?.hat||'#fff1ce');
+if(airborne){
+for(const arm of [-1,1])limb([[arm*3,-16],[arm*5,-22],[arm*4,-28]],skin,2.4);
+}else if(sailing){
+for(const arm of [-1,1])limb([[0,-16],[4,-19+arm*2],[8,-19+arm*2]],skin,2.4);
+}else if(working){
+const hammer=Math.sin(uniform.work*.018)*3;
+limb([[side,-16],[side*5,-15-hammer],[side*7,-18-hammer]],skin,2.5);
+limb([[side*7,-18-hammer],[side*7,-23-hammer]],'#775536',1.2);
+characterRect(side*7-2,-24-hammer,5,2,'#bccace');
+}else if(sideView)limb([[side,-16],[stride*4,-12],[stride*6,-9]],skin,2.5);
 else for(const arm of [-1,1]){
 const wave=waving?Math.sin(gait*.014+arm*.8):0;
 limb([[arm*4,-16],[arm*(waving?6.5:5),waving?-21-wave*1.5:-12+stride*arm*2],[arm*(waving?7.5+wave:5),waving?-25-wave*2:seated?-10:-9+stride*arm*3]],skin,2.5);
@@ -4390,7 +5131,7 @@ ctx.restore();
 }
 function drawClimbingLifeguard(station,progress,skin){
 const p=lifeguardLadderPose(station,progress),cycle=Math.sin(progress*Math.PI*10),crouch=2+Math.abs(cycle)*2;
-ctx.save();ctx.translate(p.x,p.y);
+ctx.save();ctx.translate(p.x,p.y);ctx.lineCap='round';ctx.lineJoin='round';
 // Face into the ladder: hands grip opposite rails while knees tuck onto alternate rungs.
 const limb=(points)=>{ctx.strokeStyle=skin;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(...points[0]);for(const point of points.slice(1))ctx.lineTo(...point);ctx.stroke();};
 for(const side of [-1,1]){
@@ -4398,12 +5139,12 @@ const step=cycle*side;
 limb([[side*2,-8-crouch],[side*4-2,-5-crouch+step*2],[side*2-3,-1-crouch+step*3]]);
 }
 polygon([[-4,-18-crouch],[2,-19-crouch],[5,-9-crouch],[-2,-8-crouch]],'#f7edce');
-rect(-2,-11-crouch,7,4,'#c94d43');rect(-1,-18-crouch,2,6,'#c9473d');rect(-3,-16-crouch,6,2,'#c9473d');
-rect(-6,-25-crouch,6,6,skin);rect(-6,-25-crouch,3,5,'#775342');rect(-7,-27-crouch,8,3,'#d94f43');rect(-8,-25-crouch,9,1,'#fff1ce');
+characterRect(-2,-11-crouch,7,4,'#c94d43');characterRect(-1,-18-crouch,2,6,'#c9473d');characterRect(-3,-16-crouch,6,2,'#c9473d');
+characterRect(-6,-25-crouch,6,6,skin);characterRect(-6,-25-crouch,3,5,'#775342');characterRect(-7,-27-crouch,8,3,'#d94f43');characterRect(-8,-25-crouch,9,1,'#fff1ce');
 for(const side of [-1,1]){
 const reach=cycle*side*3;
 limb([[side*3-1,-17-crouch],[side*5-4,-20-crouch+reach],[side*3-5,-23-crouch+reach]]);
-rect(side*3-6,-24-crouch+reach,3,2,skin);
+characterRect(side*3-6,-24-crouch+reach,3,2,skin);
 }
 ctx.restore();
 }
@@ -4471,7 +5212,8 @@ crossings.forEach(drawTimberShadow);activePiers().forEach(drawTimberShadow);
 if(state.upgrades.includes('bridge'))drawTimberShadow(woodlandBridge);
 islandPolys.forEach((poly,i)=>{if(allIslands[i].mainland||!islandInView(allIslands[i]))return;polygon(poly,'#4d9d9e',11);polygon(poly,'#e0ce95',5);polygon(poly,'#e7d7a2');const l=allIslands[i];polygon(poly.map(([x,y])=>[x+(x<l.x?7:-7),y+(y<l.y?7:-7)]),(l.boatOnly?l.color:null)||['#9bb96b','#93bda0','#adc77e','#7ca276','#9ba995'][i%5]);});
 // Water occupants and their splashes pass beneath timber decks and boat hulls.
-drawLochDragon();drawBlueMarlins();drawSharkFins();if(swimming)swimmerArt();
+const airborneDive=swimming&&diveAnimation&&diveAnimation.elapsed<434;
+drawLochDragon();drawBlueMarlins();drawSharkFins();if(swimming&&!airborneDive)swimmerArt();
 if(waterEntrySplash&&swimming&&waterEntrySplash.owner===profileId&&waterEntrySplash.level===ageLevel)drawWaterSplash(waterEntrySplash.x,waterEntrySplash.y,waterEntrySplash.elapsed/1500,waterEntrySplash.scale);
 if(dragonFlight?.stage==='swimming')drawPetDragon();
 crossings.forEach(b=>drawRaisedTimber(b));
@@ -4484,16 +5226,16 @@ for(let r=0;r<3;r++)for(let c=0;c<5;c++){let x=733+c*10,y=198+r*9;rect(x,y,8,6,'
 drawIslandTrees();drawBoatIslandDetails();drawMainlandBeach();drawSurfOcean();drawSurfShack();
 polygon([[710,423],[716,392],[737,369],[755,383],[770,423]],'#778675');rect(731,405,19,27,'#374b46');
 activePiers().forEach(p=>drawRaisedTimber(p));
-rect(95,211,2,12,'#6f6349');ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fillText('FISHING DOCK',106,265);
+drawDockSign({x:fishingDock.x,y:fishingDock.y+17},'FISHING');drawDockSign(dock,'FERRY');drawDockSign(farDock,'FERRY');drawDockSign(WATERSPORTS_DOCK,'WATERSPORTS');
 rect(farDock.x+10,farDock.y-8,9,3,'#78694e');cavernFlag(farDock.x+14,farDock.y-9,44);
 const ferryAt=activeVessel==='ferry'?boatPosition:ferryPosition;ferryArt(ferryAt.x,ferryAt.y);
 if(sponsored()){const fishingAt=activeVessel==='fishing'?boatPosition:fishingBoatPosition;fishingBoatArt(fishingAt.x,fishingAt.y);}
 if(speedboatUnlocked()){const speedAt=activeVessel==='speedboat'?boatPosition:speedboatPosition;speedboatArt(speedAt.x,speedAt.y);drawSpeedboatDock();}
 
 locations.forEach((l,i)=>{const done=l.ids.every(n=>state.solved.includes(n)),locked=false,bob=Math.floor(Math.sin(frame/22+i)*2);rect(l.x-8,l.y-27+bob,16,15,locked?'#72817a':done?'#577c54':'#fff3cc');ctx.fillStyle=locked?'#fff':done?'#eef5c6':'#927141';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText(locked?'×':done?'✓':'!',l.x,l.y-16+bob);ctx.font='7px monospace';ctx.fillStyle='#254f42';ctx.fillText(['MAIN ISLAND','MOONWATER ISLAND','SUNSEED ISLAND','WHISPERING ISLAND','CRYSTAL CAVERN'][i],l.x,l.y-65);});
-ctx.font='7px monospace';ctx.fillStyle='#fff5cd';ctx.textAlign='center';ctx.fillText('FERRY · TICKET 50 ◆',dock.x+30,dock.y+32);
+if(airborneDive)drawWaterEntry();
 drawFishing();
-if(!wakeboardCrash&&!surfSession&&!voyage&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!volleyball&&!frisbeeGame){if(state.solved.length>=8)character(player.x-13,player.y+6,true);if(beachTransfer)drawBeachTransfer();else if(shoreRecovery)drawShoreRecovery();else if(!hookedFish)drawWalkingExplorer();}drawSurfingWorld();drawWakeboardCrash();drawFrisbeeGame();drawGoggleToss();drawBoatAnchor();drawBeachAnchorage();if(dragonFlight?.stage!=='swimming')drawPetDragon();drawWatersports();drawVolleySprayReactions();drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true);drawPlayerHairEffect();drawBoatExplosions();ctx.restore();
+if(!wakeboardCrash&&!surfSession&&!voyage&&!boating&&!swimming&&!dragonFlight&&!wakeboardRide&&!volleyball&&!frisbeeGame){if(state.solved.length>=8)character(player.x-13,player.y+6,true);if(beachTransfer)drawBeachTransfer();else if(shoreRecovery)drawShoreRecovery();else if(!fishingActive)drawWalkingExplorer();}drawSurfingWorld();drawWakeboardCrash();drawFrisbeeGame();drawGoggleToss();drawBoatAnchor();drawBeachAnchorage();if(dragonFlight?.stage!=='swimming')drawPetDragon();drawWatersports();drawVolleySprayReactions();drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true);drawPlayerHairEffect();drawBoatExplosions();drawBoatRepairs();ctx.restore();
 drawMiniMap();
 }
 function drawMiniMap(){
@@ -4537,7 +5279,7 @@ if(e.target?.tagName==='BUTTON')return;
 if(frisbeeGame&&['x','escape'].includes(k)){e.preventDefault();if(!e.repeat){if(k==='escape')leaveFrisbee();else frisbeeAction();}return;}if(k==='x'&&nearbyFrisbeeHost()>=0){e.preventDefault();if(!e.repeat)startFrisbee();return;}if(volleyball&&[' ','enter','x','escape'].includes(k)){e.preventDefault();if(!e.repeat){if(k==='x'||k==='escape')leaveVolleyball();else hitVolleyball();}return;}if(k===' '&&boating&&!fishingActive){e.preventDefault();if(!e.repeat)cycleBoatTrim();return;}if(k==='q'&&boating){e.preventDefault();if(!e.repeat)anchorBoatAtBeach();return;}if(k==='x'&&wakeboardRide){e.preventDefault();if(!e.repeat)finishWakeboarding();return;}if(k==='x'&&dragonFlight){e.preventDefault();if(!e.repeat)landPetDragon();return;}if(k==='x'&&sharkRide){e.preventDefault();if(!e.repeat)dismountShark();return;}if(k==='x'&&!swimming&&!voyage&&!fishingActive){e.preventDefault();if(!e.repeat){if(boating)exitBoat();else diveFromIsland();}return;}if(k==='f'&&!swimming&&(boating||fishingActive||canFishAtDock())){e.preventDefault();if(!e.repeat){if(fishingActive)stopFishing();else openFishing();}return;}if(k==='e'&&sponsored()&&canFishAtDock()){e.preventDefault();if(!e.repeat)launchBoat();return;}if(fishingActive){if(k==='r'){e.preventDefault();if(!e.repeat)reelFishing();}return;}if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','e'].includes(k)){e.preventDefault();keys.add(k);if(k==='e'&&near>=0&&!e.repeat)interact();}});window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());save();});window.addEventListener('blur',()=>{keys.clear();save();});document.addEventListener('visibilitychange',()=>{keys.clear();save();});document.querySelectorAll('[data-dir]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.dir);};b.onpointerup=b.onpointercancel=()=>{keys.delete(b.dataset.dir);save();};});canvas.onclick=e=>{if(frisbeeGame){frisbeeAction();return;}if(volleyball){hitVolleyball();canvas.focus({preventScroll:true});return;}if(voyage||shoreRecovery||dragonFlight||wakeboardRide)return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*WORLD.viewWidth+camera.x,y=(e.clientY-r.top)/r.height*WORLD.viewHeight+camera.y;if(fishingActive){fishingAim={x,y};castFishing(x,y);return;}if(Math.hypot(x-SURF_SHACK.x,y-SURF_SHACK.y)<45){openSurfShack();return;}const court=nearbyVolleyballCourt();if(court>=0){const c=VOLLEYBALL_COURTS[court];if(x>=c.x&&x<=c.x+c.w&&y>=c.y&&y<=c.y+c.h){startVolleyball(court);return;}}if(Math.hypot(x-WATERSPORTS_DOCK.x,y-WATERSPORTS_DOCK.y)<30){openWatersports();return;}if(canMountPetDragon()&&Math.hypot(x-petDragonPosition.x,y-petDragonPosition.y)<30){mountPetDragon();return;}if(swimming){if(Math.hypot(x-boatPosition.x,y-boatPosition.y)<30)boardOwnBoat();return;}if(speedboatUnlocked()&&Math.hypot(x-SPEEDBOAT_DOCK.x,y-SPEEDBOAT_DOCK.y)<32){launchSpeedboat();return;}if(Math.hypot(x-fishingDock.x,y-fishingDock.y)<28){openFishing();return;}if([dock,farDock].some(d=>Math.hypot(d.x+30-x,d.y-y)<48)){openFerry();return;}const outer=boatIslands.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(outer>=0){visitBoatIsland(outer);return;}const i=locations.findIndex(l=>Math.hypot(l.x-x,l.y-16-y)<24);if(i>=0)visit(i);else{canvas.focus({preventScroll:true});toast('Walk across the islands, use your field journal to visit, or board the ferry at the main dock.');}};
 
 function resizeMap(){
-const width=window.innerWidth||960,height=window.innerHeight||600,dpr=Math.min(window.devicePixelRatio||1,2);
+const width=window.innerWidth||960,height=window.innerHeight||600,dpr=Math.min(window.devicePixelRatio||1,3);
 const zoom=Math.max(width/WORLD.width,height/WORLD.height,Math.min(width/480,height/300));
 WORLD.viewWidth=width/zoom;WORLD.viewHeight=height/zoom;
 canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(zoom*dpr,0,0,zoom*dpr,0,0);ctx.imageSmoothingEnabled=false;draw();

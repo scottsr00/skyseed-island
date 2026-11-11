@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement GitHub Issue"
+  short_description: "Select an issue, implement it, and verify the result"
+  default_prompt: "Use $implement-github-issue to list open issues, let me select one, and implement it against its acceptance criteria."

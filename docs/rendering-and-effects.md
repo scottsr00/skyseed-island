@@ -10,8 +10,14 @@ HUD, panels, responsive controls, and CSS collection art; `dist/index.html` owns
 The main renderer uses world coordinates under the camera transform. HUD/minimap and the surfing
 view have their own coordinate assumptions. Check transforms and viewport dimensions before
 adding a draw call. `resizeMap()` configures resolution/device-pixel ratio and disables Canvas
-image smoothing. Surf water intentionally uses smooth subpixel shapes; island sprites retain
-pixel contours.
+image smoothing, with backing resolution up to 3× for high-density displays. Surf water intentionally uses smooth subpixel shapes; island scenery retains
+pixel contours. Explorer, companion, and beach character details use fractional coordinates
+through `characterRect()`, `characterEllipse()`, `characterLimb()`, and `characterHead()`
+for finer silhouettes and continuous joints. Explorer arm swing, knee flexion, body bob, and
+hair sway follow the existing distance-driven `walkingStep()`; rendering does not advance the gait.
+The explorer renderer supplies mounted riders and court play; `drawSeatedBoatRider()` supplies
+boat occupants with bent legs, forward arms, and heading-based facing. Side-view
+shoulders sit behind the chest, elbows bend forward, and arms counter-swing against their legs.
 
 ## Presentation
 
@@ -25,15 +31,62 @@ Keyboard (WASD/arrows), touch movement, and tappable destination markers.
 
 Optional synthesized sound. All pixel artwork is original Canvas code.
 
+`drawDockSign()` mounts matching blue signboards on the fishing, ferry (both landings),
+watersports, and unlocked speedboat docks. Dock names appear on these boards instead of
+floating labels over the water.
+
 ## Layering boundaries
 
-Swimmers and sea mounts pass beneath bridges, piers, and hulls. Raised-timber shadows, water
+Swimmers and sea mounts pass beneath bridges, piers, and hulls. Airborne water entries draw
+above decks and hulls until the 434 ms contact; submersion returns to the water-occupant layer. Raised-timber shadows, water
 clipping, coastal wave masks, boat spray, and dragon altitude all affect visibility. Preserve
 `draw()` ordering and paired Canvas save/restore operations. See [surfing](surfing.md) for
 wave shape and occupant masking, and [world and travel](world-and-travel.md) for movement rules.
 
 Rendering changes should keep effects tied to simulation state. Check whether an effect is
 advanced during update or generated at draw time, especially when adding pause/reload behavior.
+
+## Water entry animations
+
+`airborneExplorerPose()` and `drawAirborneExplorer()` reuse the detailed shore explorer for
+straight dives, forward rolls, and backflips. Dives extend both arms above the head and straighten
+the legs; rolls and backflips pull the knees toward the chest, then open before entry.
+`waterEntryFrame()` places each pose on its airborne arc and carries the body beneath the
+waterline after the existing 434 ms contact. `drawWaterEntry()` clips the submerging body at the
+impact surface, then fades into swimming. The existing 700 ms sequence, random style selection,
+contact splash, movement path, pause behavior, and cleanup remain in the update code.
+
+## Shore landings and climbs
+
+`shorePoseFrame()`, `shorePoseTrack()`, and `drawShoreExplorer()` share a detailed articulated
+explorer across `drawFastShoreTumble()`, `drawShoreRecovery()`, and `drawShoreClimb()`.
+Poses use travel direction, body width, and height; `shoreScreenPoint()` preserves side-view
+thickness and projects elevation upward. Falls tuck into a forward roll, open onto the ground,
+and match the initial prone recovery pose. Recovery keeps the breathing pause and head shake,
+then plants the hands, brings a knee underneath, and stands. Climbing reaches for the actual
+shore edge, keeps the hands planted during the pull, raises the near knee while the trailing leg
+stays extended, plants the leading foot, then brings the trailing leg underneath and settles into the ordinary explorer silhouette. Existing movement timing, access checks,
+goggle tosses, and reset/pause behavior remain owned by the travel update paths.
+
+## Removing swimming gear
+
+`goggleRemovalPose()` drives a hand-to-temple reach, pushes the goggles and snorkel above the
+head, then swings the hand toward the water. At 280 ms, `advanceGoggleToss()` captures the release
+point; the gear flies independently and splashes at 600 ms. The hand follows through and lowers
+by 460 ms. `drawGoggleToss()` replaces the corresponding ordinary arm while the gesture is active,
+including prone shore recovery. Held gear follows the explorer until release; the release point
+and water target stay fixed afterward. The existing 1300 ms cleanup and profile/reset rules apply.
+
+## Swimming characters
+
+`drawSwimmingCharacter()` uses a shaped shirt with shoulders, a tapered waist, a waistband,
+and shading that rolls with the existing arm stroke. `swimmingLegPose()` produces fixed-length
+hip/knee/ankle joints with alternating vertical flutter kicks, recovery knee flexion, and delayed ankle
+extension. Leg spacing stays fixed; height uses a separate z coordinate. `projectSwimmingLeg()`
+projects elevation upward on screen at every swimming heading; `drawSwimmingLeg()` draws tapered trousers, heels, and pointed toes. Kick splashes
+follow the animated toes. Surfboard paddling shares the anatomy with a reduced kick amplitude.
+All poses derive from the existing swimming/paddling clock and effort. Idle swimmers still settle
+to head-only treading, and existing wave clipping, underwater layers, arm strokes, and pauses apply.
 
 ## Boat motors and spray
 
@@ -47,6 +100,47 @@ exhaust puff and a 0.55-second startup before propulsion engages.
 
 The speedboat uses three coordinated outboards. Vessel performance and trim rules are owned by
 [world and travel](world-and-travel.md).
+
+The ferry, fishing boat, speedboat, and watersports tow boat share `boatHullWake()` for
+attached foam and `recordHullWake()` for world-space wake emission. At low forward speed, water breaks at the bow. From 18% to 76% of each vessel's
+trim-4 top speed, a smooth transition moves the contact aft along its hull edge as it planes.
+Slowing moves the contact forward again. `drawBoatBowWake()` follows that waterline, while
+`recordBoatMovement()` and `updateTowBoatMotion()` leave wave fragments at the same contact region. Existing fragments
+stay in the water through turns and fade after stopping. Reverse emits no bow foam.
+
+Hull contact throws short airborne fans of spray through `drawBoatHullSpray()`, with more
+droplets and greater height and reach as speed increases, including at neutral motor trim.
+The spray derives from the age and recorded velocity of world-space wake fragments.
+`drawBoatWakeArm()` connects successive world-space samples into two narrow, diverging
+whitewater arms. A broad translucent wash supports each bright crest, with fine foam spilling
+outward and dispersing as it ages. Gaps in recorded water samples break the ribbon.
+All four vessels leave a widening, aerated propeller wash between the outer arms.
+`ageBoatWake()` and `drawBoatWake()` accept each vessel's motion explicitly; the tow boat keeps
+its own samples through rider release and leaves residual foam fading after docking. Its single
+outboard uses `drawOutboardMotors()` with its own steering, power, and phase. `boatVelocityStep()`
+supplies acceleration, braking, and coasting for both manual driving and the course-following tow boat.
+
+Boat turns drive a damped roll through `advanceHullRoll()` and `boatRollTarget()`, using signed
+speed times turn rate. The speedboat leans most, the ferry least; straightening, stopping, fishing,
+and anchoring let the hull settle level. The tow boat uses course curvature and preserves its roll
+when releasing the rider. Roll is transient simulation state and pauses with dialogs.
+`beginBoatHull()` projects the deck, motors, chines, and V-shaped keel using heading and roll.
+Back-face culling and water-surface clipping expose only the raised, visible underside, so the
+amount of bottom showing depends on the viewing angle. Cabins lean with their hull; seated occupants keep their hips and bent legs planted while
+`beginBoatRiderLean()` leans their upper body into the current turn at every heading.
+Their shorter seated torso uses 55% of hull roll, with turn rate resolving direction during
+steering reversals. `drawBoatSteeringWheel()` supplies a mounted, spoked wheel that stays visible
+when parked. Seated riders grip its rim, bending their elbows as they lean; the spokes turn with
+outboard steering. The tow-boat driver has a matching wheel. World-space wakes and shadows stay
+on the water.
+
+## Dragon shadow
+
+`drawPetDragonBody()` supplies the colored dragon and its ground silhouette from the same
+wing, tail, body, leg, head, and horn geometry. The shadow follows heading, mirrored facing,
+and the current wingbeat, compressed onto the ground with the existing altitude offset.
+Its parts form one filled path so overlapping anatomy has uniform opacity. Fire, water droplets,
+and the rider are drawn separately from this silhouette.
 
 ## Dragon fire and environmental reactions
 
@@ -64,14 +158,22 @@ resetting the adventure. After burning down, trees gradually grow from a small s
 original size over five minutes of active play, while the ash fades. Regrowth pauses for dialogs
 too.
 
-Dragon fire also explodes the ferry, sponsored fishing boat, and watersports tow boat when the plume
+Dragon fire also ignites beach umbrellas, including those outside the camera view.
+`burnableUmbrellas` registers the fixed umbrellas from `beachSunbathers()`;
+`checkDragonFireSceneryHits()` shares the tree plume sampling, heading, and altitude checks.
+`drawBurningScenery()` preserves each umbrella's colored canopy and pole while darkening and
+consuming them from the canopy down over 4.2 seconds, with flames, smoke, and remaining ash.
+Umbrellas stay burned for the session; reload, explorer/age changes, and adventure resets restore
+them through the dragon reset path. Dialogs pause their burn clocks. Trees keep their existing regrowth.
+
+Dragon fire also explodes the ferry, sponsored fishing boat, speedboat, and watersports tow boat when the plume
 touches their hull or cabin. The hull stays visible while flames spread for 1.8 seconds, then erupts
 into a detailed, smoothly shaded fireball with sparks, rolling smoke, and a water pressure ring.
 Sixty-four recognizable pieces (planks, hull panels, glass, engines, rails, and seats) tumble along
 gravity-driven trajectories. Each piece checks the shoreline at impact: sea impacts make individual
 splash crowns and ripples, with wooden wreckage floating briefly and metal sinking; pieces on land
-bounce, slide, and settle. Wreckage fades and the boat returns after 11.8 seconds. Occupants drop
-into swimming, and boarding is blocked until the smoke clears. Explosions respect the dragon’s
+bounce, slide, and settle. Wreckage fades after 11.8 seconds, then a repair crew arrives at the home dock. Occupants drop
+into swimming, and boarding stays blocked through reconstruction. Explosions respect the dragon’s
 heading and altitude, pause during dialogs, and clear with explorer, age, or adventure resets.
 
 Spraying a beach volleyball player interrupts that court: the sprayed player throws the ball toward
@@ -82,8 +184,29 @@ nearby dragon when the droplets are above his height, and behind him when he fli
 
 Effect entry points include `drawDragonFlame()`, `drawPetDragonFire()`, `drawPlayerHairEffect()`,
 `createBoatBlast()`, `drawBoatExplosions()`, `drawBurningTree()`, `drawVolleySprayReactions()`,
-and their advance/reset helpers. `resetPetDragon()` clears tree fires, regrowth, boat explosions,
-and hair effects; `resetVolleyball()` clears spray reactions.
+and their advance/reset helpers. `advancePetDragonFire()` also owns independent `boatRepairs`
+clocks and dispatches crews when debris expires, carrying any excess simulation time forward.
+`advanceSwimming()` runs this effect update before activity/anchor early returns; its later
+`advancePetDragon(dt, false)` updates the dragon without advancing fire twice.
+`boatRepairFrame()` derives arrival, construction, and departure poses without mutation.
+`boatBuildPlan()` orders the vessel's features; `boatBuildPart()` gives each feature two discrete
+steps. `drawBoatRepairs()` draws the cradle and frame, then calls the matching vessel renderer
+with the current build plan. Vessel renderers gate paint, deck, cabin walls/roof/windows/chimney,
+flagpole/flag, windscreen/tower, wheel, and individual engines rather than clipping a finished sprite.
+`drawOutboardMotors()` installs each engine's bracket/lower unit before its cowling;
+`drawBoatSteeringWheel()` installs the column before its wheel. Normal rendering defaults to all
+features complete. `drawBoatRepairWorker()` shares `drawLifeguardSprite()` with a work uniform
+and suspended, hammering, jumping, or braced windsurfing poses. `boatRepairCrewPose()` derives
+parachute descent and canopy folding, an 800 ms jump onto a water-fixed board, then accelerating
+sail-off and a short final fade. `drawRepairParachute()` draws the canopy and suspension lines;
+`drawRepairWindsurfer()` draws the board, upright mast, filled sail, boom, and wake.
+`createBoatRepair()` selects independent clear-water departure routes with
+`boatRepairWindsurfRoute()`; no crew collision or movement changes the explorer or repaired vessel.
+`drawBoatRepairCrew()` draws all of this above the dock without mutating animation state.
+Arrival remains 3 seconds; departure is 7 seconds. All crew/tool motion uses the repair clock,
+so dialogs freeze it too.
+Timing and recovery policy are detailed in [boats and fishing](boats-and-fishing.md).
+`resetPetDragon()` clears tree fires, regrowth, boat explosions, repair crews, and hair effects; `resetVolleyball()` clears spray reactions.
 
 ## Beach lifeguards
 

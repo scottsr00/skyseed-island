@@ -37,6 +37,7 @@ Read the page relevant to the change, then follow its code references.
 | Surf rental, controls, physics, wave artwork | [Surfing](docs/surfing.md) |
 | Canvas layering, dragon fire, environmental reactions | [Rendering and effects](docs/rendering-and-effects.md) |
 | Automated checks, focused tests, browser verification, hosting | [Testing and publication](docs/testing.md) |
+| Feature backlog, issue template, labels, agent readiness | [Writing GitHub issues](docs/github-issues.md) |
 
 [AGENTS.md](AGENTS.md) provides concise routing and maintenance instructions for coding agents.
 Keep detailed behavior in its area document and update it alongside changes.

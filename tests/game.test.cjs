@@ -1232,7 +1232,7 @@ g.run('draw()');
 
 test('wakeboarding follows the course, constrains the tow rope, and saves safe ground',()=>{
 const g=game();g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding()');assert.equal(g.run('!!wakeboardRide'),true);
-const start=g.run('wakeboardRide.boat.x');g.run('advanceSwimming(400);draw()');assert.ok(g.run('wakeboardRide.boat.x')<start);assert.ok(g.run('wakeboardRide.wake.length')>0);
+const start=g.run('wakeboardRide.boat.x');g.run('advanceSwimming(600);draw()');assert.ok(g.run('wakeboardRide.boat.x')<start);assert.ok(g.run('wakeboardRide.wake.length')>0);
 for(let i=0;i<20;i++){
 g.run('advanceSwimming(40)');assert.equal(g.run('wakeboardHullClear(wakeboardRide.boat,wakeboardRide.heading)'),true);
 assert.ok(g.run('Math.hypot(player.x-wakeboardTowPoint(wakeboardRide.boat,wakeboardRide.heading).x,player.y-wakeboardTowPoint(wakeboardRide.boat,wakeboardRide.heading).y)')<=g.run('WAKEBOARD_ROPE+WAKEBOARD_HANDLE')+1e-6);
@@ -1270,7 +1270,7 @@ for(let i=0;i<30;i++)g.run('advanceSwimming(40)');assert.ok(g.run('wakeboardRide
 const first=JSON.parse(g.run('JSON.stringify(wakeboardRide.wake[0])'));g.run('finishWakeboarding();advanceSwimming(240);draw()');
 assert.equal(g.run('wakeboardBoatTrip.wake[0].x'),first.x);assert.equal(g.run('wakeboardBoatTrip.wake[0].y'),first.y);assert.ok(g.run('wakeboardBoatTrip.wake[0].age')>first.age);
 for(let i=0;i<90;i++)g.run('advanceSwimming(40)');
-assert.equal(g.run(`wakeboardBoatTrip.wake.some(w=>w.serial===${first.serial})`),false);assert.equal(g.run('wakeboardBoatTrip.wake.every(w=>w.age<3200)&&wakeboardBoatTrip.wake.length<=100'),true);
+assert.equal(g.run(`wakeboardBoatTrip.wake.some(w=>w.serial===${first.serial})`),false);assert.equal(g.run('wakeboardBoatTrip.wake.every(w=>w.age<1800)&&wakeboardBoatTrip.wake.length<=112'),true);
 });
 
 test('long tow rope attaches at the stern and constrains the handle without pushing a slack rider',()=>{
@@ -1354,7 +1354,7 @@ g.run(`resetBeachLifeguards();const foot${facing}=lifeguardLadderPose(BEACH_LIFE
 assert.equal(g.run('beachLifeguards[2].facing'),facing);assert.ok(g.run('beachLifeguards[2].gait')>0);
 }
 // Each direction has its own visible sprite geometry, including a back without sunglasses.
-const poses=g.run(`(()=>{const originalRect=rect,originalStroke=ctx.stroke,poses=[];for(const face of ['up','down','left','right']){const calls=[];rect=(...a)=>calls.push(a);drawLifeguardSprite(0,0,'skin',face,8);poses.push(JSON.stringify(calls));}rect=originalRect;ctx.stroke=originalStroke;return poses;})()`);
+const poses=g.run(`(()=>{const originalRect=ctx.fillRect,poses=[];for(const face of ['up','down','left','right']){const calls=[];ctx.fillRect=(...a)=>calls.push(a);drawLifeguardSprite(0,0,'skin',face,8);poses.push(JSON.stringify(calls));}ctx.fillRect=originalRect;return poses;})()`);
 assert.equal(new Set(poses).size,4);
 });
 test('lifeguards descend along their ladders and return to the foot before climbing up',()=>{
@@ -2144,7 +2144,36 @@ g.run('driveBoat(500,-1,-1)');assert.ok(g.run('boatMotion.steering')<0);
 g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.steering'),0);
 });
 
-for(const vessel of ['ferry','fishing'])test(`${vessel} bow wake stays in the water through turns and fades after stopping`,()=>{
+for(const vessel of ['ferry','fishing','speedboat'])test(`${vessel} hull wake moves aft onto plane and returns to the bow when slowing`,()=>{
+const g=game();g.run(`boating=true;activeVessel='${vessel}';resetBoatMotion();let hullWakeProfile,wakeStarts=[];const wakeHeading=.6;`);
+const contacts=[];
+for(const fraction of [.1,.3,.5,.8,1,.5,.1]){
+g.run(`boatMotion.velocity=boatTopSpeed(4)*${fraction};hullWakeProfile=boatHullWake(activeVessel);`);
+contacts.push(g.run('hullWakeProfile.point(0)[0]'));
+g.run('wakeStarts=[];ctx.moveTo=(x,y)=>wakeStarts.push([x,y]);drawBoatBowWake(0,0,0,activeVessel)');
+assert.equal(g.run('wakeStarts.every(([x])=>x<=hullWakeProfile.point(0)[0])'),true);
+assert.ok(Math.abs(g.run('wakeStarts[0][1]'))>.5);
+// Emission uses the same hull-contact geometry, rotated into world space.
+g.run(`player.x=-400;player.y=900;boatMotion.distance=0;boatMotion.bowWake=[];
+player.x+=Math.cos(wakeHeading)*7;player.y+=Math.sin(wakeHeading)*7;
+recordBoatMovement({x:-400,y:900},wakeHeading);`);
+assert.equal(g.run('boatMotion.bowWake.length'),2);
+assert.ok(g.run(`boatMotion.bowWake.every(w=>{
+const dx=w.x-(-400+Math.cos(wakeHeading)*6),dy=w.y-(900+Math.sin(wakeHeading)*6),[along,across]=hullWakeProfile.point(.12);
+return Math.abs(dx*Math.cos(wakeHeading)+dy*Math.sin(wakeHeading)-along)<1e-8&&
+Math.abs(-dx*Math.sin(wakeHeading)+dy*Math.cos(wakeHeading)-w.side*across)<1e-8;
+})`));
+}
+assert.ok(contacts[0]>contacts[1]&&contacts[1]>contacts[2]&&contacts[2]>contacts[3]);
+assert.ok(contacts[3]<0);
+assert.equal(contacts[3],contacts[4]);
+assert.equal(contacts[2],contacts[5]);
+assert.equal(contacts[0],contacts[6]);
+g.run('boatMotion.velocity=0;wakeStarts=[];drawBoatBowWake(0,0,0,activeVessel)');
+assert.equal(g.run('wakeStarts.length'),0);
+});
+
+for(const vessel of ['ferry','fishing','speedboat'])test(`${vessel} bow wake stays in the water through turns and fades after stopping`,()=>{
 const g=game();g.run(`boating=true;state.ferryRemaining=FERRY_RIDE_DURATION;activeVessel='${vessel}';player.x=-400;player.y=900;resetBoatMotion();driveBoat(700,1,0)`);
 assert.ok(g.run('boatMotion.bowWake.length')>0);
 assert.equal(g.run('new Set(boatMotion.bowWake.map(w=>w.side)).size'),2);
@@ -2217,10 +2246,10 @@ g.run('petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200
 g.run('target.regrowAge=100000;resetPetDragon()');assert.equal(g.run('target.regrowAge'),0);assert.equal(g.run('target.burnAge'),null);
 });
 
-test('dragon fire explodes ferry, fishing, and tow boats once, with smoke clearing and dialog pauses',()=>{
-for(const vessel of ['ferry','fishing','tow']){
-const g=game();g.run(`state.catches={shark:5};const vessel='${vessel}';
-const target=vessel==='tow'?{x:WATERSPORTS_DOCK.x+40,y:WATERSPORTS_DOCK.y+18}:vessel===activeVessel?boatPosition:vessel==='ferry'?ferryPosition:fishingBoatPosition;
+test('dragon fire explodes all four boats once, dispatches repairs after smoke and pauses for dialogs',()=>{
+for(const vessel of ['ferry','fishing','speedboat','tow']){
+const g=game();g.run(`state.catches={shark:5};state.speedboat=true;const vessel='${vessel}';
+const target=vessel==='tow'?{x:WATERSPORTS_DOCK.x+40,y:WATERSPORTS_DOCK.y+18}:vessel===activeVessel?boatPosition:vessel==='ferry'?ferryPosition:vessel==='speedboat'?speedboatPosition:fishingBoatPosition;
 petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200,duration:850};advancePetDragonFire(1)`);
 assert.equal(g.run('boatExplosions.has(vessel)'),true);
 g.run('boatExplosions.get(vessel).elapsed=100;checkBoatDragonFireHits()');assert.equal(g.run('boatExplosions.get(vessel).elapsed'),100);
@@ -2229,8 +2258,8 @@ g.run('boatExplosions.get(vessel).elapsed=100');g.node('#challenge').open=true;
 g.run('advancePetDragonFire(500)');assert.equal(g.run('boatExplosions.get(vessel).elapsed'),100);g.node('#challenge').open=false;
 g.run('petDragonFire=null;nextPetDragonFire=100000;advancePetDragonFire(BOAT_EXPLOSION_DURATION-101)');assert.equal(g.run('boatExplosions.has(vessel)'),true);
 g.run('advancePetDragonFire(1)');assert.equal(g.run('boatExplosions.has(vessel)'),false);
-g.run('petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits()');assert.equal(g.run('boatExplosions.has(vessel)'),true);
-g.run('resetPetDragon()');assert.equal(g.run('boatExplosions.size'),0);
+g.run('petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits()');assert.equal(g.run('boatExplosions.has(vessel)'),false);assert.equal(g.run('boatRepairs.has(vessel)'),true);assert.equal(g.run('boatUnavailable(vessel)'),true);
+g.run('resetPetDragon()');assert.equal(g.run('boatExplosions.size'),0);assert.equal(g.run('boatRepairs.size'),0);
 }
 });
 
@@ -2658,6 +2687,16 @@ assert.equal(g.node('#mapWakeboardStart').hidden,false);assert.equal(g.node('#ma
 g.node(equipment==='waterskis'?'#mapWaterskisStart':'#mapWakeboardStart').onclick();assert.equal(g.run('wakeboardRide.equipment'),equipment);
 g.run('advanceSwimming(400);draw();save()');assert.equal(g.run('!!wakeboardRide'),true);assert.equal(g.run('canWalk(state.x,state.y)'),true);
 g.run('finishWakeboarding();advanceSwimming(350);draw();advanceSwimming(350)');assert.equal(g.run('swimming'),true);
+}
+});
+
+test('watersports rides launch and clear the dock with the Woodland Bridge built',()=>{
+for(const equipment of ['wakeboard','waterskis']){
+const g=game();g.run(`state.upgrades=['bridge'];state.${equipment}=true;visitWatersportsDock();startWakeboarding('${equipment}')`);
+assert.equal(g.run('wakeboardRide?.equipment'),equipment);
+g.run('for(let i=0;i<150;i++)advanceSwimming(40);draw()');
+assert.equal(g.run('wakeboardRide?.equipment'),equipment);
+assert.equal(g.run('wakeboardCrash'),null);
 }
 });
 
@@ -3102,4 +3141,482 @@ g.node('#deleteProfile').onclick();g.node('#confirmProfileAction').onclick();ass
 test('profile management restores removed age saves if writing the profile list fails',()=>{
 const g=game({solved:[0],upgrades:[],crystals:50});g.run('save();localStorage.setItem("skyseed-v1-9-10",JSON.stringify({solved:[1],upgrades:[],crystals:20}));const originalSet=localStorage.setItem;let failOnce=true;localStorage.setItem=(key,value)=>{if(key===PROFILE_KEY&&failOnce){failOnce=false;throw new Error("Storage full");}return originalSet(key,value);};');
 const before=g.snapshot();g.node('#resetProfile').onclick();g.node('#confirmProfileAction').onclick();assert.deepEqual(g.snapshot(),before);assert.equal(g.run('state.crystals'),50);assert.match(g.node('#profileFeedback').textContent,/could not be changed/);
+});
+
+test('boat banking follows turning force, reverses sides, and settles after steering',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=game();g.run(`boating=true;activeVessel='${vessel}';state.ferryRemaining=FERRY_RIDE_DURATION;resetBoatMotion();boatMotion.velocity=140;boatMotion.turnRate=1;for(let i=0;i<50;i++)advanceBoatMotion(20)`);
+const right=g.run('boatMotion.roll');assert.ok(right>.1&&right<.5);
+g.run('boatMotion.turnRate=-1;for(let i=0;i<100;i++)advanceBoatMotion(20)');
+assert.ok(Math.abs(g.run('boatMotion.roll')+right)<.002);
+g.run('boatMotion.turnRate=0;for(let i=0;i<150;i++)advanceBoatMotion(20)');
+assert.ok(Math.abs(g.run('boatMotion.roll'))<.0001);
+g.run('boatMotion.velocity=0;boatMotion.turnRate=1;for(let i=0;i<100;i++)advanceBoatMotion(20)');
+assert.ok(Math.abs(g.run('boatMotion.roll'))<.0001);
+assert.ok(g.run(`boatRollTarget('${vessel}',140,1)>boatRollTarget('${vessel}',20,1)`));
+assert.equal(g.run(`boatRollTarget('${vessel}',-140,1)`),g.run(`-boatRollTarget('${vessel}',140,1)`));
+g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.roll'),0);assert.equal(g.run('boatMotion.rollVelocity'),0);
+}
+});
+
+test('boat V hull facets reveal different bottom surfaces with bank and viewing angle',()=>{
+const g=game();g.run("let hullFaces=[];polygon=(points,color)=>hullFaces.push({points,color});");
+const bottomArea=(heading,roll)=>g.run(`hullFaces=[];beginBoatHull(0,0,${heading},'speedboat',${roll});ctx.restore();hullFaces.filter(f=>['#c2cead','#8eafa4'].includes(f.color)).reduce((total,f)=>total+Math.abs(f.points.reduce((sum,p,i)=>{const q=f.points[(i+1)%f.points.length];return sum+p[0]*q[1]-q[0]*p[1];},0))/2,0)`);
+assert.equal(bottomArea(0,0),0);
+assert.ok(bottomArea(0,-.48)>5);
+assert.equal(bottomArea(0,.48),0);
+assert.ok(bottomArea(Math.PI,.48)>5);
+for(const heading of [0,Math.PI/2,Math.PI,Math.PI*1.5])for(const roll of [-.48,0,.48]){
+bottomArea(heading,roll);assert.equal(g.run('hullFaces.every(f=>f.points.every(p=>p.every(Number.isFinite)))'),true);
+}
+g.run("boating=true;activeVessel='speedboat';boatMotion.roll=.4;draw();activeVessel='fishing';draw();activeVessel='ferry';draw()");
+});
+
+test('tow boat banks through its course and preserves roll when its rider releases',()=>{
+const g=game();g.run("state.wakeboard=true;visitWatersportsDock();startWakeboarding('wakeboard');const courseTurn=WAKEBOARD_COURSE.points.find(p=>p.speed<.06&&p.distance>400);wakeboardRide.courseDistance=courseTurn.distance;wakeboardRide.heading=courseTurn.heading;advanceWakeboarding(16)");
+assert.ok(Math.abs(g.run('wakeboardRide?.roll||wakeboardBoatTrip?.roll||0'))>0);
+if(g.run('!!wakeboardRide'))g.run('releaseWakeboardBoat(wakeboardRide);wakeboardRide=null');
+assert.ok(Number.isFinite(g.run('wakeboardBoatTrip.roll')));
+g.run('advanceReturningWakeboardBoat(500);drawWatersports()');
+assert.ok(Number.isFinite(g.run('wakeboardBoatTrip.roll')));
+});
+
+// Rendering resolution must not change the world coordinates used for movement and taps.
+test('high-density character rendering scales backing pixels without changing the viewport',()=>{
+const g=game();
+for(const [width,height] of [[1280,800],[390,844]]){
+g.run(`window.innerWidth=${width};window.innerHeight=${height};window.devicePixelRatio=1;resizeMap()`);
+const viewport=g.run('JSON.stringify([WORLD.viewWidth,WORLD.viewHeight])');
+for(const density of [2,3,4]){
+g.run(`window.devicePixelRatio=${density};resizeMap()`);
+assert.equal(g.run('canvas.width'),width*Math.min(density,3));
+assert.equal(g.run('canvas.height'),height*Math.min(density,3));
+assert.equal(g.run('JSON.stringify([WORLD.viewWidth,WORLD.viewHeight])'),viewport);
+}
+}
+});
+
+test('fishing hands follow mirrored casts and detailed poses replace the ordinary occupant',()=>{
+const g=game();
+for(const characterType of ['boy','girl'])for(const vessel of ['shore','ferry','fishing','speedboat']){
+g.run(`currentProfile().character='${characterType}';boating=${vessel!='shore'};activeVessel='${vessel==='shore'?'fishing':vessel}';fishingActive=true;pendingCast=null;hookedFish=null;player.x=600;player.y=350;`);
+for(const side of [-1,1]){
+g.run(`fishingAim={x:fishingAngler().x+${side*120},y:fishingAngler().y-9};pendingCast={...fishingAim,elapsed:0,origin:{x:fishingAngler().x+4,y:fishingAngler().y-9}}`);
+const poses=[0,100,198,400,900].map(elapsed=>g.run(`fishingCastPose({...pendingCast,elapsed:${elapsed}})`));
+assert.equal(new Set(poses.map(p=>JSON.stringify(p.hand))).size,5);
+assert.ok(poses[0].tip.y<poses[0].hand.y,'backswing lifts the rod on either side');
+for(const pose of poses)assert.ok(Math.abs(Math.hypot(pose.tip.x-pose.hand.x,pose.tip.y-pose.hand.y)-25)<1e-9);
+const before=g.run('JSON.stringify([pendingCast,fishingTime,player.facing])');
+g.run(`var ordinaryCharacter=character,detailedAngler=drawFishingAngler,ordinaryDraws=0,anglerDraws=0;character=(...args)=>{if(!args[2])ordinaryDraws++;ordinaryCharacter(...args)};drawFishingAngler=(...args)=>{anglerDraws++;detailedAngler(...args)};draw();character=ordinaryCharacter;drawFishingAngler=detailedAngler;`);
+assert.equal(g.run('ordinaryDraws'),0);assert.equal(g.run('anglerDraws'),1);
+assert.equal(g.run('JSON.stringify([pendingCast,fishingTime,player.facing])'),before);
+g.run(`pendingCast=null;hookedFish={fish:fishingTargets()[0],from:{x:fishingAngler().x+${side*120},y:380},elapsed:120,idle:120,lastPull:0,target:1/6,progress:.1};draw();`);
+assert.equal(g.run('Number.isFinite(hookedFishingPose().hand.y)'),true);
+}
+}
+});
+
+test('swimming flutter bends knees without stretching limbs and carries splash points with the toes',()=>{
+const g=game();
+let kneeMotion=0,ankleMotion=0;
+for(const onBoard of [false,true])for(const side of [-1,1])for(const effort of [0,.2,1]){
+let previous;
+for(let step=0;step<24;step++){
+const phase=step*Math.PI/12;
+const pose=g.run(`swimmingLegPose(${phase},${effort},${side},${onBoard})`);
+assert.ok(Math.abs(Math.hypot(pose.knee.x-pose.hip.x,pose.knee.y-pose.hip.y,pose.knee.z-pose.hip.z)-6.3)<1e-9);
+assert.ok(Math.abs(Math.hypot(pose.ankle.x-pose.knee.x,pose.ankle.y-pose.knee.y,pose.ankle.z-pose.knee.z)-5.8)<1e-9);
+assert.ok(pose.toe.x<pose.ankle.x,'toes point back along the swimming direction');
+for(const joint of ['knee','ankle','toe'])assert.equal(pose[joint].y,pose.hip.y,'flutter never splays the leg sideways');
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+const projected=g.run(`projectSwimmingLeg(swimmingLegPose(${phase},${effort},${side},${onBoard}),${heading})`);
+// After the swimmer rotates, elevation changes screen y only.
+const rawX=pose.toe.x*Math.cos(heading)-pose.toe.y*Math.sin(heading);
+const rawY=pose.toe.x*Math.sin(heading)+pose.toe.y*Math.cos(heading);
+assert.ok(Math.abs(projected.toe.x*Math.cos(heading)-projected.toe.y*Math.sin(heading)-rawX)<1e-9);
+assert.ok(Math.abs(projected.toe.x*Math.sin(heading)+projected.toe.y*Math.cos(heading)-(rawY-pose.toe.z))<1e-9);
+}
+if(previous){kneeMotion+=Math.hypot(pose.knee.x-previous.knee.x,pose.knee.y-previous.knee.y);ankleMotion+=Math.hypot(pose.ankle.x-previous.ankle.x,pose.ankle.y-previous.ankle.y);}
+previous=pose;
+}
+}
+assert.ok(kneeMotion>0);assert.ok(ankleMotion>kneeMotion,'ankles follow the knee and add their own recovery motion');
+g.run(`var originalKickSplash=drawSwimKickSplash,splashPoints=[];drawSwimKickSplash=(...args)=>splashPoints.push(args);swimMotion.phase=.7;swimMotion.effort=1;drawSwimmingCharacter(0,0);drawSwimKickSplash=originalKickSplash;`);
+assert.equal(g.run('splashPoints.length'),2);
+for(const [index,side] of [[0,-1],[1,1]]){
+const toe=g.run(`swimmingLegPose(swimMotion.phase,swimMotion.effort,${side}).toe`);
+assert.equal(g.run(`splashPoints[${index}][0]`),toe.x);
+assert.equal(g.run(`splashPoints[${index}][1]`),toe.y);
+}
+});
+
+test('shore poses hold the edge during the pull and join tumble to recovery without a pose jump',()=>{
+const g=game();
+g.run('var renderShoreExplorer=drawShoreExplorer,capturedShorePose,capturedGrips;drawShoreExplorer=(pose,normal,shake,grips,gear)=>{capturedShorePose=pose;capturedGrips=grips;renderShoreExplorer(pose,normal,shake,grips,gear)}');
+for(const characterType of ['boy','girl'])for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+g.run(`currentProfile().character='${characterType}';player.x=300;player.y=300;var shoreNormal={x:Math.cos(${heading}),y:Math.sin(${heading})};shoreClimb={elapsed:0,normal:shoreNormal,from:{x:300-shoreNormal.x*14,y:300-shoreNormal.y*14},edge:{x:300,y:300},to:{x:300+shoreNormal.x*8,y:300+shoreNormal.y*8}};`);
+for(const t of [.3,.45,.6]){
+g.run(`shoreClimb.elapsed=${t*650};drawShoreClimb()`);
+for(let i=0;i<2;i++){
+const side=i?1:-1,hand=g.run(`capturedGrips[${i}]`);
+assert.ok(Math.abs(hand[0]-(300-Math.sin(heading)*side*3))<1e-9);
+assert.ok(Math.abs(hand[1]-(300+Math.cos(heading)*side*3))<1e-9);
+}
+}
+g.run(`shoreClimb=null;drawFastShoreTumble({elapsed:280,duration:280},${heading})`);
+const landing=JSON.parse(g.run('JSON.stringify(capturedShorePose)'));
+g.run(`shoreRecovery={elapsed:0,heading:${heading}};drawShoreRecovery()`);
+const recovery=JSON.parse(g.run('JSON.stringify(capturedShorePose)'));
+for(const key of Object.keys(landing))for(let i=0;i<3;i++)assert.ok(Math.abs(landing[key][i]-recovery[key][i])<1e-9);
+const before=g.run('JSON.stringify([player,shoreRecovery])');
+g.run('for(let i=0;i<5;i++)drawShoreRecovery()');assert.equal(g.run('JSON.stringify([player,shoreRecovery])'),before);
+for(const elapsed of [1000,1200,1450,1570,1740,1899]){
+g.run(`shoreRecovery.elapsed=${elapsed};drawShoreRecovery()`);
+assert.equal(g.run('Object.values(capturedShorePose).flat().every(Number.isFinite)'),true);
+}
+}
+});
+
+test('side walking bends elbows forward and counter-swings the arm against the near leg',()=>{
+const g=game();
+for(const characterType of ['boy','girl'])for(const facing of ['left','right']){
+g.run(`currentProfile().character='${characterType}';player.facing='${facing}';player.x=0;player.y=0;walkMotion.x=0;walkMotion.y=0;walkMotion.moving=true;var originalWalkingLimb=characterLimb,limbCalls=[];characterLimb=(points,color,width)=>{limbCalls.push({points,color});originalWalkingLimb(points,color,width)};walkMotion.phase=0;character(0,0);characterLimb=originalWalkingLimb;`);
+const rest=g.run('limbCalls.find(c=>c.color==="#e4bd88").points');
+assert.ok(rest[1][0]>rest[0][0],'elbow bends toward the face');
+assert.ok(rest[2][0]>rest[0][0],'resting hand sits ahead of the shoulder');
+g.run('limbCalls=[];characterLimb=(points,color,width)=>{limbCalls.push({points,color});originalWalkingLimb(points,color,width)};walkMotion.phase=Math.PI/2;character(0,0);characterLimb=originalWalkingLimb;');
+const arm=g.run('limbCalls.find(c=>c.color==="#e4bd88").points'),leg=g.run('limbCalls.find(c=>c.color==="#49656a").points');
+assert.ok(arm[2][0]<rest[2][0]);assert.ok(leg[2][0]>leg[0][0]);
+}
+});
+
+test('shore climbing plants one knee before the trailing leg comes onto land',()=>{
+const g=game();
+g.run('var originalClimbRenderer=drawShoreExplorer,climbPose;drawShoreExplorer=(pose,...args)=>{climbPose=pose;originalClimbRenderer(pose,...args)}');
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+g.run(`player.x=300;player.y=300;var climbNormal={x:Math.cos(${heading}),y:Math.sin(${heading})};shoreClimb={normal:climbNormal,from:{x:300-climbNormal.x*14,y:300-climbNormal.y*14},edge:{x:300,y:300},to:{x:300,y:300},elapsed:.46*650};drawShoreClimb()`);
+assert.ok(g.run('climbPose.knee1[0]>climbPose.hip[0]'),'leading knee comes forward onto the bank');
+assert.ok(g.run('climbPose.knee1[2]>climbPose.hip[2]'),'leading knee lifts before planting');
+assert.ok(g.run('climbPose.foot0[0]<climbPose.hip[0]-4'),'trailing leg stays extended');
+assert.ok(g.run('climbPose.foot0[2]<0'),'trailing foot remains in the water');
+g.run('shoreClimb.elapsed=.64*650;drawShoreClimb()');
+assert.equal(g.run('climbPose.foot1[2]'),0,'leading foot plants on the bank');
+const trailing=g.run('climbPose.foot0[0]');
+g.run('shoreClimb.elapsed=.82*650;drawShoreClimb()');
+assert.ok(g.run('climbPose.foot0[0]')>trailing,'trailing leg comes through after the leading foot plants');
+assert.ok(g.run('climbPose.foot0[2]')>0);
+for(let frame=0;frame<=30;frame++){
+g.run(`shoreClimb.elapsed=${frame/30*650};drawShoreClimb()`);
+const pose=g.run('climbPose');
+for(let leg=0;leg<2;leg++){
+const hip=pose['hip'+leg],knee=pose['knee'+leg],foot=pose['foot'+leg];
+const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
+assert.ok(distance(hip,knee)+distance(knee,foot)<6.5,'climbing legs retain compact explorer proportions throughout the pull');
+}
+}
+}
+});
+
+test('detailed water entries tuck and extend, meet the splash surface, and submerge without changing state while drawing',()=>{
+const g=game();
+const dive=g.run("airborneExplorerPose('dive',1)");
+assert.ok(dive.hand0[2]>dive.head[2]+10,'hands lead the straight dive');
+assert.ok(Math.abs(dive.hand0[1]-dive.hand1[1])<2,'hands join for a narrow entry');
+const tuck=g.run("airborneExplorerPose('roll',1)");
+assert.ok(tuck.knee0[2]>tuck.hip[2],'tucked knee draws toward the chest');
+for(const style of ['dive','roll','backflip'])for(let frame=0;frame<=30;frame++){
+const pose=g.run(`airborneExplorerPose('${style}',${frame/30})`);
+for(let leg=0;leg<2;leg++){
+const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
+assert.ok(distance(pose['hip'+leg],pose['knee'+leg])+distance(pose['knee'+leg],pose['foot'+leg])<6.5,'airborne legs retain compact explorer proportions while extending and tucking');
+}
+}
+
+for(const characterType of ['boy','girl'])for(const style of ['dive','roll','backflip'])for(const [facing,dx,dy] of [['right',-30,0],['left',30,0],['up',0,30],['down',0,-30]]){
+g.run(`currentProfile().character='${characterType}';player.x=600;player.y=350;player.facing='${facing}';diveAnimation={elapsed:0,style:'${style}',from:{x:600+${dx},y:350+${dy}},to:{x:600,y:350}}`);
+let previousSink=-Infinity;
+for(const elapsed of [0,80,220,433,434,500,560,614]){
+const frame=g.run(`waterEntryFrame({...diveAnimation,elapsed:${elapsed}})`);
+assert.equal(Object.values(frame.pose).flat().every(Number.isFinite),true);
+if(elapsed<434)assert.ok(frame.y+frame.bottom<=350+1e-9,'airborne silhouette stays on or above the contact surface');
+if(elapsed===434)assert.ok(Math.abs(frame.y+frame.bottom-350)<1e-9,'first contact matches the impact splash');
+if(elapsed>=434){assert.ok(frame.y>=previousSink,'entry continues down through the waterline');previousSink=frame.y;}
+if(elapsed===614)assert.ok(frame.y+frame.top>350,'the airborne body has fully submerged before resurfacing');
+}
+g.run('diveAnimation.elapsed=300');const before=g.run('JSON.stringify([player,diveAnimation,swimMotion])');
+g.run('drawWaterEntry();drawWaterEntry()');assert.equal(g.run('JSON.stringify([player,diveAnimation,swimMotion])'),before);
+}
+});
+
+test('dock jumps follow facing, clear the deck, and choose an unobstructed side when land blocks ahead',()=>{
+const g=game();
+g.run(`crossings.splice(0);piers.splice(0,piers.length,{x:100,y:90,w:18,h:90,dock:{x:109,y:90}});islandPolys.splice(0,islandPolys.length,[[50,0],[170,0],[170,100],[50,100]]);boatObstacles=()=>[];player.x=109;player.y=145;`);
+for(const [facing,dx,dy] of [['down',0,1],['right',1,0],['left',-1,0]]){
+g.run(`player.facing='${facing}'`);const to=g.run('shoreDiveTarget()');assert.ok(to);
+assert.ok((to.x-109)*dx+(to.y-145)*dy>=32);
+assert.equal((to.x-109)*dy-(to.y-145)*dx,0,'jump follows facing exactly');
+for(let i=0;i<8;i++)assert.equal(g.run(`openSea(${to.x+Math.cos(i*Math.PI/4)*8},${to.y+Math.sin(i*Math.PI/4)*8})`),true,'landing clears the deck and land');
+}
+g.run("player.facing='up';boatObstacles=()=>[[[65,125],[99,125],[99,165],[65,165]]]");
+const right=g.run('shoreDiveTarget()');assert.ok(right.x>109);assert.equal(right.y,145,'blocked left side sends the jumper right');
+g.run('boatObstacles=()=>[[[119,125],[155,125],[155,165],[119,165]]]');
+const left=g.run('shoreDiveTarget()');assert.ok(left.x<109);assert.equal(left.y,145,'blocked right side sends the jumper left');
+g.run('diveFromIsland()');assert.equal(g.run('player.facing'),'left');assert.equal(g.run('diveAnimation.to.x'),left.x);
+g.run('advanceSwimming(434)');assert.equal(g.run('player.x'),left.x);assert.equal(g.run('player.y'),left.y);assert.equal(g.run('!!waterEntrySplash'),true);
+g.run(`swimming=false;diveAnimation=null;player.x=109;player.y=145;player.facing='up';boatObstacles=()=>[[[65,125],[99,125],[99,165],[65,165]],[[119,125],[155,125],[155,165],[119,165]]]`);
+assert.equal(g.run('shoreDiveTarget()'),null);g.run('diveFromIsland()');assert.equal(g.run('swimming'),false);
+});
+
+test('dock jump draws above timber while airborne and below timber after water contact',()=>{
+const g=game();
+g.run(`swimming=true;player.x=600;player.y=350;diveAnimation={elapsed:100,from:{x:580,y:350},to:{x:610,y:350},style:'dive'};var entryLayers=[],realRaisedTimber=drawRaisedTimber,realEntryDrawing=drawWaterEntry;drawRaisedTimber=(...args)=>{entryLayers.push('deck');realRaisedTimber(...args)};drawWaterEntry=()=>{entryLayers.push('entry');realEntryDrawing()};draw()`);
+assert.ok(g.run("entryLayers.indexOf('entry')>entryLayers.lastIndexOf('deck')"));
+g.run('diveAnimation.elapsed=450;entryLayers=[];draw()');
+assert.ok(g.run("entryLayers.indexOf('entry')<entryLayers.indexOf('deck')"));
+assert.equal(g.run("entryLayers.filter(layer=>layer==='entry').length"),1);
+});
+
+test('gear removal reaches the head, pushes up, then releases from the hand independently of walking',()=>{
+const g=game();
+for(const characterType of ['boy','girl'])for(const facing of ['down','up','left','right'])for(const prone of [false,true]){
+g.run(`currentProfile().character='${characterType}';player.x=600;player.y=350;player.facing='${facing}';shoreRecovery=${prone?'{elapsed:0,heading:0}':'null'};goggleToss={elapsed:0,from:{x:600,y:334},to:{x:570,y:380},owner:profileId,armSide:-1}`);
+const contact=g.run('goggleRemovalPose(goggleToss,100)'),lift=g.run('goggleRemovalPose(goggleToss,180)');
+assert.equal(contact.hand[1],contact.head[1],'hand reaches the strap at head height');
+assert.equal(contact.gear.x,contact.head[0]);assert.equal(contact.gear.y,contact.head[1]);
+assert.ok(lift.gear.y<lift.head[1]-4,'gear is pushed up off the head');
+assert.equal(lift.hand[1],lift.gear.y,'gear stays in the hand during removal');
+g.run('advanceGoggleToss(280)');const release=g.run('JSON.stringify(goggleToss.releaseFrom)');
+assert.ok(g.run('Number.isFinite(goggleToss.releaseFrom.x)&&Number.isFinite(goggleToss.releaseFrom.y)'));
+g.run('player.x+=3;player.y+=2;advanceGoggleToss(80)');assert.equal(g.run('JSON.stringify(goggleToss.releaseFrom)'),release);
+const before=g.run('JSON.stringify([player,goggleToss])');g.run('drawGoggleToss();drawGoggleToss()');assert.equal(g.run('JSON.stringify([player,goggleToss])'),before);
+g.run('advanceGoggleToss(100)');assert.equal(g.run('goggleArmActive()'),false,'ordinary arm returns after follow-through');
+}
+});
+
+test('tow boat accelerates gradually with shared propulsion and keeps its motion independent',()=>{
+const g=game();g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding();const ownedMotionBefore=JSON.stringify(boatMotion);advanceWakeboarding(200)');
+assert.ok(Math.abs(g.run('wakeboardRide.velocity')-13)<1e-8);
+assert.ok(g.run('wakeboardRide.boat.x')<590);
+assert.ok(g.run('590-wakeboardRide.boat.x')<3);
+g.run('for(let i=0;i<150;i++)advanceWakeboarding(40);drawWakeboardWake();drawWatersports()');
+assert.equal(g.run('!!wakeboardRide'),true);
+assert.ok(g.run('wakeboardRide.velocity')<=g.run("boatTopSpeed(0,'tow')"));
+assert.ok(g.run('wakeboardRide.bowWake.length')>0);
+assert.ok(g.run('wakeboardRide.wake.length')>0);
+assert.equal(g.run('JSON.stringify(boatMotion)'),g.run('ownedMotionBefore'));
+// Identical physics speed changes apply without consulting the player's selected boat.
+assert.equal(g.run("boatVelocityStep(0,1,.2,'tow')"),g.run("boatVelocityStep(0,1,.2,'fishing')"));
+assert.equal(g.run("boatVelocityStep(100,0,.2,'tow')"),g.run("boatVelocityStep(100,0,.2,'fishing')"));
+g.run('const slowing={courseDistance:0,velocity:140};advanceTowBoatSpeed(slowing,100)');
+assert.ok(g.run('slowing.velocity')>=133&&g.run('slowing.velocity')<140);
+});
+
+test('tow hull shares planing contact, wake spray, and fading samples through release and docking',()=>{
+const g=game();g.run("const towSlow=boatHullWake('tow',{velocity:20}),towFast=boatHullWake('tow',{velocity:140});");
+assert.ok(g.run('towFast.point(0)[0]')<g.run('towSlow.point(0)[0]'));
+g.run("let towSamples={velocity:140,distance:0,steering:.2,wake:[],bowWake:[]};recordHullWake(towSamples,{x:440,y:800},{x:500,y:800},0,'tow');");
+assert.equal(g.run('towSamples.wake.length'),10);
+assert.equal(g.run('towSamples.bowWake.length'),20);
+assert.equal(g.run('towSamples.wake.every(w=>w.y===800&&w.heading===.2)'),true);
+assert.ok(g.run('towSamples.bowWake.every(w=>w.velocity===140&&w.speed>0)'));
+g.run('let towSpray=0;ctx.stroke=()=>towSpray++;towSamples.bowWake.forEach(w=>w.age=100);drawBoatWake(towSamples)');
+assert.ok(g.run('towSpray')>10);
+g.run('state.wakeboard=true;visitWatersportsDock();startWakeboarding();for(let i=0;i<50;i++)advanceWakeboarding(40);const beforeRelease=wakeboardRide;releaseWakeboardBoat(beforeRelease);wakeboardRide=null');
+assert.equal(g.run('wakeboardBoatTrip.velocity'),g.run('beforeRelease.velocity'));
+assert.equal(g.run('JSON.stringify(wakeboardBoatTrip.bowWake)'),g.run('JSON.stringify(beforeRelease.bowWake)'));
+g.run('const fixedSample={...wakeboardBoatTrip.bowWake[0]};advanceReturningWakeboardBoat(40)');
+assert.equal(g.run('beforeRelease.bowWake[0].age'),g.run('fixedSample.age'));
+assert.equal(g.run('wakeboardBoatTrip.bowWake[0].x'),g.run('fixedSample.x'));
+assert.ok(g.run('wakeboardBoatTrip.bowWake[0].age')>g.run('fixedSample.age'));
+g.run('for(let i=0;i<1500&&wakeboardBoatTrip;i++)advanceReturningWakeboardBoat(40)');
+assert.equal(g.run('wakeboardBoatTrip'),null);
+assert.equal(g.run('!!wakeboardDockWake'),true);
+g.run('const dockWakeBefore=JSON.stringify(wakeboardDockWake)');g.node('#challenge').showModal();
+g.run('advanceReturningWakeboardBoat(400)');assert.equal(g.run('JSON.stringify(wakeboardDockWake)'),g.run('dockWakeBefore'));g.node('#challenge').close();
+g.run('advanceReturningWakeboardBoat(3600)');assert.equal(g.run('wakeboardDockWake'),null);
+});
+
+test('tow route sweeps the shared hull against boats and clears the return dock with the bridge built',()=>{
+const g=game();g.run("state.upgrades=['bridge'];const routeStart=wakeboardCoursePose(600);let blockedTow={boat:{x:routeStart.x,y:routeStart.y},heading:routeStart.heading,courseDistance:600,velocity:100,steering:0,roll:0,rollVelocity:0,wake:[],bowWake:[]};const blockingFerry=wakeboardCoursePose(675);ferryPosition={x:blockingFerry.x,y:blockingFerry.y};ferryHeading=blockingFerry.heading;advanceTowBoatRoute(blockedTow,500)");
+assert.equal(g.run('blockedTow.velocity'),0);
+assert.equal(g.run('blockedTow.courseDistance'),600);
+g.run('ferryPosition={x:3000,y:1500};for(let i=0;i<20;i++)advanceTowBoatRoute(blockedTow,16)');
+assert.ok(g.run('blockedTow.courseDistance')>600);
+assert.equal(g.run("(()=>{for(let d=WAKEBOARD_COURSE.length-220;d<WAKEBOARD_COURSE.length;d+=.1){const p=wakeboardCoursePose(d);if(!boatPoseClear(p.x,p.y,p.heading,'tow'))return false;}return true;})()"),true);
+assert.equal(g.run("(()=>{for(let i=0;i<=1000;i++){const t=i/1000,e=t*t*(3-2*t);if(!boatPoseClear(590+Math.sin(t*Math.PI)**2*12,299+(WATERSPORTS_DOCK.y+18-299)*e,Math.PI+Math.PI/2*e,'tow'))return false;}return true;})()"),true);
+});
+
+test('free boat repairs time arrival, staged construction, exact completion and crew departure for every hull',()=>{
+for(const vessel of ['fishing','tow','speedboat','ferry']){
+const g=game();g.run(`const vessel='${vessel}';state.catches={bass:5};state.speedboat=true;state.crystals=123;state.wakeboard=true;state.waterskis=true;state.ferryTicket=true;state.ferryRemaining=90000;currentProfile().fuel={fishing:17,speedboat:23};currentProfile().reserveGas=11;
+const target=boatRepairHome(vessel).berth;petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits();petDragonFire=null;nextPetDragonFire=1e9;
+advancePetDragonFire(BOAT_EXPLOSION_DURATION);const repair=boatRepairs.get(vessel);`);
+assert.ok(g.run('repair'));assert.equal(g.run('boatRepairFrame(repair).phase'),'arriving');assert.equal(g.run('repair.elapsed'),0);
+g.run('advancePetDragonFire(BOAT_REPAIR_TIMING.arrival-1)');assert.equal(g.run('boatRepairFrame(repair).phase'),'arriving');
+g.run('advancePetDragonFire(1)');assert.equal(g.run('boatRepairFrame(repair).progress'),0);
+for(const progress of [.1,.4,.8,.97]){
+g.run(`repair.elapsed=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[vessel]*${progress};constBefore=JSON.stringify(repair);drawBoatRepairs();draw();`);
+assert.equal(g.run('JSON.stringify(repair)'),g.run('constBefore'));assert.equal(g.run('boatRepairFrame(repair).phase'),'building');
+}
+g.run('repair.elapsed=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[vessel]-1;advancePetDragonFire(0)');assert.equal(g.run('boatUnavailable(vessel)'),true);
+g.run('advancePetDragonFire(1)');assert.equal(g.run('boatUnavailable(vessel)'),false);assert.equal(g.run('boatRepairFrame(repair).phase'),'departing');
+assert.equal(g.run('state.crystals'),123);assert.equal(g.run('JSON.stringify(currentProfile().fuel)'),'{"fishing":17,"speedboat":23}');assert.equal(g.run('currentProfile().reserveGas'),11);
+assert.equal(g.run('state.ferryTicket'),true);assert.equal(g.run('state.ferryRemaining'),90000);assert.equal(g.run('state.wakeboard&&state.waterskis&&sponsored()&&speedboatUnlocked()'),true);
+if(vessel!=='tow')assert.equal(g.run('JSON.stringify(vesselPose(vessel).slice(0,2))'),g.run('JSON.stringify([target.x,target.y])'));
+g.run('advancePetDragonFire(BOAT_REPAIR_TIMING.departure-1)');assert.equal(g.run('boatRepairs.has(vessel)'),true);
+g.run('advancePetDragonFire(1)');assert.equal(g.run('boatRepairs.has(vessel)'),false);
+}
+const g=game();assert.equal(g.run('BOAT_REPAIR_TIMING.fishing'),20000);assert.equal(g.run('BOAT_REPAIR_TIMING.fishing<BOAT_REPAIR_TIMING.tow&&BOAT_REPAIR_TIMING.tow<BOAT_REPAIR_TIMING.speedboat&&BOAT_REPAIR_TIMING.speedboat<BOAT_REPAIR_TIMING.ferry'),true);
+});
+
+test('simultaneous repairs advance offscreen through other activity dispatch and pause all animation for modals',()=>{
+const g=game();g.run(`nextPetDragonFire=1e9;const vessels=['fishing','tow','speedboat','ferry'];
+for(const vessel of vessels)boatExplosions.set(vessel,createBoatBlast({...boatRepairHome(vessel).berth,heading:0,vessel}));
+advancePetDragonFire(BOAT_EXPLOSION_DURATION+BOAT_REPAIR_TIMING.arrival+1000);`);
+assert.equal(g.run('boatRepairs.size'),4);assert.equal(g.run('boatRepairFrame(boatRepairs.get("fishing")).progress'),.05);
+g.node('#challenge').open=true;g.run('const before=JSON.stringify([...boatRepairs]);advanceSwimming(5000);draw();');assert.equal(g.run('JSON.stringify([...boatRepairs])'),g.run('before'));
+g.node('#challenge').open=false;
+// An anchor animation used to return before the dragon effects update.
+g.run(`boating=true;boatPosition={x:1200,y:1400};player.x=1200;player.y=1400;throwBoatAnchor();advanceSwimming(1000);`);
+assert.equal(g.run('boatRepairs.get("ferry").elapsed'),5000);
+g.run('advancePetDragonFire(18000)');assert.equal(g.run('boatRepairs.get("fishing").complete'),true);assert.equal(g.run('boatRepairs.get("tow").complete'),false);
+g.run('advancePetDragonFire(10000)');assert.equal(g.run('boatRepairs.has("fishing")'),false);assert.equal(g.run('boatRepairs.get("tow").complete'),true);
+g.run('advancePetDragonFire(30000)');assert.equal(g.run('boatUnavailable("ferry")'),false);
+});
+
+test('repair availability guards dock menus, touch buttons, reboarding and watersports without spending tickets or crystals',()=>{
+const g=game();g.run(`state.catches={bass:5};state.speedboat=true;state.wakeboard=true;state.waterskis=true;state.ferryTicket=true;state.crystals=200;
+for(const vessel of ['fishing','tow','speedboat','ferry'])boatRepairs.set(vessel,{vessel,elapsed:4000,complete:false});
+player.x=fishingDock.x;player.y=fishingDock.y;launchBoat();$('#mapFishingBoat').onclick();`);assert.equal(g.run('boating'),false);
+g.run('player.x=SPEEDBOAT_DOCK.x;player.y=SPEEDBOAT_DOCK.y;launchSpeedboat()');assert.equal(g.run('boating'),false);
+g.run(`player.x=dock.x;player.y=dock.y;openFerry();activeMapPanel='ferry';confirmFerryBoarding();boardFerry()`);assert.equal(g.run('boating'),false);assert.equal(g.run('state.ferryTicket'),true);assert.equal(g.run('state.crystals'),200);
+g.run(`activeVessel='fishing';swimming=true;player.x=boatPosition.x;player.y=boatPosition.y;boardOwnBoat()`);assert.equal(g.run('boating'),false);
+g.run(`swimming=false;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y;startWakeboarding();startWakeboarding('waterskis');updateWakeboardUI()`);assert.equal(g.run('wakeboardRide'),null);assert.equal(g.node('#mapWakeboardStart').disabled,true);assert.equal(g.node('#mapWaterskisStart').disabled,true);
+g.run(`advancePetDragonFire(BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING.ferry);player.x=fishingDock.x;player.y=fishingDock.y;launchBoat()`);assert.equal(g.run('boating'),true);
+});
+
+test('offshore occupied and beach-moored destruction clears anchors and reloads safely at one home boat',()=>{
+for(const vessel of ['fishing','speedboat','ferry'])for(const anchored of [false,true]){
+const g=game();g.run(`const vessel='${vessel}';state.catches={bass:5};state.speedboat=true;state.beachPass=true;state.ferryRemaining=90000;
+activeVessel=vessel;boatPosition={x:1100,y:1400};player.x=1100;player.y=1400;boating=${!anchored};swimming=false;
+state.boatIsland='test';state.parkedBoat={...boatPosition,vessel,heading:1};state.beachAnchor=${anchored?'{...boatPosition,vessel,heading:1,landing:{x:1100,y:1390}}':'null'};
+boatAnchor={x:1080,y:1400,elapsed:900};petDragonPosition={x:1040,y:1392};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits();petDragonFire=null;nextPetDragonFire=1e9;`);
+assert.equal(g.run('boatExplosions.get(vessel).x'),1100);assert.equal(g.run('state.beachAnchor'),null);assert.equal(g.run('boatAnchor'),null);assert.equal(g.run('state.boatIsland'),null);assert.equal(g.run('boating'),false);
+if(!anchored)assert.equal(g.run('swimming'),true);
+assert.equal(g.run('boatPosition.x'),g.run('boatRepairHome(vessel).berth.x'));
+g.run('advancePetDragonFire(BOAT_EXPLOSION_DURATION+4500);save()');
+const restored=game(undefined,g.snapshot());assert.equal(restored.run('boatRepairs.size+boatExplosions.size'),0);assert.equal(restored.run('boating'),false);assert.equal(restored.run('canWalk(player.x,player.y)'),true);assert.equal(restored.run('state.beachAnchor'),null);
+assert.equal(restored.run(`vesselPose('${vessel}')[0]`),g.run('boatRepairHome(vessel).berth.x'));
+g.run('advancePetDragonFire(BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[vessel]);draw()');assert.equal(g.run('boating'),false);assert.equal(g.run('boatUnavailable(vessel)'),false);
+}
+});
+
+test('repairs clear on age, profile, adventure and full profile resets without carrying crews to another save',()=>{
+for(const reset of ["switchAge('9-10')","$('#profileName').value='Repair tester';createProfile()","$('#resetConfirm').open=true;$('#confirmReset').onclick()","pendingProfileAction={action:'reset',id:profileId};$('#profileActionConfirm').open=true;confirmProfileAction()"]){
+const g=game();g.run(`for(const vessel of ['fishing','tow','speedboat','ferry'])boatRepairs.set(vessel,{vessel,elapsed:7000,complete:false});${reset}`);
+assert.equal(g.run('boatRepairs.size'),0,reset);assert.equal(g.run('boatExplosions.size'),0,reset);assert.equal(g.run('canWalk(player.x,player.y)'),true,reset);
+}
+});
+
+test('destroyed occupied tow boat cancels the ride permanently and repair does not restart fishing or towing',()=>{
+const g=game();g.run(`state.wakeboard=true;state.waterskis=true;player.x=1100;player.y=1400;
+wakeboardRide={boat:{x:1150,y:1400},heading:0,safe:{x:550,y:229},wake:[],bowWake:[]};
+petDragonPosition={x:1090,y:1392};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits();petDragonFire=null;nextPetDragonFire=1e9;`);
+assert.equal(g.run('boatExplosions.has("tow")'),true);assert.equal(g.run('swimming'),true);assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('wakeboardBoatTrip'),null);
+g.run('advancePetDragonFire(BOAT_EXPLOSION_DURATION+BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING.tow);draw()');assert.equal(g.run('wakeboardRide'),null);assert.equal(g.run('wakeboardBoatTrip'),null);assert.equal(g.run('fishingActive'),false);assert.equal(g.run('state.wakeboard&&state.waterskis'),true);
+});
+
+test('boat construction renders each feature in two steps and installs outboards individually after the wheel',()=>{
+for(const vessel of ['fishing','tow','speedboat','ferry']){
+const g=game();g.run(`const vessel='${vessel}',repair={vessel,elapsed:0,complete:false};boatRepairs.set(vessel,repair);const plan=boatBuildPlan(vessel);let shapes=[],strokes=[];const realPolygon=polygon,realLimb=characterLimb;polygon=(points,color,...rest)=>{shapes.push({points,color});realPolygon(points,color,...rest);};characterLimb=(points,color,...rest)=>{strokes.push({points,color});realLimb(points,color,...rest);};`);
+const plan=JSON.parse(g.run('JSON.stringify(plan)'));
+for(let index=0;index<plan.length;index++)for(let half=0;half<2;half++){
+g.run(`repair.elapsed=BOAT_REPAIR_TIMING.arrival+(${index*2+half}+.25)/(plan.length*2)*BOAT_REPAIR_TIMING[vessel];shapes=[];strokes=[];drawBoatRepairs();`);
+assert.equal(g.run('boatRepairFrame(repair).feature'),plan[index]);assert.equal(g.run('boatRepairFrame(repair).featureStep'),half+1);
+const enginesFinished=plan.slice(0,index).filter(p=>p.startsWith('engine')).length+(plan[index].startsWith('engine')&&half===1?1:0);
+assert.equal(g.run('shapes.filter(p=>p.color==="#34494f").length'),enginesFinished,`${vessel}: ${plan[index]} ${half+1}`);
+const wheelFinished=index>plan.indexOf('wheel')||index===plan.indexOf('wheel')&&half===1;
+assert.equal(g.run('strokes.some(p=>p.color==="#263e48")'),wheelFinished,`${vessel} wheel stage`);
+if(plan[index]==='hull')assert.equal(g.run('shapes.some(p=>p.color==="#c7a16b")'),half===1);
+if(plan[index]==='paint')assert.equal(g.run('shapes.some(p=>p.color==="#e3ddd0")'),half===0);
+if(vessel==='ferry'){
+const flagIndex=plan.indexOf('flag');
+assert.equal(g.run('shapes.some(p=>p.color==="#8266aa")'),index>=flagIndex);
+if(index===flagIndex)assert.equal(g.run('shapes.find(p=>p.color==="#8266aa").points.length'),half===0?3:4);
+}
+}
+}
+});
+
+test('repair crews parachute onto each pier, jump onto windsurfers and sail along clear water',()=>{
+for(const vessel of ['fishing','speedboat','ferry','tow']){
+const g=game();g.run(`const vessel='${vessel}',repair=createBoatRepair(vessel);boatRepairs.set(vessel,repair);nextPetDragonFire=1e9;`);
+assert.ok(g.run('repair.crewRoutes.every(route=>route.distance>=120)'),vessel+' needs a visible sea lane');
+for(const index of [0,1]){
+g.run(`const crewIndex${index}=${index};`);
+for(const elapsed of [0,1200,2399,2999,3000]){
+g.run(`repair.elapsed=${elapsed};draw();`);
+assert.equal(g.run(`boatRepairCrewPose(repair,${index}).mode`),elapsed<3000?'parachute':'work');
+}
+g.run('repair.elapsed=0');const initial=g.run(`boatRepairCrewPose(repair,${index}).height`);
+g.run('repair.elapsed=1200');assert.ok(g.run(`boatRepairCrewPose(repair,${index}).height`)<initial);
+g.run('repair.elapsed=2999');assert.equal(g.run(`boatRepairCrewPose(repair,${index}).height`),0);assert.ok(g.run(`boatRepairCrewPose(repair,${index}).canopy`)<.01);
+g.run('repair.elapsed=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[vessel]');assert.equal(g.run(`boatRepairCrewPose(repair,${index}).mode`),'jump');
+g.run('repair.elapsed+=BOAT_REPAIR_TIMING.jump/2');assert.ok(g.run(`boatRepairCrewPose(repair,${index}).height`)>20);g.run('draw()');
+g.run('repair.elapsed+=BOAT_REPAIR_TIMING.jump/2');assert.equal(g.run(`boatRepairCrewPose(repair,${index}).mode`),'windsurf');assert.equal(g.run(`boatRepairCrewPose(repair,${index}).height`),0);
+assert.equal(g.run(`(()=>{const route=repair.crewRoutes[${index}];for(let d=0;d<=route.distance;d+=3)if(!openSea(route.from.x+Math.cos(route.heading)*d,route.from.y+Math.sin(route.heading)*d))return false;return true;})()`),true);
+g.run('repair.elapsed=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[vessel]+BOAT_REPAIR_TIMING.departure-1;draw()');assert.ok(g.run(`boatRepairCrewPose(repair,${index}).alpha`)<.01);
+}
+// Simulation, not drawing, owns departure cleanup and all pause behavior.
+g.run('repair.elapsed=1000;const before=JSON.stringify(repair);draw();draw()');assert.equal(g.run('JSON.stringify(repair)'),g.run('before'));
+g.node('#challenge').open=true;g.run('advancePetDragonFire(1000)');assert.equal(g.run('JSON.stringify(repair)'),g.run('before'));g.node('#challenge').open=false;
+g.run('repair.elapsed=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING[vessel]+BOAT_REPAIR_TIMING.departure-1;advancePetDragonFire(1)');assert.equal(g.run('boatRepairs.has(vessel)'),false);
+}
+});
+
+test('repair workers retain the shared character renderer with suspended, working and windsurfing poses',()=>{
+const g=game();g.run(`let calls=[];const sharedSprite=drawLifeguardSprite;drawLifeguardSprite=(...args)=>{calls.push(args);sharedSprite(...args);};const repair=createBoatRepair('ferry');`);
+for(const elapsed of [1000,3000,63400,65000])g.run(`repair.elapsed=${elapsed};drawBoatRepairCrew(repair,boatRepairFrame(repair),-1);`);
+const calls=JSON.parse(g.run('JSON.stringify(calls)'));
+assert.deepEqual(calls.map(c=>c[7].pose),['parachute','parachute','work','work','jump','jump','windsurf','windsurf']);
+assert.ok(calls.every(c=>c[4]===0));assert.equal(calls[2][7].work,3200);assert.equal(calls[6][7].work,null);
+});
+
+
+test('dragon breath burns beach umbrellas down to ash without restarting or regrowing them',()=>{
+const g=game();g.run(`const umbrella=burnableUmbrellas.values().next().value;
+petDragonPosition={x:umbrella.x-55,y:umbrella.y-10};petDragonFire={elapsed:200,duration:850};advancePetDragonFire(16)`);
+assert.equal(g.run('umbrella.burnAge'),0);
+assert.equal(g.run('[...burnableUmbrellas.values()].filter(t=>t.burnAge!==null).length'),1);
+g.run(`let umbrellaSprites=0,umbrellaFlames=0;const originalUmbrellaSprite=drawBeachUmbrellaSprite;
+drawBeachUmbrellaSprite=(...args)=>{umbrellaSprites++;originalUmbrellaSprite(...args)};
+drawDragonFlame=()=>umbrellaFlames++;advancePetDragonFire(900);beachUmbrella(umbrella.x,umbrella.y,umbrella.color)`);
+assert.equal(g.run('umbrellaSprites'),1);assert.equal(g.run('umbrellaFlames'),4);
+g.run('advancePetDragonFire(TREE_BURN_DURATION);umbrellaSprites=0;umbrellaFlames=0;beachUmbrella(umbrella.x,umbrella.y,umbrella.color)');
+assert.equal(g.run('umbrella.burnAge'),4200);assert.equal(g.run('umbrellaSprites'),0);assert.equal(g.run('umbrellaFlames'),0);
+g.run('advancePetDragonFire(TREE_REGROW_DURATION);petDragonFire={elapsed:200,duration:850};checkDragonFireSceneryHits(burnableUmbrellas)');
+assert.equal(g.run('umbrella.burnAge'),4200);assert.equal(g.run('umbrella.regrowAge'),0);
+});
+
+test('umbrella fire follows the visible plume heading and altitude, including offscreen umbrellas',()=>{
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+const g=game();g.run(`const umbrella=[...burnableUmbrellas.values()].at(-1),heading=${heading};
+dragonFlight={stage:'flying',heading,altitude:30};player.x=umbrella.x-Math.cos(heading)*55;player.y=umbrella.y-10+30-Math.sin(heading)*55;
+petDragonFire={elapsed:200,duration:850};advancePetDragonFire(16)`);
+assert.equal(g.run('umbrella.burnAge'),0,`heading ${heading}`);
+}
+const g=game();g.run(`const umbrella=burnableUmbrellas.values().next().value;
+petDragonPosition={x:umbrella.x-150,y:umbrella.y-10};petDragonFire={elapsed:200,duration:850};checkDragonFireSceneryHits(burnableUmbrellas)`);
+assert.equal(g.run('umbrella.burnAge'),null);
+g.run(`dragonFlight={stage:'flying',heading:0,altitude:100};player.x=umbrella.x-55;player.y=umbrella.y;checkDragonFireSceneryHits(burnableUmbrellas)`);
+assert.equal(g.run('umbrella.burnAge'),null);
+});
+
+test('umbrella burning pauses in dialogs and clears on reload, age changes and dragon reset',()=>{
+const g=game();g.run('const umbrella=burnableUmbrellas.values().next().value;umbrella.burnAge=500');
+g.node('#challenge').open=true;g.run('advancePetDragonFire(500)');assert.equal(g.run('umbrella.burnAge'),500);
+g.node('#challenge').open=false;g.run('advancePetDragonFire(500)');assert.equal(g.run('umbrella.burnAge'),1000);
+const reloaded=game(null,g.snapshot());assert.equal(reloaded.run('[...burnableUmbrellas.values()].every(t=>t.burnAge===null)'),true);
+g.run("switchAge('7-8')");assert.equal(g.run('umbrella.burnAge'),null);
+g.run('umbrella.burnAge=4200;resetPetDragon()');assert.equal(g.run('umbrella.burnAge'),null);
 });

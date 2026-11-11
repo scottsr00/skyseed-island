@@ -78,6 +78,36 @@ speed. Its top speed advantage applies at every matching trim setting (175 versu
 trim; 206.5 versus 165.2 at trim 4). Fishing, anchoring at the beach, outer-island docking, saved
 parking, reboarding, and dragon-fire explosions work with the speedboat.
 
+## Automatic boat repairs
+
+Dragon fire can destroy the sponsored fishing boat, speedboat, ferry, and watersports tow boat.
+After the existing 11.8-second ignition/explosion/debris sequence, two repair workers parachute onto
+that vessel's home dock over 3 seconds and rebuild it for free. Construction gives every feature two distinct steps: frame then hull, primer then paint,
+unfinished then finished deck, steering column then wheel, and each engine's mounting/lower unit
+then its cowling, one engine at a time. The speedboat adds its windscreen frame then glass; the
+tow boat fits then finishes its tower. The ferry separately builds cabin walls, roof, windows,
+chimney, flagpole, and flag, each in two steps. Dock labels name the current feature and step.
+The crew descends under colored parachutes, lands on the pier, and folds the canopies before
+construction starts. Workers stand and hammer while building. On completion, each worker jumps
+onto a waiting windsurfer and sails away through a clear sea lane, leaving a wake. `BOAT_REPAIR_TIMING` keeps all
+durations together: fishing 20 seconds, tow 30 seconds, speedboat 40 seconds, ferry 60 seconds,
+measured from crew arrival. Departure takes 7 seconds, including an 800 ms jump onto the boards; the vessel is usable
+as soon as construction finishes, subject to ordinary sponsorship, ownership, energy, and ticket rules.
+
+`boatUnavailable()` guards launching, ferry confirmation, reboarding, beach returns, and tow
+activities through destruction, crew arrival, and construction. Dock interactions explain that
+repairs are underway. Each vessel has an independent session-only `boatRepairs` entry; repeated
+fire cannot restart a repair. Repairs progress offscreen and during other activities, but modal
+dialogs pause their clocks. Rendering never advances construction.
+
+`restoreRebuiltBoat()` returns the vessel to its home berth and clears its stale parking, beach
+mooring, and anchor references as soon as destruction is registered. Offshore occupants stay
+swimming; interrupted fishing, driving, or towing never resumes automatically. Rebuilding does
+not change sponsorship, unlocks, equipment, fuel tanks/reserve, tickets, or remaining ferry time.
+Existing ferry countdown rules continue during repairs. Reload ends the session-only effects,
+with one docked vessel and the usual safe saved explorer position. Profile/age switches and
+adventure/full-profile resets clear explosions and crews through `resetPetDragon()`.
+
 ## Driving and trim
 
 Boat hull collision checks cover land, docks, built bridges, and other boats, including the tow
@@ -126,6 +156,13 @@ Fishing on an owned boat fills only available tank capacity; excess from that ca
 to reserve. Shore and ferry catches accumulate reserve; boarding an owned boat transfers only
 what fits and retains unused reserve. Sponsorship uses the current age's catches, not the
 explorer-wide lifetime badge total.
+
+`fishingCastPose()` drives the rod and gripping hand through backswing, release, and follow-through.
+`drawFishingAngler()` renders the detailed explorer, braced legs, jointed arms, and attached reel for
+idle aiming, casting, and hooked-fish retrieval on shore and all three boats. `hookedFishingPose()`
+drives the loaded-rod lean and reel crank from elapsed simulation time and each accepted pull.
+Fishing replaces the ordinary walking/boat occupant sprite so no static arms remain beneath the pose.
+Drawing does not advance fishing state; dialogs pause the cast and reel animation clocks.
 
 ## Verification
 

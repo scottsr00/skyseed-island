@@ -11,6 +11,11 @@ runtime/test files by default.
 
 ## Repository conventions
 
+- For drafting or publishing GitHub issues, use
+  [create-github-issue](.agents/skills/create-github-issue/SKILL.md) and its linked issue guide.
+- For selecting and implementing existing GitHub issues, use
+  [implement-github-issue](.agents/skills/implement-github-issue/SKILL.md).
+
 - `dist/` contains the maintained source and the published static site. There is no build step.
 - Preserve the dependency-free browser runtime unless the task calls for an architecture change.
 - `surfing.js` loads before `app.js`; both are classic scripts sharing global bindings. Account
