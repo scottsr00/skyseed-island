@@ -17,7 +17,8 @@ See [saves and profiles](saves-and-profiles.md) for persistence and ownership,
 ## Map and access
 
 Seventeen islands in a 6,400 × 1,800 world, with twice the previous map area and open ocean on both
-sides of the centered island group. The original five-island region is preserved. Walkways link the
+sides of the centered island group. Whispering Island sits southwest of the main island at
+`(160, 555)`, leaving a broad channel beyond the ferry pier for boats to turn. Walkways link the
 main island, Moonwater, and Sunseed. The former Whispering Island crossing is now a shorter ferry
 pier, with the ferry berthed in open water on its west side. Swim to Whispering Island. Restoring
 the woodland bridge connects Sunseed Island to Crystal Cavern; ferry tickets pay for rides and do
@@ -41,6 +42,7 @@ Ordinary shoreline walking enters the water automatically and does not show a Di
 sponsorship is required. Swimmers and swimming mounts pass underneath bridges, docks, and boat
 hulls, with their bodies and splashes hidden by the structures above. Swim onto land to reach onto
 the beach and pull yourself up before walking again; Crystal Cavern no longer requires a ferry pass.
+The swimming action list has no Return to dock shortcut; swim ashore or reboard a nearby boat.
 The compact, text-free miniature chart shows the islands, crossings, docks, your position, and
 the camera footprint.
 

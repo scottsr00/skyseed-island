@@ -2245,6 +2245,21 @@ for(const angle of outcomes)assert.ok(Math.abs(angle-outcomes[0])<1e-9);
 }
 });
 
+test('ferry plows a broader bow wash and leaves wider spreading whitewater than smaller boats',()=>{
+const g=game();
+g.run("let washWidths=[],washFaces=[];ctx.stroke=()=>washWidths.push(ctx.lineWidth);polygon=(points,color)=>washFaces.push({points,color});boating=true;");
+const widths={};
+for(const vessel of ['ferry','fishing','speedboat']){
+g.run(`activeVessel='${vessel}';boatMotion.velocity=boatTopSpeed(4,'${vessel}')*.7;washWidths=[];drawBoatBowWake(0,0,0,'${vessel}');`);
+widths[vessel]=g.run('Math.max(...washWidths)');
+}
+assert.ok(widths.ferry>widths.fishing*1.6&&widths.ferry>widths.speedboat*1.6);
+g.run("activeVessel='ferry';boatMotion.distance=0;boatMotion.bowWake=[];recordHullWake(boatMotion,{x:-400,y:900},{x:-380,y:900},0,'ferry');const ferrySamples=boatMotion.bowWake.map(w=>({...w,age:1000}));");
+assert.ok(g.run('ferrySamples.length')>2);
+const span=size=>g.run(`washFaces=[];drawBoatWakeArm(1,{bowWake:ferrySamples.map(w=>({...w,wakeSize:${size}}))});Math.max(...washFaces.flatMap(f=>f.points.map(p=>p[1])))-Math.max(...ferrySamples.filter(w=>w.side===1).map(w=>w.y))`);
+assert.ok(span(1.7)>span(1)*1.5,'ferry trail expands farther from its recorded hull contacts');
+});
+
 for(const vessel of ['ferry','fishing','speedboat'])test(`${vessel} hull wake moves aft onto plane and returns to the bow when slowing`,()=>{
 const g=game();g.run(`boating=true;activeVessel='${vessel}';resetBoatMotion();let hullWakeProfile,wakeStarts=[];const wakeHeading=.6;`);
 const contacts=[];
@@ -3264,11 +3279,10 @@ g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.roll'),0);assert.equal
 
 test('seated boat riders follow the full hull bank through steering reversals',()=>{
 const g=game();
-g.run(`let riderLimbs=[],riderTransforms=[];
-characterLimb=(points,color)=>riderLimbs.push({points,color});
-ctx.transform=(...matrix)=>riderTransforms.push(matrix);boating=true;`);
+g.run(`let riderLimbs=[];
+characterLimb=(points,color)=>riderLimbs.push({points,color});boating=true;`);
 for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*1.5])for(const roll of [-.48,0,.48])for(const turn of [-1,1]){
-g.run(`riderLimbs=[];riderTransforms=[];boatMotion.turnRate=${turn};drawSeatedBoatRider(100,200,${heading},${roll});`);
+g.run(`riderLimbs=[];boatMotion.turnRate=${turn};boatMotion.steering=${turn}*.5;drawSeatedBoatRider(100,200,${heading},${roll});`);
 const limbs=JSON.parse(g.run('JSON.stringify(riderLimbs)'));
 const project=(along,across,height)=>{
 const c=Math.cos(heading),s=Math.sin(heading),cr=Math.cos(roll),sr=Math.sin(roll);
@@ -3280,9 +3294,15 @@ for(const [index,leg] of [[1,-1],[3,1]]){
 const expected=[project(0,leg*2,0),project(4,leg*2,-1),project(5,leg*2,-4)];
 limbs[index].points.forEach((point,i)=>near(point,expected[i]));
 }
-const transforms=JSON.parse(g.run('JSON.stringify(riderTransforms)'));
-assert.ok(transforms.length>0);
-for(const matrix of transforms)near(matrix,[1,0,Math.sin(heading)*Math.sin(roll)/.85,Math.cos(roll)-Math.cos(heading)*Math.sin(roll)/.85,0,0]);
+const arms=limbs.filter(l=>l.color==='#e4bd88'&&l.points.length===3);
+assert.equal(arms.length,2);
+const farSide=Math.cos(heading)>=0?-1:1;
+for(const [i,side] of [[0,farSide],[1,-farSide]]){
+near(arms[i].points[0],project(.6,side*3.4,5.7));
+near(arms[i].points[1],project(3.2,side*3.2,2.7));
+const angle=(side<0?Math.PI*.75:Math.PI*.25)+turn*.15;
+near(arms[i].points[2],project(5.5+Math.sin(angle)*1.2,Math.cos(angle)*3.5,5+Math.sin(angle)*2.8));
+}
 const mount=limbs.find(l=>l.color==='#52676c');
 near(mount.points[0],project(7,0,-1));near(mount.points[1],project(5.5,0,5));
 }
@@ -3296,7 +3316,7 @@ ctx.save=()=>headStack.push(headMatrix.slice());ctx.restore=()=>{headMatrix=head
 ctx.transform=headMultiply;ctx.translate=(x,y)=>headMultiply(1,0,0,1,x,y);
 ctx.scale=(x,y)=>headMultiply(x,0,0,y,0,0);
 ctx.rotate=a=>headMultiply(Math.cos(a),Math.sin(a),-Math.sin(a),Math.cos(a),0,0);
-characterHead=(x,y)=>heads.push({matrix:headMatrix.slice(),x,y});`);
+drawBoatDriverFace=(x,y)=>heads.push({matrix:headMatrix.slice(),x,y});`);
 for(const characterType of ['boy','girl'])for(let i=0;i<8;i++)for(const roll of [-.48,0,.48]){
 const heading=i*Math.PI/4;
 g.run(`heads=[];currentProfile().character='${characterType}';drawSeatedBoatRider(100,200,${heading},${roll});`);
@@ -3309,6 +3329,36 @@ const vx=Math.sin(heading)*Math.sin(roll)/.85,vy=Math.cos(roll)-Math.cos(heading
 near(a*x+c*y+e,100-8*vx-3.8*vx/length);
 near(b*x+d*y+f,200-Math.sin(roll)**2*26*.85-8*vy-3.8*vy/length);
 assert.equal(g.run('headStack.length'),0);
+}
+});
+
+test('ferry cabin occludes the aft driver and parked wheel when the bow faces down',()=>{
+const g=game();
+g.run("let ferryLayers=[];drawFerryCabin=()=>ferryLayers.push('cabin');drawSeatedBoatRider=()=>ferryLayers.push('driver');drawBoatSteeringWheel=()=>ferryLayers.push('wheel');activeVessel='ferry';player.x=1100;player.y=1400;boatPosition={x:1100,y:1400};");
+for(const active of [true,false])for(const roll of [-.22,0,.22])for(let i=0;i<8;i++){
+const heading=i*Math.PI/4;
+g.run(`ferryLayers=[];boating=${active};boatMotion.heading=${heading};boatMotion.roll=${roll};boatMotion.waveHeight=20;ferryArt(1100,1400);`);
+const occupant=active?'driver':'wheel';
+assert.equal(g.run('ferryLayers.join(",")'),Math.sin(heading)>0?`${occupant},cabin`:`cabin,${occupant}`,`heading ${heading}, roll ${roll}, active ${active}`);
+}
+});
+
+test('covered cabin corners follow hull heading, bank, and elevation at every viewing angle',()=>{
+const g=game();g.run("let cabinFaces=[];polygon=(points,color)=>cabinFaces.push({points,color});");
+for(let i=0;i<8;i++)for(const roll of [-.22,0,.22]){
+const heading=i*Math.PI/4;
+g.run(`cabinFaces=[];drawFerryCabin(100,200,${heading},${roll});`);
+const faces=JSON.parse(g.run('JSON.stringify(cabinFaces)'));
+const roof=faces.filter(f=>f.color==='#bc7056').at(-1);
+assert.ok(roof,'roof top remains visible');
+const expected=[[-6,-12],[26,-12],[26,12],[-6,12]].map(([along,across])=>{
+const side=across*Math.cos(roll)+28*Math.sin(roll);
+const z=28*Math.cos(roll)-across*Math.sin(roll)+Math.sin(roll)**2*26;
+return [100+Math.cos(heading)*along-Math.sin(heading)*side,200+Math.sin(heading)*along+Math.cos(heading)*side-z*.85];
+});
+roof.points.forEach((p,j)=>p.forEach((v,k)=>assert.ok(Math.abs(v-expected[j][k])<1e-9)));
+assert.ok(faces.some(f=>f.color==='#7bb8bc'),'visible walls have windows');
+assert.ok(faces.every(f=>f.points.every(p=>p.every(Number.isFinite))));
 }
 });
 
@@ -3544,6 +3594,37 @@ g.run('player.x+=3;player.y+=2;advanceGoggleToss(80)');assert.equal(g.run('JSON.
 const before=g.run('JSON.stringify([player,goggleToss])');g.run('drawGoggleToss();drawGoggleToss()');assert.equal(g.run('JSON.stringify([player,goggleToss])'),before);
 g.run('advanceGoggleToss(100)');assert.equal(g.run('goggleArmActive()'),false,'ordinary arm returns after follow-through');
 }
+});
+
+function watersportsCallGame(){
+const g=game();g.run("state.wakeboard=true;state.waterskis=true;visitWatersportsDock();startWakeboarding();advanceWakeboarding(4000);releaseWakeboardBoat(wakeboardRide);wakeboardRide=null;player.x=WATERSPORTS_DOCK.x;player.y=WATERSPORTS_DOCK.y-18;updateWaterControls();");return g;
+}
+test('watersports dock offers a call command while the empty boat is away and restores both ride choices',()=>{
+for(const input of ['button','keyboard','interact']){
+const g=watersportsCallGame();
+assert.equal(g.node('#mapWatersportsCall').hidden,false);
+assert.equal(g.node('#mapWakeboardStart').hidden,true);
+g.run('const callResources=JSON.stringify([state.crystals,currentProfile().power,boatMotion]);');
+if(input==='button')g.node('#mapWatersportsCall').onclick();
+else if(input==='keyboard')g.run('window.listeners.keydown.find(l=>!l.capture).handler({key:"e",repeat:false,target:{tagName:"BUTTON"},preventDefault(){}})');
+else g.run('near=101;interact()');
+assert.equal(g.run('wakeboardBoatTrip'),null,input);
+assert.equal(g.run('wakeboardDockHeading'),Math.PI*1.5);
+assert.equal(g.run('wakeboardRide'),null,'calling does not start a ride');
+assert.equal(g.run('JSON.stringify([state.crystals,currentProfile().power,boatMotion])'),g.run('callResources'));
+assert.equal(g.node('#mapWatersportsCall').hidden,true);
+assert.equal(g.node('#mapWakeboardStart').hidden,false);
+assert.equal(g.node('#mapWaterskisStart').hidden,false);
+g.run("startWakeboarding('waterskis')");assert.equal(g.run('wakeboardRide.equipment'),'waterskis');
+}
+});
+test('watersports boat call respects location, dialogs, recovery, repairs, and berth collisions',()=>{
+for(const setup of ['player.x=1000','swimming=true','wakeboardCrash={elapsed:0}',"boatRepairs.set('tow',{vessel:'tow',elapsed:0})",'ferryPosition={x:590,y:265};ferryHeading=Math.PI/2',"$('#challenge').showModal()"]){
+const g=watersportsCallGame();g.run(`const tripBeforeCall=JSON.stringify(wakeboardBoatTrip);${setup};callWatersportsBoat();`);
+assert.equal(g.run('JSON.stringify(wakeboardBoatTrip)'),g.run('tripBeforeCall'),setup);
+}
+const g=game();g.run('visitWatersportsDock();updateWaterControls();callWatersportsBoat()');
+assert.equal(g.node('#mapWatersportsCall').hidden,true);assert.equal(g.run('wakeboardBoatTrip'),null);
 });
 
 test('tow boat accelerates gradually with shared propulsion and keeps its motion independent',()=>{
@@ -4203,4 +4284,43 @@ assert.ok(g.run('alphas.every(alpha=>alpha>0&&alpha<.1)'),'mist fades as a trans
 g.run('for(const p of mist)p.age=p.life;alphas=[];drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true)');
 assert.equal(g.run('alphas.length'),0,'mist disappears without a heavy landing splash');
 }
+});
+
+for(const equipment of ['waterskis','wakeboard'])test(`${equipment} leaves scaled boat whitewater and spray that fades after release`,()=>{
+const g=game();g.run(`state.${equipment}=true;visitWatersportsDock();startWakeboarding('${equipment}');for(let i=0;i<100;i++)advanceSwimming(40)`);
+assert.equal(g.run('!!wakeboardRide'),true);
+assert.ok(g.run('watersportsRiderWake.wake.length')>0);
+assert.ok(g.run('watersportsRiderWake.bowWake.length')>0);
+assert.equal(g.run('new Set(watersportsRiderWake.bowWake.map(w=>w.side)).size'),2);
+assert.ok(g.run('watersportsRiderWake.bowWake.every(w=>w.scale>0&&w.scale<1&&Number.isFinite(w.velocity))'));
+g.run('const riderWakeBefore=JSON.stringify(watersportsRiderWake);let riderSprayStrokes=0;ctx.stroke=()=>riderSprayStrokes++;drawBoatWake(watersportsRiderWake)');
+assert.ok(g.run('riderSprayStrokes')>0);
+assert.equal(g.run('JSON.stringify(watersportsRiderWake)'),g.run('riderWakeBefore'));
+g.run('finishWakeboarding();const lingeringWake=JSON.stringify(watersportsRiderWake)');
+assert.ok(g.run('watersportsRiderWake.bowWake.length')>0);
+g.node('#challenge').showModal();g.run('advanceSwimming(400)');
+assert.equal(g.run('JSON.stringify(watersportsRiderWake)'),g.run('lingeringWake'));
+g.node('#challenge').close();g.run('advanceSwimming(3700)');
+assert.equal(g.run('watersportsRiderWake.bowWake.length+watersportsRiderWake.wake.length'),0);
+g.run('resetWatersports()');assert.equal(g.run('watersportsRiderWake.distance||0'),0);
+});
+
+for(const equipment of ['waterskis','wakeboard'])test(`${equipment} detailed rider animates above fixed bindings and renders every direction without advancing state`,()=>{
+const g=game();g.run(`state.${equipment}=true;visitWatersportsDock();startWakeboarding('${equipment}');for(let i=0;i<80;i++)advanceSwimming(40)`);
+assert.ok(g.run('wakeboardRide.riderPhase')>0);
+g.run('const originalRiderPhase=wakeboardRide.riderPhase');g.node('#challenge').showModal();g.run('advanceSwimming(400)');
+assert.equal(g.run('wakeboardRide.riderPhase'),g.run('originalRiderPhase'));g.node('#challenge').close();
+g.run(`wakeboardRide.riderPhase=0;const firstPose=watersportsRiderPose(wakeboardRide);wakeboardRide.riderPhase=1;const secondPose=watersportsRiderPose(wakeboardRide)`);
+assert.equal(g.run('JSON.stringify(firstPose.legs.map(l=>l.foot))'),g.run('JSON.stringify(secondPose.legs.map(l=>l.foot))'));
+assert.notEqual(g.run('JSON.stringify(firstPose.chest)'),g.run('JSON.stringify(secondPose.chest)'));
+g.run(`let riderDrawDepth=0;
+ctx.save=()=>{riderDrawDepth++};ctx.restore=()=>{riderDrawDepth--;if(riderDrawDepth<0)throw Error('unbalanced rider transform')};
+for(const method of ['translate','rotate','scale','moveTo','lineTo','quadraticCurveTo','bezierCurveTo','ellipse','fillRect'])ctx[method]=(...values)=>{if(values.some(v=>typeof v==='number'&&!Number.isFinite(v)))throw Error('invalid rider geometry: '+method)};
+for(const character of ['boy','girl'])for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*1.5]){
+currentProfile().character=character;wakeboardRide.heading=heading;wakeboardRide.rider.vx=Math.cos(heading)*110;wakeboardRide.rider.vy=Math.sin(heading)*110;
+for(const lean of [-1,0,1]){wakeboardRide.riderLean=lean;const beforeDraw=JSON.stringify(wakeboardRide);drawWatersports();if(JSON.stringify(wakeboardRide)!==beforeDraw)throw Error('drawing changed rider state');}
+}`);
+assert.equal(g.run('riderDrawDepth'),0);
+g.run('finishWakeboarding();advanceSwimming(200);drawWakeboardCrash()');
+assert.equal(g.run('riderDrawDepth'),0);
 });

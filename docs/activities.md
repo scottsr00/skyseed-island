@@ -3,7 +3,7 @@
 ## Code map and integration
 
 In `dist/app.js`: `nearWatersportsDock()`, `updateWakeboardUI()`, `startWakeboarding()`, `buyWakeboard()`,
-`buyWaterskis()`, `advanceWakeboarding()`, `finishWakeboarding()`, `resetWatersports()`,
+`buyWaterskis()`, `canCallWatersportsBoat()`, `callWatersportsBoat()`, `advanceWakeboarding()`, `finishWakeboarding()`, `resetWatersports()`,
 `startVolleyball()`, `hitVolleyball()`, `advanceVolleyball()`, `leaveVolleyball()`,
 `resetVolleyball()`, `startFrisbee()`, `frisbeeAction()`, `advanceFrisbee()`, `leaveFrisbee()`,
 and `resetFrisbee()`.
@@ -24,7 +24,10 @@ there is no separate equipment popup. Watersports gear is not listed in Island u
 normal bottom-screen actions show Start wakeboarding (E) for an owned wakeboard and Start
 waterskiing (R) for owned waterskis. Both actions appear when both are owned; either launches
 directly without an equipment chooser. E and R work at the dock while a button has keyboard focus.
-Actions disable while the tow boat returns or is exploding. When the Woodland Bridge crosses the
+While the empty tow boat is away, Call watersports boat (E) replaces the launch actions
+at the dock. The button and keyboard command bring it straight back to its berth for another
+ride, without spending energy or crystals. A blocked berth must be cleared first. The call
+is unavailable during a ride, recovery, dialogs, or boat destruction/repairs. When the Woodland Bridge crosses the
 usual launch position, the rider starts closer to the tow boat with slack in the rope.
 Waterskis appear as twin skis and use the same towing controls. Both purchases save per
 explorer and age level. The boat automatically follows the center of the island channel to a

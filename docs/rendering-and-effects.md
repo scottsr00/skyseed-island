@@ -16,7 +16,11 @@ through `characterRect()`, `characterEllipse()`, `characterLimb()`, and `charact
 for finer silhouettes and continuous joints. Explorer arm swing, knee flexion, body bob, and
 hair sway follow the existing distance-driven `walkingStep()`; rendering does not advance the gait.
 The explorer renderer supplies mounted riders and court play; `drawSeatedBoatRider()` supplies
-boat occupants with bent legs, forward arms, and heading-based facing. Side-view
+boat occupants with bent legs and forward arms. Driver shoulders, elbows, vest panels, and
+hands use the hull projection continuously through turns. Hidden vest faces are culled,
+and the hands grip the corresponding sides of the wheel using that vessel’s steering state.
+`drawBoatDriverFace()` moves facial features around a round, banked head continuously with
+heading. The tow captain shares this renderer with its own motion. Explorer side-view
 shoulders sit behind the chest, elbows bend forward, and arms counter-swing against their legs.
 
 ## Presentation
@@ -107,7 +111,10 @@ attached foam and `recordHullWake()` for world-space wake emission. At low forwa
 trim-4 top speed, a smooth transition moves the contact aft along its hull edge as it planes.
 Slowing moves the contact forward again. `drawBoatBowWake()` follows that waterline, while
 `recordBoatMovement()` and `updateTowBoatMotion()` leave wave fragments at the same contact region. Existing fragments
-stay in the water through turns and fade after stopping. Reverse emits no bow foam.
+stay in the water through turns and fade after stopping. The ferry uses 1.7× wider attached
+foam and larger foam patches; its recorded fragments retain that size for broader, faster-spreading
+whitewater arms as it plows through the water. Other vessels keep their existing wake size.
+Reverse emits no bow foam.
 
 Hull contact throws short airborne fans of spray through `drawBoatHullSpray()`, with more
 droplets and greater height and reach as speed increases, including at neutral motor trim.
@@ -130,7 +137,11 @@ The shallow chine tapers inward to a raked, varying-depth keel, keeping the expo
 `boatHullLift()` uses squared sine of bank so lift eases smoothly through level during turn reversals;
 riders, motors, and cabins follow that lift. Back-face culling and water-surface clipping expose only
 the raised, visible underside, so the
-amount of bottom showing depends on the viewing angle. Cabins lean with their hull. Seated occupants use the full hull roll for their seat, bent legs,
+amount of bottom showing depends on the viewing angle. `drawFerryCabin()` projects cabin walls, windows, roof, chimney, and flag mount through
+`boatHullProjection()`, so the covered cabin turns and banks with the hull. Hidden faces are
+culled, and the flagpole follows the same elevation axis. `ferryArt()` orders the aft driver
+and steering wheel against the cabin by heading: a bow facing down puts the opaque cabin
+in front of the driver, while a bow facing up leaves the driver in front. Seated occupants use the full hull roll for their seat, bent legs,
 steering wheel, and upper body at every heading. `beginBoatRiderLean()` projects torso elevation
 with the same roll as `boatHullProjection()`; steering reversals follow the actual hull bank
 until it settles onto the other side. `drawBoatRiderHead()` follows the banked neckline with
@@ -275,3 +286,21 @@ See [testing](testing.md). Drawing tests use Canvas substitutes: they can detect
 some geometry regressions, but do not establish visual quality. Inspect the affected scene in a
 browser at desktop and narrow/touch sizes. Check camera edges, layering above/below structures,
 paused frames, effects lifecycle, and recovery after profile/age/reset changes.
+
+Waterskis and wakeboards also use `recordHullWake()` and `drawBoatWake()` for their own
+world-space whitewater arms, central churn, and speed-driven airborne spray. The optional
+sample scale reduces contact offsets, sample spacing, crest spread, wash size, and spray
+height/reach to 55% for skis and 45% for the board. `watersportsRiderWake` follows actual
+rider movement independently of the tow boat, pauses with dialogs, and fades through
+`ageBoatWake()` after release or a crash. Watersports resets clear the residual samples.
+
+`watersportsRiderPose()` and `drawWatersportsRider()` use fractional character primitives
+for detailed heads, life vests, jointed knees/elbows, and hands gripping the tow handle.
+Skis use a parallel stance; board bindings use a sideways stance. Feet stay on the equipment
+while distance-driven knee compression and body bob absorb water chatter. A damped lateral
+lean follows rider velocity relative to the boat. `advanceWakeboarding()` owns the transient
+phase and lean, so dialogs freeze animation and drawing never advances it. `drawTowEquipment()`
+shares curved tips, edge highlights, graphics, and bindings with the release animation.
+
+Watersports riders use a low hip and compact knee bend; the tow grip follows the chest
+at a short bent-arm reach, keeping limb proportions compact through turns and body bob.
