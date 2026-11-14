@@ -5904,6 +5904,7 @@ if(nearbyBeachDiscovery()===index){rect(x-48,y+19,96,12,'#fff3cf');ctx.font='bol
 function drawMainlandBeach(){
 if(!islandInView(mainlandBeach))return;
 polygon(beachPoly,'#d8bd83',5);polygon(beachPoly,'#ead6a1');
+drawBeachShoreWash();
 rect(WORLD.left,WORLD.height-18,WORLD.width,18,'#dfc58d');
 const courts=VOLLEYBALL_COURTS.map(c=>c.x);
 for(const p of beachSunbathers()){

@@ -21,8 +21,13 @@ relevant simulation and trails. `surfWaveSize()`, `surfRideScale()`, `surfRideVi
 
 A surf rental shack on Mainland Beach rents a board for 20 crystals until it is returned. Ambient
 beach swells have a rounded, shaded lip that peels right to left, trails scattered spray and
-whitewater, then flattens into patchy foam against the mainland shore. Crumbling foam follows island
-coastlines; water clipping and drawing waves beneath land keep the islands clear. Renting adds
+whitewater, then flattens into patchy foam against the mainland shore. `drawBeachShoreWash()`
+continues each arriving crest onto the sand as a shallow sheet with a broken foam fringe, then
+recedes across damp sand. It draws above the beach surface and beneath beach occupants and props;
+`beachWaveWashProfile()` keeps the retreat continuous when the offshore wave cycle wraps.
+The upward drifting spray
+starts beside the mouth's top edge, where the lip meets the curl, with three lines fanning left.
+Crumbling foam follows island coastlines; offshore waves clip to water beneath land. Renting adds
 catchable crests in the local break. Wave height increases with distance from shore: the outer break
 at 280 world units retains the original full-size wave, while every nearer wave is smaller. Catching
 a wave fixes its height for that ride; paddle-out controls show the available size.

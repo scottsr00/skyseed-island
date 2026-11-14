@@ -333,7 +333,7 @@ surfContour(points([[32,-.84],[13,-1.02],[-7,-1.04],[-23,-.9],[-33,-.62],[-37,-.
 drawBeachWaveWhitewater(x,y,height,time,seed);
 }
 function drawBeachWaveWhitewater(x,y,height,time,seed){
-const h=20,scale=height/50;
+const scale=height/50;
 const trailStart=x+25*scale,trailEnd=Math.min(x+600,WORLD.right),trailLength=Math.max(1,trailEnd-trailStart);
 // Foam ribbons span the trailing wave, narrowing and fading toward its far end.
 ctx.save();
@@ -405,12 +405,13 @@ const size=Math.max(1,(1-age)*3.4*scale);
 rect(px,py,size,size,'#effff3');
 }
 ctx.restore();
-// Small drifting droplets and separated foam patches prevent a solid, blocky edge.
-for(let i=0;i<12;i++){
+// Launch three drifting spray lines from the lip/curl junction, fanning left.
+for(let i=0;i<36;i++){
 const grain=surfFoamNoise(i+seed*53),age=(time*.00065+grain)%1;
-const dx=-24-age*(10+grain*18),dy=-h*.7-Math.sin(age*Math.PI)*(4+grain*7)+age*age*9;
+const leftOffset=Math.floor(i/12)*3;
+const dx=-14-age*(10+grain*18),dy=-Math.sin(age*Math.PI)*(4+grain*7)+age*age*9;
 ctx.globalAlpha=(1-age)*.65;
-rect(x-dy*scale,y+dx*scale,1,grain>.7?2:1,'#eafff1');
+rect(x-(dy+leftOffset)*scale,y+dx*scale,1,grain>.7?2:1,'#eafff1');
 }
 }
 function drawBeachWaves(){
@@ -460,6 +461,43 @@ drawBeachWaveLip(x,waveY(x),height,collapse,time,i+section*3);
 }
 }
 drawCoastalCrumble(time);
+ctx.restore();
+}
+function beachWaveWashProfile(distance){
+// Continue the spent crest through its offshore wrap so the wash can recede.
+const progress=distance<=60?(60-distance)/49:distance>=300?1+(335-distance)/35:null;
+if(progress===null)return null;
+const retreat=Math.max(0,progress-1);
+const edge=progress<=1?-60+78*Math.sin(progress*Math.PI/2):18-24*(1-Math.cos(retreat*Math.PI/2));
+return {edge,alpha:Math.min(1,progress*5)*(1-retreat),wet:progress<=1?Math.max(0,edge)+5:23};
+}
+function drawBeachShoreWash(){
+const time=state.surfRental?surfClock:frame*16.667;
+const start=Math.max(WORLD.left,Math.floor(camera.x/4)*4),end=Math.min(WORLD.right,camera.x+WORLD.viewWidth+4);
+ctx.save();
+for(let i=0;i<3;i++){
+const wash=beachWaveWashProfile(surfWaveDistance(i,time));if(!wash||wash.alpha<=0)continue;
+for(let x=start;x<end;x+=4){
+const shore=beachShoreY(x),grain=surfFoamNoise(Math.floor(x/4)+i*313);
+const ripple=Math.sin(x*.025+time*.0014)*2+grain*1.5;
+const edge=shore+wash.edge+ripple;
+// Damp sand remains visible through the thin sheet of water.
+ctx.globalAlpha=wash.alpha*.25;
+rect(x,shore,4,wash.wet,'#a59e76');
+const depth=Math.max(0,edge-(shore-61));
+for(let band=0;band<8;band++){
+ctx.globalAlpha=wash.alpha*.45*(band+1)/8;
+rect(x,shore-61+depth*band/8,4,depth/8,'#91c9bd');
+}
+// A broken foam fringe advances onto the sand, then thins on the backwash.
+ctx.globalAlpha=wash.alpha*(.55+grain*.35);
+rect(x,edge,4,1+grain*2,'#effff0');
+if(grain>.45){
+ctx.globalAlpha=wash.alpha*.4;
+rect(x-1,edge-3-grain*5,2+grain*2,1,'#d8f3e7');
+}
+}
+}
 ctx.restore();
 }
 function drawSurfOcean(){

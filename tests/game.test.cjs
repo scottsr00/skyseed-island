@@ -2615,6 +2615,22 @@ assert.equal(g.run("coastOrder.filter(x=>x==='waves').length"),1);
 for(const layer of ['land','swimmer','beach'])assert.ok(g.run(`coastOrder.indexOf('waves')<coastOrder.indexOf('${layer}')`));
 });
 
+test('beach shore wash advances onto sand and recedes continuously after the wave wraps',()=>{
+const g=game();
+assert.equal(g.run('beachWaveWashProfile(150)'),null);
+assert.equal(g.run('beachWaveWashProfile(60).alpha'),0);
+assert.ok(g.run('beachWaveWashProfile(30).edge')>0,'the spent wave crosses onto sand');
+assert.equal(g.run('beachWaveWashProfile(11).edge'),18);
+assert.equal(g.run('JSON.stringify(beachWaveWashProfile(11))'),g.run('JSON.stringify(beachWaveWashProfile(335))'),'the wave wrap preserves the wash');
+assert.ok(g.run('beachWaveWashProfile(315).edge')<18,'backwash retreats');
+assert.equal(g.run('beachWaveWashProfile(300).alpha'),0);
+g.run(`camera.x=820;camera.y=1500;const washOrder=[];
+polygon=()=>washOrder.push('sand');drawBeachShoreWash=()=>washOrder.push('wash');
+drawSunbatherTowel=()=>washOrder.push('towel');drawMainlandBeach()`);
+assert.ok(g.run("washOrder.indexOf('wash')>washOrder.indexOf('sand')"));
+assert.ok(g.run("washOrder.indexOf('towel')>washOrder.indexOf('wash')"));
+});
+
 test('whitewater alone covers swimmers and duck-diving boards, with nose-first entry and resurfacing',()=>{
 const g=surfGame();
 g.run(`surfClock=1000;const lipX=beachWaveProfile(1100,1,surfClock,true).front;
