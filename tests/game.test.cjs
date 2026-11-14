@@ -1158,7 +1158,7 @@ assert.equal(g.run('state.boatIslandsVisited.length'),12);g.run('journal()');ass
 test('outer island arrival and the parked boat survive reloads without stranding the explorer',()=>{
 const g=game();g.run('state.catches={barracuda:5};boating=true;state.ferryRemaining=FERRY_RIDE_DURATION;player.x=boatIslands[0].dock.x+43;player.y=boatIslands[0].dock.y+15;boatMotion.heading=.75;exitBoat();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');
 const parked=g.run('JSON.stringify(boatPosition)'),restored=game(null,g.snapshot());
-assert.equal(restored.run('state.boatIsland'),'palm-cove');assert.equal(restored.run('canWalk(player.x,player.y)'),true);assert.equal(restored.run('JSON.stringify(boatPosition)'),parked);assert.equal(restored.run('boatMotion.heading'),.75);
+assert.equal(restored.run('state.boatIsland'),'palm-cove');assert.equal(restored.run('canWalk(player.x,player.y)'),true);assert.equal(restored.run('JSON.stringify(boatPosition)'),parked);assert.equal(restored.run('boatMotion.heading'),Math.PI/2);
 restored.run('boardOwnBoat()');assert.equal(restored.run('boating'),true);
 });
 test('expanded ocean supports camera movement, creatures, and fishing beyond the old boundaries',()=>{
@@ -1239,7 +1239,7 @@ g.run('advanceSwimming(700)');assert.equal(g.node('#mapBoatBoard').hidden,false)
 });
 test('ferry outer-island docking and its vessel type survive reloads and permit reboarding',()=>{
 const g=game();g.run('state.ferryTicket=true;boardFerry();player.x=boatIslands[1].dock.x+43;player.y=boatIslands[1].dock.y+15;boatMotion.heading=.9;exitBoat();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION)');assert.equal(g.run('state.boatIsland'),'coral-key');assert.equal(g.run('canBoardIslandBoat()'),true);assert.equal(g.run('state.parkedBoat.vessel'),'ferry');
-const restored=game(null,g.snapshot());assert.equal(restored.run('activeVessel'),'ferry');assert.equal(restored.run('sponsored()'),false);assert.equal(restored.run('canBoardIslandBoat()'),true);assert.equal(restored.run('boatMotion.heading'),.9);restored.run('boardOwnBoat();draw()');assert.equal(restored.run('boating'),true);
+const restored=game(null,g.snapshot());assert.equal(restored.run('activeVessel'),'ferry');assert.equal(restored.run('sponsored()'),false);assert.equal(restored.run('canBoardIslandBoat()'),true);assert.equal(restored.run('boatMotion.heading'),Math.PI/2);restored.run('boardOwnBoat();draw()');assert.equal(restored.run('boating'),true);
 });
 
 test('pet dragon splashes down, swims with a wake, then takes off again',()=>{
@@ -1368,7 +1368,7 @@ test('beach pass gates swimming ashore while ordinary boat anchors remain includ
 const g=game();g.run('swimming=true');
 assert.equal(g.run('canWalk(1200,1750)'),false);
 g.run('state.crystals=50;buyBeachPass()');assert.equal(g.run('canWalk(1200,1750)'),true);
-const fresh=game();fresh.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=1000;exitBoat()');
+const fresh=game();fresh.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=1200;exitBoat()');
 assert.equal(fresh.run('boatAnchorCasting()'),true);assert.equal(fresh.run('state.beachPass'),false);
 });
 test('legacy profile anchor purchases become beach passes without another charge',()=>{
@@ -1826,7 +1826,9 @@ const b=${JSON.stringify(span)};
 for(let t=.2;t<.9;t+=.2)for(const p of [
 {x:b.x,y:b.y+b.h*t,dx:-3,dy:0},{x:b.x+b.w,y:b.y+b.h*t,dx:3,dy:0},
 {x:b.x+b.w*t,y:b.y,dx:0,dy:-3},{x:b.x+b.w*t,y:b.y+b.h,dx:0,dy:3}]){
-if(openSea(p.x+p.dx,p.y+p.dy))return p;
+player.x=p.x;player.y=p.y;player.facing=p.dx<0?'left':p.dx>0?'right':p.dy<0?'up':'down';
+// A closely moored hull can block an otherwise exposed sea edge.
+if(openSea(p.x+p.dx,p.y+p.dy)&&dockDiveTarget())return p;
 }
 return null;})())`));
 assert.ok(edge,'timber must have an exposed sea edge');
@@ -1837,6 +1839,35 @@ assert.equal(g.node('#mapDive').hidden,false);
 g.run('window.listeners.keydown.find(l=>!l.capture).handler({key:"x",repeat:false,target:{tagName:"CANVAS"},preventDefault(){}})');
 assert.equal(g.run('swimming'),true);assert.ok(g.run('!!diveAnimation'));
 }
+});
+test('bridge approach buffer guides walkers across both ends and edges without diving',()=>{
+const g=game();g.run('state.upgrades=["bridge"]');
+const spans=JSON.parse(g.run('JSON.stringify([...crossings,woodlandBridge])'));
+for(const b of spans)for(const direction of [-1,1])for(const side of [-1,1])for(const offset of [4,10]){
+const horizontal=b.w>b.h,start=horizontal?b.x:b.y,length=horizontal?b.w:b.h;
+const across=(horizontal?b.y:b.x)+(side<0?-offset:(horizontal?b.h:b.w)+offset);
+const end=direction>0?start:start+length;
+const origin=JSON.parse(g.run(`JSON.stringify((()=>{
+for(let d=0;d<=12;d++){
+const p=${horizontal?`{x:${end}-d*${direction},y:${across}}`:`{x:${across},y:${end}-d*${direction}}`};
+if(canWalk(p.x,p.y)&&!walkableTimberAt(p.x,p.y))return p;
+}return null;})())`));
+assert.ok(origin,JSON.stringify({b,direction,side,offset}));
+g.run(`swimming=false;diveAnimation=null;shoreRecovery=null;player.x=${origin.x};player.y=${origin.y}`);
+for(let step=0;step<length+16;step++)g.run(`moveExplorer(${horizontal?direction:0},${horizontal?0:direction})`);
+assert.equal(g.run('swimming'),false,JSON.stringify({b,direction,side,offset}));
+assert.equal(g.run('diveAnimation'),null);
+assert.ok(g.run(horizontal?`player.x*${direction}>${end*direction+length}`:`player.y*${direction}>${end*direction+length}`),JSON.stringify({b,direction,side,offset,origin,player:g.run("JSON.stringify(player)")}));
+}
+});
+test('bridge approach buffer excludes unbuilt bridges, distant edges and sideways approaches',()=>{
+const g=game();
+g.run('const b=woodlandBridge');
+assert.equal(g.run('bridgeApproachTarget(b.x-4,b.y-1,0,2)'),null);
+g.run('state.upgrades=["bridge"]');
+assert.equal(g.run('bridgeApproachTarget(b.x-13,b.y-1,0,2)'),null);
+assert.equal(g.run('bridgeApproachTarget(b.x-4,b.y+b.h/2,2,0)'),null);
+assert.equal(g.run('bridgeApproachTarget(b.x-4,b.y-1,0,-2)'),null);
 });
 test('ordinary shoreline offers no X suggestion and walking into water still dives',()=>{
 const g=game();g.run(`{
@@ -1930,13 +1961,14 @@ assert.equal(g.run(`boatPoseClear(${b.x+b.w/2},${b.y+b.h/2},0,'${vessel}')`),fal
 }
 });
 
-test('the Whispering crossing becomes a short ferry pier with open turning room to the west',()=>{
+test('the snug Whispering ferry pier retains clear water for turning to the west',()=>{
 const g=game();g.run('state.ferryTicket=true;boardFerry()');
 assert.equal(g.run('dock.x'),232);assert.equal(g.run('dock.y'),285);
 assert.equal(g.run('canWalk(player.x,player.y)'),true);
 const x=g.run('player.x'),y=g.run('player.y');assert.ok(x<g.run('dock.x'));
-for(let i=0;i<32;i++)assert.equal(g.run(`boatPoseClear(${x},${y},${i}*Math.PI/16,'ferry')`),true,`turn ${i}`);
-g.run('moveExplorer(-55,0);moveExplorer(0,100);draw()');assert.equal(g.run('player.x'),x-55);assert.equal(g.run('player.y'),y+100);
+assert.equal(g.run(`boatPoseClear(${x},${y},Math.PI/2,'ferry')`),true);
+g.run('moveBoat(-55,0,boatMotion.heading);moveExplorer(0,100);draw()');assert.equal(g.run('player.x'),x-55);assert.equal(g.run('player.y'),y+100);
+for(let i=0;i<32;i++)assert.equal(g.run(`boatPoseClear(${x-55},${y+100},${i}*Math.PI/16,'ferry')`),true,`turn ${i}`);
 g.run('returnBoat()');assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('nearby()'),7);
 assert.equal(g.run('canWalk(232,320)'),false);assert.equal(g.run('crossings.length'),2);
 assert.equal(g.run('canWalk(woodlandBridge.x+woodlandBridge.w/2,woodlandBridge.y+woodlandBridge.h/2)'),false);
@@ -2267,7 +2299,7 @@ g.run('driveBoat(100,1,0)');assert.equal(g.run('player.x'),1100);
 g.run('advanceSwimming(549)');assert.equal(g.run('boatMotion.engineStage'),'starting');
 g.run('let puffs=0;ellipse=()=>puffs++;drawBoatExhaust(player.x,player.y,boatMotion.heading,activeVessel)');assert.ok(g.run('puffs')>0);
 g.run('advanceSwimming(1)');assert.equal(g.run('boatMotion.engineStage'),'running');
-g.run('driveBoat(100,1,0)');assert.ok(g.run('player.x')>1100);
+g.run('driveBoat(100,1,0)');assert.ok(g.run('Math.hypot(player.x-1100,player.y-1400)>0'));
 g.run('advanceSwimming(500);puffs=0;drawBoatExhaust(player.x,player.y,boatMotion.heading,activeVessel)');assert.equal(g.run('puffs'),0);
 });
 test('ferry outboards are visibly larger than fishing outboards',()=>{
@@ -3011,17 +3043,17 @@ g.node('#nextQuestion').onclick();assert.equal(g.run('active'),101);
 test('the fishing boat launches from normal dock actions and returns to a walkable landing',()=>{
 const g=game({solved:[],upgrades:[],catches:{shark:5},sponsorshipAnnounced:true});
 assert.ok(g.run('Math.hypot(fishingBoatPosition.x-fishingDock.x,fishingBoatPosition.y-fishingDock.y)')<45);
-assert.equal(g.run("boatPoseClear(boatPosition.x,boatPosition.y,0,'fishing')"),true);
+assert.equal(g.run("boatPoseClear(boatPosition.x,boatPosition.y,boatMotion.heading,'fishing')"),true);
 assert.equal(g.node('#mapFishingBoat').hidden,true);
 g.run('player.x=fishingDock.x;player.y=fishingDock.y-8;updateWaterControls()');
 assert.equal(g.run('fishingActive'),false);assert.equal(g.node('#mapFishingBoat').hidden,false);g.node('#mapFishingBoat').onclick();
 assert.equal(g.node('#mapFishingBoat').hidden,true);
 assert.equal(g.run('boating'),true);assert.equal(g.run('fishingActive'),false);
-assert.ok(g.run('Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)')<45);
+assert.ok(g.run('Math.hypot(player.x-fishingDock.x,player.y-fishingDock.y)')<60);
 g.run('exitBoat()');assert.equal(g.run('swimming'),false);assert.equal(g.run('player.x'),g.run('fishingDock.x'));assert.equal(g.run('canWalk(player.x,player.y)'),true);
 g.run('launchBoat();player.x=1100;player.y=1400;returnBoat()');
 assert.equal(g.run('player.x'),g.run('fishingDock.x'));assert.equal(g.run('player.y'),g.run('fishingDock.y-8'));
-assert.equal(g.run('boatPosition.x'),g.run('BOAT_MOORING.x'));assert.equal(g.run('canWalk(player.x,player.y)'),true);
+assert.ok(g.run('Math.hypot(boatPosition.x-BOAT_MOORING.x,boatPosition.y-BOAT_MOORING.y)<5'));assert.equal(g.run('boatMotion.heading'),Math.PI/2);assert.equal(g.run('boatPoseClear(boatPosition.x,boatPosition.y,boatMotion.heading)'),true);assert.equal(g.run('canWalk(player.x,player.y)'),true);
 g.run('save()');const restored=game(undefined,g.snapshot());assert.equal(restored.run('boatPosition.x'),g.run('BOAT_MOORING.x'));
 g.run('state.ferryTicket=true;boardFerry();returnBoat()');assert.equal(g.run('player.x'),g.run('dock.x'));
 });
@@ -3055,9 +3087,9 @@ g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.r
 
 test('empty boat stops but fishing restores its tank; ferry catches build reserve',()=>{
 const g=game();g.run('state.catches={bass:5};state.sponsorshipAnnounced=true;launchBoat();advanceSwimming(600);player.x=-400;player.y=900;boatPosition={x:player.x,y:player.y};currentProfile().fuel.fishing=.001;boatMotion.velocity=140;driveBoat(1000,1,0)');
-assert.equal(g.run('currentProfile().fuel.fishing'),0);assert.equal(g.run('boatMotion.engineStage'),'off');const x=g.run('player.x');g.run('driveBoat(1000,1,1)');assert.equal(g.run('player.x'),x);
+assert.equal(g.run('currentProfile().fuel.fishing'),0);assert.equal(g.run('boatMotion.engineStage'),'off');const x=g.run('player.x'),y=g.run('player.y');g.run('driveBoat(1000,1,1)');assert.equal(g.run('player.x'),x);
 g.run('openFishing();hookedFish={fish:fishSpecies[6]};landHookedFish()');assert.ok(g.run('currentProfile().fuel.fishing')>=10&&g.run('currentProfile().fuel.fishing')<=15);
-g.run('stopFishing();advanceSwimming(600);driveBoat(1000,1,0)');assert.ok(g.run('player.x')>x);
+g.run('stopFishing();advanceSwimming(600);driveBoat(1000,1,0)');assert.ok(Math.hypot(g.run('player.x')-x,g.run('player.y')-y)>0);
 g.run('returnBoat();state.crystals=25;buyFerryTicket();boardFerry();openFishing();hookedFish={fish:fishSpecies[6]};landHookedFish()');assert.ok(g.run('currentProfile().reserveGas')>=10);assert.equal(g.run('state.ferryRemaining'),g.run('FERRY_RIDE_DURATION'));
 });
 
@@ -3213,6 +3245,56 @@ assert.ok(Math.abs(g.run('boatMotion.roll'))<.0001);
 assert.ok(g.run(`boatRollTarget('${vessel}',140,1)>boatRollTarget('${vessel}',20,1)`));
 assert.equal(g.run(`boatRollTarget('${vessel}',-140,1)`),g.run(`-boatRollTarget('${vessel}',140,1)`));
 g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.roll'),0);assert.equal(g.run('boatMotion.rollVelocity'),0);
+}
+});
+
+test('seated boat riders follow the full hull bank through steering reversals',()=>{
+const g=game();
+g.run(`let riderLimbs=[],riderTransforms=[];
+characterLimb=(points,color)=>riderLimbs.push({points,color});
+ctx.transform=(...matrix)=>riderTransforms.push(matrix);boating=true;`);
+for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*1.5])for(const roll of [-.48,0,.48])for(const turn of [-1,1]){
+g.run(`riderLimbs=[];riderTransforms=[];boatMotion.turnRate=${turn};drawSeatedBoatRider(100,200,${heading},${roll});`);
+const limbs=JSON.parse(g.run('JSON.stringify(riderLimbs)'));
+const project=(along,across,height)=>{
+const c=Math.cos(heading),s=Math.sin(heading),cr=Math.cos(roll),sr=Math.sin(roll);
+const side=across*cr+height/.85*sr,z=height/.85*cr-across*sr+Math.sin(roll)**2*26;
+return [100+c*along-s*side,200+s*along+c*side-z*.85];
+};
+const near=(actual,expected)=>actual.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-9));
+for(const [index,leg] of [[1,-1],[3,1]]){
+const expected=[project(0,leg*2,0),project(4,leg*2,-1),project(5,leg*2,-4)];
+limbs[index].points.forEach((point,i)=>near(point,expected[i]));
+}
+const transforms=JSON.parse(g.run('JSON.stringify(riderTransforms)'));
+assert.ok(transforms.length>0);
+for(const matrix of transforms)near(matrix,[1,0,Math.sin(heading)*Math.sin(roll)/.85,Math.cos(roll)-Math.cos(heading)*Math.sin(roll)/.85,0,0]);
+const mount=limbs.find(l=>l.color==='#52676c');
+near(mount.points[0],project(7,0,-1));near(mount.points[1],project(5.5,0,5));
+}
+});
+
+test('boat rider heads retain their size and shape while following the banked neckline',()=>{
+const g=game();
+g.run(`let headMatrix=[1,0,0,1,0,0],headStack=[],heads=[];
+const headMultiply=(a,b,c,d,e,f)=>{const [A,B,C,D,E,F]=headMatrix;headMatrix=[A*a+C*b,B*a+D*b,A*c+C*d,B*c+D*d,A*e+C*f+E,B*e+D*f+F];};
+ctx.save=()=>headStack.push(headMatrix.slice());ctx.restore=()=>{headMatrix=headStack.pop();};
+ctx.transform=headMultiply;ctx.translate=(x,y)=>headMultiply(1,0,0,1,x,y);
+ctx.scale=(x,y)=>headMultiply(x,0,0,y,0,0);
+ctx.rotate=a=>headMultiply(Math.cos(a),Math.sin(a),-Math.sin(a),Math.cos(a),0,0);
+characterHead=(x,y)=>heads.push({matrix:headMatrix.slice(),x,y});`);
+for(const characterType of ['boy','girl'])for(let i=0;i<8;i++)for(const roll of [-.48,0,.48]){
+const heading=i*Math.PI/4;
+g.run(`heads=[];currentProfile().character='${characterType}';drawSeatedBoatRider(100,200,${heading},${roll});`);
+const heads=JSON.parse(g.run('JSON.stringify(heads)'));
+assert.equal(heads.length,1,'each rider draws one head');
+const {matrix:[a,b,c,d,e,f],x,y}=heads[0];
+const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-9);
+near(a*a+b*b,1);near(c*c+d*d,1);near(a*c+b*d,0);
+const vx=Math.sin(heading)*Math.sin(roll)/.85,vy=Math.cos(roll)-Math.cos(heading)*Math.sin(roll)/.85,length=Math.hypot(vx,vy);
+near(a*x+c*y+e,100-8*vx-3.8*vx/length);
+near(b*x+d*y+f,200-Math.sin(roll)**2*26*.85-8*vy-3.8*vy/length);
+assert.equal(g.run('headStack.length'),0);
 }
 });
 
@@ -3718,4 +3800,185 @@ g.run(`${flag}=true;visitBeachDiscovery(${i})`);assert.notEqual(g.node('#challen
 g.run('state.beachPass=false;visitBeachDiscovery(2)');assert.notEqual(g.node('#challenge').open,true);
 assert.equal(g.run('new Set(BEACH_DISCOVERIES.flatMap(b=>b.ids)).size'),200);
 assert.equal(g.run('beachSunbathers().some(p=>BEACH_DISCOVERIES.some(b=>Math.abs(p.x-b.x)<88))'),false);
+});
+
+test('beach umbrella canopy peaks above its rim',()=>{
+const g=game();g.run(`const panels=[];polygon=(points)=>panels.push(points);drawBeachUmbrellaSprite(100,100,'#85adb8')`);
+const panels=JSON.parse(g.run('JSON.stringify(panels)'));
+assert.equal(panels.length,6);
+for(const [peak,...rim] of panels){assert.equal(peak[1],78);assert.ok(rim.every(p=>p[1]>=86));}
+});
+
+test('burning umbrellas make their own sunbathers stand, wave and flee into the ocean',()=>{
+const g=game();g.run(`const umbrella=[...burnableUmbrellas.values()].at(-1),owner=beachSunbathers().find(p=>p.i===umbrella.sunbather);
+sunbatherReactions.set(owner.i,{elapsed:900});
+petDragonPosition={x:umbrella.x-55,y:umbrella.y-10};petDragonFire={elapsed:200,duration:850};checkDragonFireSceneryHits(burnableUmbrellas)`);
+assert.equal(g.run('umbrella.burnAge'),0);
+assert.equal(g.run('sunbatherReactions.get(owner.i).kind'),'fire');
+assert.equal(g.run('sunbatherReactions.size'),1);
+assert.equal(g.run('sunbatherReactions.get(owner.i).elapsed'),0);
+for(const age of [0,250,500,900,1400]){
+assert.equal(g.run(`fleeingSunbatherPose(owner,${age}).y===owner.y`),true);
+g.run(`drawFleeingSunbather(owner,'#f0c896','#cb8d71',${age})`);
+}
+assert.equal(g.run('fleeingSunbatherPose(owner,1700).y<owner.y'),true);
+assert.equal(g.run('fleeingSunbatherPose(owner,10000).swimming'),true);
+assert.equal(g.run('fleeingSunbatherPose(owner,10000).y<beachShoreY(owner.x)'),true);
+g.run('advanceSunbathers(10000);drawSunbather(owner,"#f0c896","#cb8d71")');
+assert.equal(g.run('sunbatherReactions.get(owner.i).elapsed'),10000);
+g.node('#challenge').showModal();g.run('advanceSunbathers(500)');
+assert.equal(g.run('sunbatherReactions.get(owner.i).elapsed'),10000);g.node('#challenge').close();
+g.run('petDragonFire.elapsed=200;checkDragonFireSceneryHits(burnableUmbrellas)');
+assert.equal(g.run('sunbatherReactions.get(owner.i).elapsed'),10000);
+g.run('resetPetDragon()');assert.equal(g.run('sunbatherReactions.size'),0);
+});
+
+test('dragon burns a lifeguard chair and the guard builds a reusable sandcastle lookout',()=>{
+const g=game();g.run(`const chair=burnableLifeguardChairs.get(2),guard=beachLifeguards[2];
+camera.x=chair.x-200;petDragonPosition={x:chair.x-55,y:chair.y-35};petDragonFire={elapsed:200,duration:850};advancePetDragonFire(16)`);
+assert.equal(g.run('chair.burnAge'),0);assert.equal(g.run('guard.phase'),'jumping');
+assert.equal(g.run('guard.y'),g.run('chair.y-27'));
+g.run('advanceBeachLifeguards(400);drawBeachLifeguards()');assert.equal(g.run('guard.phase'),'jumping');
+assert.equal(g.run('guard.y<chair.y'),true);
+g.run('advanceBeachLifeguards(400);drawBeachLifeguards()');assert.equal(g.run('guard.phase'),'building');
+for(const dt of [500,4500,5000,9999])g.run(`advanceBeachLifeguards(${dt});drawBeachLifeguards()`);
+assert.equal(g.run('guard.phase'),'building');assert.equal(g.run('guard.sandcastle===true'),false);
+g.run('advanceBeachLifeguards(1);drawBeachLifeguards()');assert.equal(g.run('guard.phase'),'castleClimbing');
+g.run('advanceBeachLifeguards(750);drawBeachLifeguards();advanceBeachLifeguards(750);drawBeachLifeguards()');
+assert.equal(g.run('guard.phase'),'seated');assert.equal(g.run('guard.facing'),'up');
+assert.equal(g.run('guard.x'),g.run('chair.x+48'));assert.equal(g.run('guard.y'),g.run('chair.y+4'));
+// The sandcastle remains the home for normal warning and return behavior.
+g.run(`state.beachPass=true;boating=true;activeVessel='speedboat';guard.sprayReaction={remaining:12000,vessel:activeVessel};player.x=guard.x;player.y=beachShoreY(guard.x)-30;advanceBeachLifeguards(16)`);
+assert.equal(g.run('guard.phase'),'descending');
+g.run('advanceBeachLifeguards(1500);boating=false;advanceBeachLifeguards(16);advanceBeachLifeguards(5000);advanceBeachLifeguards(1500);drawBeachLifeguards()');
+assert.equal(g.run('guard.phase'),'seated');assert.equal(g.run('guard.x'),g.run('chair.x+48'));
+g.run('advancePetDragonFire(400000);drawBeachLifeguards()');assert.equal(g.run('chair.burnAge'),4200);assert.equal(g.run('chair.regrowAge'),0);
+});
+
+test('lifeguard construction pauses, does not restart in fire, and resets with chairs',()=>{
+const g=game();g.run(`const chair=burnableLifeguardChairs.get(4);petDragonPosition={x:chair.x-55,y:chair.y-35};petDragonFire={elapsed:200,duration:850};checkDragonFireSceneryHits(burnableLifeguardChairs);advanceBeachLifeguards(1800)`);
+assert.equal(g.run('beachLifeguards[4].phase'),'building');
+g.node('#challenge').showModal();g.run('advanceBeachLifeguards(20000);advancePetDragonFire(20000)');
+assert.equal(g.run('beachLifeguards[4].rebuild.elapsed'),1800);assert.equal(g.run('chair.burnAge'),0);g.node('#challenge').close();
+g.run('checkDragonFireSceneryHits(burnableLifeguardChairs)');assert.equal(g.run('beachLifeguards[4].rebuild.elapsed'),1800);
+g.run('advanceBeachLifeguards(30000)');assert.equal(g.run('beachLifeguards[4].phase'),'seated');assert.equal(g.run('beachLifeguards[4].sandcastle'),true);
+g.run('resetPetDragon()');assert.equal(g.run('chair.burnAge'),null);assert.equal(g.run('beachLifeguards[4].sandcastle'),undefined);
+assert.equal(g.run('beachLifeguards[4].x'),g.run('chair.x'));
+g.run('chair.burnAge=500;igniteLifeguardChair(chair);switchAge("9-10")');assert.equal(g.run('chair.burnAge'),null);assert.equal(g.run('beachLifeguards[4].rebuild'),undefined);
+});
+
+test('lifeguard chair ignition jumps from the current climbing or walking position',()=>{
+for(const phase of ['descending','ascending','running']){
+const g=game();g.run(`const chair=burnableLifeguardChairs.get(1),guard=beachLifeguards[1];guard.phase='${phase}';guard.elapsed=750;guard.x+=40;guard.y+=10;
+const expected=guard.phase==='running'?{x:guard.x,y:guard.y}:lifeguardLadderPose(chair,.5);igniteLifeguardChair(chair)`);
+assert.equal(g.run('guard.rebuild.from.x'),g.run('expected.x'));assert.equal(g.run('guard.rebuild.from.y'),g.run('expected.y'));
+g.run('advanceBeachLifeguards(22300)');assert.equal(g.run('guard.phase'),'seated');
+}
+});
+
+test('lifeguard digging renders a continuous full-body cycle without snapping at phase changes',()=>{
+const g=game();
+for(const fraction of [0,.2,.34,.49,.67,.8,.9,1]){
+const ms=fraction*2600;
+for(const offset of [-.01,0,.01])g.run(`drawDiggingLifeguard(150,100,'#efc897',${ms+offset},.5)`);
+const before=JSON.parse(g.run(`JSON.stringify(lifeguardDigPose(${ms===0?2600:ms}-.01))`));
+const after=JSON.parse(g.run(`JSON.stringify(lifeguardDigPose(${ms}+.01))`));
+for(const joint of ['hip','shoulder','blade'])assert.ok(Math.hypot(before[joint][0]-after[joint][0],before[joint][1]-after[joint][1])<.01,`${joint} continuity at ${fraction}`);
+assert.ok(Math.abs(before.angle-after.angle)<.01);
+}
+// Check every animation frame, including the held scoop and released sand.
+for(let ms=0;ms<=2600;ms+=16)g.run(`drawDiggingLifeguard(150,100,'#efc897',${ms},.9)`);
+const press=JSON.parse(g.run('JSON.stringify(lifeguardDigPose(884))'));
+const lift=JSON.parse(g.run('JSON.stringify(lifeguardDigPose(1742))'));
+assert.ok(press.hip[1]>lift.hip[1]);assert.ok(press.shoulder[1]>lift.shoulder[1]);assert.ok(press.blade[1]>lift.blade[1]);
+});
+
+test('walking scenery blocks tree roots, umbrellas, chairs and the surf shack even on long moves',()=>{
+const g=game({beachPass:true});
+for(const target of ['[...burnableTrees.values()][0]','[...burnableUmbrellas.values()][0]','[...burnableLifeguardChairs.values()][0]']){
+g.run(`var obstacle=${target};var rootY=obstacle.y+(obstacle.kind==='umbrella'?4:obstacle.kind==='lifeguardChair'?0:13*obstacle.scale)`);
+assert.equal(g.run('fixedWalkingObstacleAt(obstacle.x,rootY)'),true,target);
+}
+g.run('player.x=SURF_SHACK.x-90;player.y=SURF_SHACK.y-10;moveExplorer(180,0)');
+assert.ok(g.run('player.x<SURF_SHACK.x-35'));assert.equal(g.run('walkingHop'),null);
+g.run('player.x=160;player.y=160;moveExplorer(100,-40)');assert.equal(g.run('canWalk(player.x,player.y)'),true);
+});
+
+test('walking automatically hops over sunbathers in every direction and lands on clear ground at zero energy',()=>{
+for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1]]){
+const g=game({beachPass:true,power:0});
+g.run(`state.power=0;burnableUmbrellas.clear();var b=beachSunbathers()[0];player.x=b.x-(${dx})*26;player.y=b.y-(${dy})*26;moveExplorer(${dx}*20,${dy}*20)`);
+assert.equal(g.run('!!walkingHop'),true,`${dx},${dy}`);
+assert.equal(g.run('canWalk(walkingHop.to.x,walkingHop.to.y)'),true);
+g.run('var landing={...walkingHop.to};advanceSwimming(walkingHop.duration/2);draw()');
+assert.equal(g.run('!!walkingHop'),true);assert.equal(g.run('state.power'),0);
+g.run('advanceSwimming(walkingHop.duration)');assert.equal(g.run('walkingHop'),null);
+assert.equal(g.run('player.x'),g.run('landing.x'));assert.equal(g.run('player.y'),g.run('landing.y'));
+assert.equal(g.run('canWalk(player.x,player.y)'),true);
+}
+});
+
+test('walking hops pause, save a safe takeoff and clear when changing age or starting swimming',()=>{
+const g=game({beachPass:true});g.run('var b=beachSunbathers()[0];player.x=b.x-26;player.y=b.y;moveExplorer(20,0);var takeoff={...walkingHop.from};advanceSwimming(150);save()');
+assert.equal(g.run('state.x'),g.run('takeoff.x'));assert.equal(g.run('state.y'),g.run('takeoff.y'));
+g.node('#challenge').showModal();g.run('advanceSwimming(500)');assert.equal(g.run('walkingHop.elapsed'),150);g.node('#challenge').close();
+g.run('switchAge("9-10")');assert.equal(g.run('walkingHop'),null);
+g.run('state.beachPass=true;player.x=b.x-26;player.y=b.y;moveExplorer(20,0);swimming=true;advanceSwimming(0)');assert.equal(g.run('walkingHop'),null);
+});
+
+test('walking refuses a hop with a fixed obstacle, water, locked land or a standing sunbather ahead',()=>{
+const g=game({beachPass:true});g.run('var b=beachSunbathers()[0];player.x=b.x-26;player.y=b.y;burnableUmbrellas.set("test",{x:b.x+12,y:b.y-4,burnAge:null});moveExplorer(20,0)');
+assert.equal(g.run('walkingHop'),null);assert.ok(g.run('player.x<b.x-10'));
+g.run('burnableUmbrellas.delete("test");sunbatherReactions.set(b.i,{elapsed:1000});player.x=b.x-26;player.y=b.y+2;moveExplorer(50,0)');assert.equal(g.run('walkingHop'),null);assert.ok(g.run('player.x<b.x-9'));
+g.run('sunbatherReactions.clear();player.x=b.x-26;player.y=b.y;state.beachPass=false');assert.equal(g.run('startWalkingHop(1,0)'),false);
+g.run('state.beachPass=true;var actualCanWalk=canWalk;canWalk=(x,y,low)=>x>b.x+12?false:actualCanWalk(x,y,low)');assert.equal(g.run('startWalkingHop(1,0)'),false);
+});
+
+
+for(const vessel of ['fishing','speedboat','ferry'])test(`${vessel} exits dock approaches stern-first without throwing an anchor`,()=>{
+const g=game();g.run(`state.catches={bass:5};state.speedboat=true;state.ferryRemaining=FERRY_RIDE_DURATION;activeVessel='${vessel}'`);
+for(const name of ['fishingDock','dock','SPEEDBOAT_DOCK','farDock','WATERSPORTS_DOCK',...Array.from({length:12},(_,i)=>`boatIslands[${i}].dock`)]){
+g.run(`(()=>{const landing=${name},berth={...boatDockBerth(landing),heading:dockedBoatPose(landing).heading};boating=true;swimming=false;player.x=berth.x+Math.cos(berth.heading)*25;player.y=berth.y+Math.sin(berth.heading)*25;boatPosition={x:player.x,y:player.y};boatMotion.heading=1.2;boatMotion.velocity=80;exitBoat();})()`);
+assert.equal(g.run('boating'),false,name);assert.equal(g.run('swimming'),false,name);assert.equal(g.run('boatAnchor'),null,name);
+assert.equal(g.run('boatMotion.velocity'),0);assert.equal(g.run('boatMotion.engineStage'),'off');
+assert.equal(g.run('boatMotion.heading'),Math.PI/2,'parallel to the north–south pier, bow seaward');
+assert.equal(g.run('boatPoseClear(boatPosition.x,boatPosition.y,boatMotion.heading)'),true,name);
+assert.ok(g.run(`(boatPosition.x-${name}.x)*Math.cos(boatMotion.heading)+(boatPosition.y-${name}.y)*Math.sin(boatMotion.heading)>0`),name);
+assert.equal(g.run('canWalk(player.x,player.y)'),true,name);assert.equal(g.run('player.x'),g.run(`${name}.x`));g.run('draw()');
+if(name.startsWith('boatIslands')||vessel==='ferry'){assert.equal(g.run('canBoardIslandBoat()'),true,name);g.run('boardOwnBoat()');assert.equal(g.run('boating'),true,name);}
+}
+});
+test('docks take priority over beach anchoring and offshore exits still throw anchors',()=>{
+const g=game();g.run('state.catches={bass:5};state.beachPass=true;launchBoat();player.x=boatIslands[10].dock.x+80;player.y=boatIslands[10].dock.y+15;boatPosition={x:player.x,y:player.y};exitBoat()');
+assert.equal(g.run('state.boatIsland'),'pearl-haven');assert.equal(g.run('state.beachAnchor'),null);assert.equal(g.run('boatAnchor'),null);
+g.run('boardOwnBoat();player.x=1200;player.y=1200;boatPosition={x:player.x,y:player.y};exitBoat()');assert.equal(g.run('boatAnchorCasting()'),true);assert.equal(g.run('boating'),true);
+});
+
+test('close dock exits work from either side of the pier and choose the nearest berth',()=>{
+const g=game();g.run('state.catches={bass:5};state.speedboat=true;launchBoat();player.x=fishingDock.x+40;player.y=fishingDock.y;exitBoat()');
+assert.equal(g.run('player.x'),g.run('fishingDock.x'));assert.equal(g.run('boatAnchor'),null);assert.equal(g.run('boatMotion.heading'),Math.PI/2);
+g.run('launchBoat();player.x=dock.x-70;player.y=dock.y+15;exitBoat()');assert.equal(g.run('player.x'),g.run('dock.x'));assert.equal(g.run('boatAnchor'),null);
+});
+
+test('parallel ferry berth at the narrow southern island survives reload and remains boardable',()=>{
+const g=game();g.run('state.ferryTicket=true;boardFerry();player.x=boatIslands[10].dock.x+43;player.y=boatIslands[10].dock.y+15;exitBoat()');
+const restored=game(null,g.snapshot());assert.equal(restored.run('boatMotion.heading'),Math.PI/2);assert.equal(restored.run('canBoardIslandBoat()'),true);restored.run('boardOwnBoat()');assert.equal(restored.run('boating'),true);assert.equal(restored.run('boatPoseClear(player.x,player.y,boatMotion.heading)'),true);
+});
+
+for(const vessel of ['fishing','speedboat','ferry'])test(`${vessel} moors tightly alongside the dock without hull contact`,()=>{
+const g=game();g.run(`state.catches={bass:5};state.speedboat=true;activeVessel='${vessel}';fishingBoatPosition={x:1100,y:1300};speedboatPosition={x:1300,y:1300};ferryPosition={x:1500,y:1300}`);
+for(const name of ['fishingDock','SPEEDBOAT_DOCK','dock','farDock','boatIslands[0].dock']){
+const gap=g.run(`(()=>{const d=${name},p=dockedBoatPose(d),pier=activePiers().find(b=>b.dock===d),hull=boatHull(p.x,p.y,p.heading);return p.x<d.x?pier.x-Math.max(...hull.map(p=>p[0])):Math.min(...hull.map(p=>p[0]))-(pier.x+pier.w);})()`);
+assert.ok(Math.abs(gap-(vessel==='ferry'?2.5:4))<1e-6,`${name}: gap ${gap}`);
+assert.equal(g.run(`(()=>{const p=dockedBoatPose(${name});return boatPoseClear(p.x,p.y,p.heading);})()`),true);
+}
+});
+
+test('saved docked ferries adopt the snug berth while offshore ferries keep their position',()=>{
+for(const name of ['dock','farDock','boatIslands[0].dock']){
+const g=game();g.run(`state.ferryTicket=true;boardFerry();boating=false;player.x=${name}.x;player.y=${name}.y-18;boatPosition={x:${name}.x+55,y:${name}.y+15};boatMotion.heading=0;state.boatIsland=${name}.islandId||null;save()`);
+const restored=game(null,g.snapshot());assert.equal(restored.run('boatMotion.heading'),Math.PI/2);
+assert.equal(restored.run(`JSON.stringify(boatPosition)`),restored.run(`JSON.stringify((()=>{const p=dockedBoatPose(${name},'ferry');return {x:p.x,y:p.y};})())`));assert.equal(restored.run('canBoardIslandBoat()'),true);
+}
+const offshore=game();offshore.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=1200;boatPosition={x:1200,y:1200};exitBoat();advanceSwimming(FISH_CAST_DURATION);advanceSwimming(700);save()');const restored=game(null,offshore.snapshot());assert.equal(restored.run('boatPosition.x'),1200);assert.equal(restored.run('boatPosition.y'),1200);
 });

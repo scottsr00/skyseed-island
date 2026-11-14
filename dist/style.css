@@ -241,19 +241,25 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .surf-message{top:82px}.surf-session-actions{top:142px}
 @media(max-width:600px){.surf-message{top:86px}.surf-session-actions{top:150px}#surfLine{font-size:9px}}
 
-/* Discoveries use the same field-journal parchment and pixel controls as map menus. */
-.map-app #challenge{width:min(620px,calc(100% - 28px));max-height:calc(100dvh - 28px);padding:22px;overflow-y:auto;overflow-wrap:anywhere}
-.map-app #challenge .modal-top{align-items:flex-start;margin-bottom:18px;padding-bottom:0;border:0;box-shadow:none}
-.map-app #challenge .close{border:0;background:transparent;box-shadow:none;color:var(--muted)}
-.map-app #challengeCategory{align-self:center;font-size:10px;letter-spacing:.5px}
-.map-app #challengeBody h2{margin:0 0 12px;font-size:16px;letter-spacing:0;color:var(--muted)}
-.map-app #challenge .question{margin:0 0 24px;padding:0;border:0;background:transparent;box-shadow:none;font-size:20px;font-weight:700;line-height:1.6;color:var(--ink)}
-.map-app #challenge .tool{margin:0 0 24px;padding:0;border:0;background:transparent;box-shadow:none}
-.map-app #challenge .tool-title{margin-bottom:10px;padding:0;border:0;font-size:10px;font-weight:400;line-height:1.6;letter-spacing:.5px;color:var(--muted)}
-.map-app #challenge .visual-result{margin:12px 0 0;font-size:12px;line-height:1.7;color:var(--muted)}
+/* Discovery cards: a readable prompt, a tactile workbench, and a clear answer area. */
+.map-app #challenge{width:min(660px,calc(100% - 28px));max-height:calc(100dvh - 28px);padding:28px;overflow-y:auto;overflow-wrap:anywhere}
+.map-app #challenge .modal-top{align-items:flex-start;margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--border);box-shadow:0 1px var(--pixel-light)}
+.map-app #challenge .close{flex:0 0 44px;width:44px;height:44px;margin:-8px -8px -8px 0;border:0;background:transparent;box-shadow:none;color:var(--muted)}
+.map-app #challengeCategory{align-self:center;font-size:14px;letter-spacing:.5px}
+.map-app #challengeBody h2{margin:6px 0 0;font-size:26px;letter-spacing:-.5px;color:var(--ink)}
+.map-app #challenge .challenge-heading{display:block;height:auto;max-width:none;margin:0 0 20px;padding:0;border:0}
+.map-app #challenge .challenge-heading h2{font-size:32px}
+.map-app #challenge .challenge-kicker{font-size:12px;letter-spacing:1.4px;color:var(--muted)}
+.map-app #challenge .question{margin:0 0 20px;padding:18px 20px;border-left:4px solid #769562;background:var(--pixel-light);box-shadow:0 1px #d8ddbb;font-size:21px;font-weight:700;line-height:1.65;color:var(--ink)}
+.map-app #challenge .tool{margin:0 0 22px;padding:18px;border:1px solid #a7b58b;background:#e9edda;box-shadow:inset 0 2px #f7fae9}
+.map-app #challenge .tool-title{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding:0 0 12px;border-bottom:1px solid #c3cfae;font-size:18px;font-weight:700;line-height:1.6;letter-spacing:0;text-transform:none;color:var(--ink)}
+.map-app #challenge .tool-title>span:first-child{color:#7a8e4f;font-size:18px;line-height:1}
+.map-app #challenge .tool-invite{margin-left:auto;font-size:14px;font-weight:400;color:var(--muted)}
+.map-app #challenge #workbench{font-size:16px}
+.map-app #challenge .visual-result{margin:12px 0 0;font-size:16px;line-height:1.7;color:var(--muted)}
 .map-app #challenge .math-picture{padding:8px 0;border:0;background:transparent;font-size:21px}
 .map-app #challenge .tiles{gap:8px}
-.map-app #challenge .tile{min-width:44px;min-height:44px;padding:10px;font-size:12px}
+.map-app #challenge .tile{min-width:44px;min-height:44px;padding:10px;font-size:16px}
 .map-app #challenge .fraction-grid{gap:8px}
 .map-app #challenge .fraction-grid button{min-height:38px}
 .map-app #challenge .tile.selected{background:var(--green);color:var(--pixel-light);box-shadow:inset 2px 2px #244332,inset -2px -2px #70905c}
@@ -261,17 +267,20 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .map-app #challenge input[type=range]{appearance:none;height:12px;margin:14px 0;border:2px solid var(--pixel-edge);background:#cbd5aa;box-shadow:inset 2px 2px #a4b380;border-radius:0;cursor:pointer}
 .map-app #challenge input[type=range]::-webkit-slider-thumb{appearance:none;width:22px;height:26px;border:2px solid var(--pixel-edge);border-radius:0;background:#e3e8c0;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #a4b380}
 .map-app #challenge input[type=range]::-moz-range-thumb{width:18px;height:22px;border:2px solid var(--pixel-edge);border-radius:0;background:#e3e8c0;box-shadow:inset 2px 2px var(--pixel-light),inset -2px -2px #a4b380}
-.map-app #challenge .answer-form{display:flex;flex-wrap:nowrap;align-items:stretch;gap:10px;margin:0}
-.map-app #challenge .answer-form input{flex:1;min-width:0;min-height:54px;padding:14px;border-color:var(--pixel-edge);background:var(--pixel-light);box-shadow:none;font-size:18px}
+.map-app #challenge .answer-form{display:block;margin:0}
+.map-app #challenge .answer-form label{display:block;margin-bottom:8px;font-size:12px;font-weight:700}
+.map-app #challenge .answer-controls{display:flex;align-items:stretch;gap:10px}
+.map-app #challenge .answer-form input{flex:1;min-width:0;min-height:54px;padding:14px;border-color:var(--pixel-edge);background:#fffef5;box-shadow:inset 0 2px #e8e9d5;font-size:18px}
+.map-app #challenge .answer-form input:focus-visible{outline:3px solid #bc8e3c;outline-offset:3px}
 .map-app #challenge .answer-form input::placeholder{color:#657354;font-size:12px;opacity:1}
 .map-app #challenge .primary{min-height:44px;padding:12px 16px;font-size:12px;line-height:1.5}
 .map-app #challenge .answer-form button{width:auto;flex-shrink:0}
 .map-app #challenge .feedback{min-height:0;margin:14px 0 0;font-size:12px}
 .map-app #challenge .feedback:empty{display:none}
-.map-app #challenge .feedback.error{padding:0;border:0;background:transparent;color:#794b2f;box-shadow:none}
+.map-app #challenge .feedback.error{padding:12px 14px;border-left:3px solid #b77b47;background:#f6e6ce;color:#794b2f;box-shadow:none}
 .map-app #challenge .text-button{min-height:44px;margin-top:8px;padding:10px 0;font-size:12px;color:var(--green)}
 .map-app #challenge .text-button:not(:disabled):hover{background:transparent;color:#254735}
-.map-app #challenge .hint-box{margin-top:8px;padding:4px 0 4px 12px;border:0;border-left:3px solid #b18c47;background:transparent;box-shadow:none;font-size:12px}
+.map-app #challenge .hint-box{margin-top:8px;padding:12px 14px;border:0;border-left:3px solid #b18c47;background:#f6e6ce;box-shadow:none;font-size:12px}
 .map-app #challenge .celebration{padding:4px 0 0}
 .map-app #challenge .celebration h2{font-size:22px;color:var(--ink)}
 .map-app #challenge .celebration>.eyebrow{margin:0 0 12px}
@@ -301,9 +310,12 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 .map-app #challenge .discovery-actions kbd{margin:0;padding:2px 5px;border:1px solid currentColor;background:transparent;box-shadow:none;font:700 10px/1.4 var(--pixel-font);color:inherit;opacity:.8}
 @media(max-width:600px){
  .map-app #challenge{padding:16px}
- .map-app #challengeBody h2{font-size:15px}
+ .map-app #challengeBody h2{font-size:23px}
+ .map-app #challenge .challenge-heading h2{font-size:28px}
+ .map-app #challenge .question{padding:14px;margin-bottom:16px}
+ .map-app #challenge .tool{padding:14px;margin-bottom:18px}
  .map-app #challenge .question{font-size:18px}
- .map-app #challenge .answer-form{flex-direction:column}
+ .map-app #challenge .answer-controls{flex-direction:column}
  .map-app #challenge .answer-form button{width:100%}
  .map-app #challenge .math-picture{font-size:18px}
  .map-app #challenge .discovery-result h2{font-size:23px}

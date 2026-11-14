@@ -58,7 +58,13 @@ steerable fishing boat at the fishing dock. The fishing boat launches and return
 Launch fishing boat action in the normal map actions near the fishing dock, outside the fishing menu.
 Dock commands are Go fishing (F), Launch fishing boat (E, once sponsored), and Dive into the sea
 (X, when clear water is within reach). `canFishAtDock()` gates the dock actions and fishing shortcut. Persistent map hints explain casting and boat controls. X /
-Exit boat steps onto a nearby dock; offshore, the rider first throws an anchor with an unfurling
+Exit boat automatically moors at a nearby dock, parallel to the pier, with the stern toward land and bow facing open
+water, then steps ashore. `nearbyBoatDock()` includes the berth approach and picks the closest
+berth; dock exits take priority over beach anchoring. `dockedBoatPose()` keeps a small hull gap (2.5 pixels for the ferry, four for owned boats) alongside the pier, sliding along its length
+to clear shore and trying the other side when occupied. It provides hull clearance
+and the same stern-first pose for Return boat. Dock boarding reach includes the clearance
+needed by parallel hulls beside narrow island shorelines. Saved ferries parked beside a dock
+adopt the snug berth on reload; occupied rides and offshore/beach moorings retain their positions. Offshore, the rider first throws an anchor with an unfurling
 rope, then dives into the sea. The boat stays still during the throw and the rope remains while it
 is moored. Anchor throws land in clear water at least 72 pixels from the boat. Reboarding
 automatically hauls the rope and anchor aboard before steering resumes; beach moorings retain their

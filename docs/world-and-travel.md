@@ -30,6 +30,8 @@ to reboard. Island visits and the parked boat persist across reloads.
 
 Walk off any island shoreline to dive into the sea with the same animation as a boat dive. Bridges
 and docks keep walkers on the timber; press X or the Dive button to enter the water explicitly.
+`bridgeApproachTarget()` gives both ends of built bridges a 12-pixel approach buffer, guiding
+slightly off-center walkers onto the deck before shoreline movement can trigger a dive.
 `dockDiveTarget()` first checks the facing direction for a clear jump of at least 32 world pixels
 and an eight-pixel landing margin from land, timber, and boat hulls. If blocked, it chooses a
 clear perpendicular side, preferring the nearer opening. The path may cross the launching deck
@@ -41,6 +43,14 @@ hulls, with their bodies and splashes hidden by the structures above. Swim onto 
 the beach and pull yourself up before walking again; Crystal Cavern no longer requires a ferry pass.
 The compact, text-free miniature chart shows the islands, crossings, docks, your position, and
 the camera footprint.
+
+Walking uses swept ground footprints: buildings, tree trunks, beach umbrellas, and lifeguard
+chairs are fixed obstacles. Canopies do not block empty ground beneath their edges. Reposed
+sunbathers are low obstacles: `startWalkingHop()` automatically chooses a short jump in the
+walking direction, only when the entire path avoids fixed scenery and ends on clear accessible
+land. `advanceWalkingHop()` carries the explorer across while `drawWalkingExplorer()` supplies
+the raised pose and ground shadow. Hops pause with dialogs, cost no energy, and save the safe
+takeoff position; profile/age changes clear them. Movement input resumes after landing.
 
 ## Energy
 

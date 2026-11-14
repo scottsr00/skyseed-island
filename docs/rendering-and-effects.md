@@ -130,10 +130,11 @@ The shallow chine tapers inward to a raked, varying-depth keel, keeping the expo
 `boatHullLift()` uses squared sine of bank so lift eases smoothly through level during turn reversals;
 riders, motors, and cabins follow that lift. Back-face culling and water-surface clipping expose only
 the raised, visible underside, so the
-amount of bottom showing depends on the viewing angle. Cabins lean with their hull; seated occupants keep their hips and bent legs planted while
-`beginBoatRiderLean()` leans their upper body into the current turn at every heading.
-Their shorter seated torso uses 55% of hull roll, with turn rate resolving direction during
-steering reversals. `drawBoatSteeringWheel()` supplies a mounted, spoked wheel that stays visible
+amount of bottom showing depends on the viewing angle. Cabins lean with their hull. Seated occupants use the full hull roll for their seat, bent legs,
+steering wheel, and upper body at every heading. `beginBoatRiderLean()` projects torso elevation
+with the same roll as `boatHullProjection()`; steering reversals follow the actual hull bank
+until it settles onto the other side. `drawBoatRiderHead()` follows the banked neckline with
+a rigid rotation so the head keeps its proportions instead of stretching with torso foreshortening. `drawBoatSteeringWheel()` supplies a mounted, spoked wheel that stays visible
 when parked. Seated riders grip its rim, bending their elbows as they lean; the spokes turn with
 outboard steering. The tow-boat driver has a matching wheel. World-space wakes and shadows stay
 on the water. Boat shadows use soft oval footprints so a hard-edged shadow cannot resemble
@@ -163,13 +164,23 @@ resetting the adventure. After burning down, trees gradually grow from a small s
 original size over five minutes of active play, while the ash fades. Regrowth pauses for dialogs
 too.
 
+Beach sunbathers use tapered swimwear, rounded articulated limbs, varied hair and sunglasses.
+Resting poses vary between relaxed arms and hands behind the head, with occasional bent knees.
+`drawSunbatherHead()` and `drawSunbatherTorso()` keep their appearance consistent while resting,
+drying off, fleeing and swimming. `drawSunbatherTowel()` adds striped woven edges and fringe.
+
 Dragon fire also ignites beach umbrellas, including those outside the camera view.
 `burnableUmbrellas` registers the fixed umbrellas from `beachSunbathers()`;
 `checkDragonFireSceneryHits()` shares the tree plume sampling, heading, and altitude checks.
 `drawBurningScenery()` preserves each umbrella's colored canopy and pole while darkening and
 consuming them from the canopy down over 4.2 seconds, with flames, smoke, and remaining ash.
 Umbrellas stay burned for the session; reload, explorer/age changes, and adventure resets restore
-them through the dragon reset path. Dialogs pause their burn clocks. Trees keep their existing regrowth.
+them through the dragon reset path. Each canopy has a raised peak above its curved rim.
+Ignition replaces that umbrella owner's spray/drying reaction with a fire reaction: they stand up,
+wave both arms, and run toward the local shoreline before swimming just offshore.
+`fleeingSunbatherPose()` derives travel from active reaction time, including offscreen updates;
+they stay in the water until the dragon/beach resets. Dialogs pause burning and reactions.
+Trees keep their existing regrowth.
 
 Dragon fire also explodes the ferry, sponsored fishing boat, speedboat, and watersports tow boat when the plume
 touches their hull or cabin. The hull stays visible while flames spread for 1.8 seconds, then erupts
@@ -231,6 +242,20 @@ with a WATCH THE SPRAY warning even when the boater owns a beach pass. The react
 12 seconds and ends early when the boater leaves the coast or vessel. Repeated spray does not
 restart it. Spray checks use their own per-droplet cursor so other beach reactions still work.
 `resetBeachLifeguards()` clears reactions and approach reminders on profile/age/adventure changes.
+Dragon fire checks all five `burnableLifeguardChairs` using the shared plume hit test, including
+stations outside the camera view. A chair burns to permanent session ash over 4.2 seconds.
+`igniteLifeguardChair()` interrupts the guard's current action; they jump clear over 0.8 seconds,
+then dig and shovel sand into a growing castle for 20 seconds of active play.
+`lifeguardDigPose()` eases a 2.6-second reach/plant/press/scoop/lift/throw/recover cycle.
+`drawDiggingLifeguard()` keeps staggered feet planted while knees, hips, torso and head follow
+the effort; articulated elbows keep both hands on one rigid shovel. Sand stays on the blade
+until the throw, then arcs onto the growing castle. Head, shoulders, and feet turn toward the
+castle during the lift and throw, then ease back toward the excavation for the next scoop.
+All poses use active simulation time.
+`advanceLifeguardRebuild()` then sends them up the sand steps over 1.5 seconds to sit facing
+the ocean. `lifeguardStation()` makes the finished castle their new lookout, so warnings and
+return trips keep working. The castle is sand and does not burn. Dialogs pause the sequence;
+dragon reset, reload, and profile/age/adventure changes restore the original chairs and guards.
 See [boats and fishing](boats-and-fishing.md) for pass access and approach behavior.
 
 ## Verification

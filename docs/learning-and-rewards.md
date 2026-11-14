@@ -45,6 +45,10 @@ paired answers preserve order. `answerComplete` prevents duplicate submission re
 Already-solved questions give no extra discovery crystals until the entire age bank is solved.
 Correct answers also restore energy; see [world and travel](world-and-travel.md).
 
+Discovery cards in `openQuestion()` separate the title and prompt, an inset interactive workbench,
+and a visibly labeled answer form. The answer controls stack on narrow screens; hints and retry
+feedback stay below the form. The dialog is named by the current challenge or result heading.
+
 Discovery results show the answer and outcome before rewards/actions. Next discovery selection
 stays on the current destination while it has unsolved questions; destination visits and the
 journal are distinct from boat-only island access.
