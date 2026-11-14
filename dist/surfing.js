@@ -507,10 +507,12 @@ for(const x of [850,1390]){const y=beachShoreY(x)-200;ellipse(x,y+2,5,2,'#dff4e6
 function surfBaseCrest(x){return 94+Math.sin((x-(surfSession?.scroll||0)*.35)*.019)*3;}
 function surfFaceCrest(x,wave){
 const base=surfBaseCrest(x);if(!wave)return base;
-// A short, steep shoulder lifts the face into the peak of the rounded lip.
-const crown=surfLipCrown(wave),t=Math.max(0,Math.min(1,(x-(crown-30))/30));
+// The unbroken shoulder loses height smoothly ahead (left) of the curl.
+const crown=surfLipCrown(wave),distance=Math.max(0,crown-x);
+const shoulder=base+55*(1-Math.exp(-distance/190));
+const t=Math.max(0,Math.min(1,(x-(crown-30))/30));
 const lift=t*t*(3-2*t);
-return base+(76-base)*lift;
+return shoulder+(76-shoulder)*lift;
 }
 function surfRideCrest(x){return 279-(279-surfFaceCrest(x,surfSession?surfRideView():null))*surfRideScale();}
 function surfRideView(s=surfSession){
@@ -532,7 +534,7 @@ for(let y=96;y<=281;y+=2)points.push([surfBreakEdge(y,wave),y]);
 return points;
 }
 function surfBarrelState(s=surfSession){
-const wave=surfRideView(s),y=surfBaseCrest(wave.riderX)+Math.max(0,Math.min(1,s.y))*(279-surfBaseCrest(wave.riderX));
+const wave=surfRideView(s),crest=surfFaceCrest(wave.riderX,wave),y=crest+Math.max(0,Math.min(1,s.y))*(279-crest);
 const edge=surfBreakEdge(y,wave),mouth=edge-32;
 const coverage=s.y>.12&&s.y<.85?Math.max(0,Math.min(1,(wave.riderX+15-mouth)/30)):0;
 return {coverage,half:coverage>=.25&&coverage<=.75,overrun:wave.riderX+3>=edge,edge,mouth};
@@ -597,46 +599,61 @@ if(!gradient?.addColorStop)return fallback;
 for(const [position,color] of stops)gradient.addColorStop(position,color);
 return gradient;
 }
+function surfFaceFlowPoint(anchor,rise,wave,top=surfFaceCrest(anchor,wave)+2){
+const distance=Math.max(0,surfLipCrown(wave)-anchor),shoulder=distance/(distance+140);
+const tilt=65+180*shoulder,bowl=45+80*shoulder,angle=rise*Math.PI/2;
+// A left-leaning oval stands up toward the break. Its lower arc is shallow,
+// but the upper face keeps its camera-space slant instead of aiming vertically.
+return {x:anchor+tilt*(1-rise)+bowl*(1-Math.sin(angle)),y:279-(279-top)*(1-Math.cos(angle))};
+}
 function surfFrothFlowPoint(anchor,progress,wave){
-const rise=Math.max(0,Math.min(1,progress)),top=surfFaceCrest(anchor-6,wave)+2;
-// Open-face streaks rise to the surface and fade out, without turning back down.
-return {x:anchor-6*rise,y:279-(279-top)*rise};
+return surfFaceFlowPoint(anchor,Math.max(0,Math.min(1,progress)),wave);
 }
 function surfBarrelFrothFlowPoint(anchor,progress,wave){
-const crown=surfLipCrown(wave),near=Math.exp(-Math.abs(crown-anchor)/85);
-const theta=progress*2.14,crest=surfBaseCrest(anchor);
-return {x:anchor-(24+near*25)*Math.sin(theta)+(14+near*15)*(1-Math.cos(theta)),y:279-(279-crest)*Math.sin(theta)};
+const crown=surfLipCrown(wave),radius=Math.max(10,Math.min(14,crown-anchor));
+const p=Math.max(0,Math.min(1,progress)),rise=p/.76;
+if(rise<=1)return surfFaceFlowPoint(crown-radius,rise,wave,94);
+// Shear the roof oval to match the slanted rising wall, retaining its bend
+// through the highest point and into the forward-folding water.
+const shoulder=radius/(radius+140),shear=(65+180*shoulder)*2/Math.PI/185;
+const angle=Math.PI+(p-.76)/.24*Math.PI,y=94+radius*Math.sin(angle);
+return {x:crown+radius*Math.cos(angle)+shear*(y-94),y};
 }
 function drawSurfFrothRibbon(anchor,from,to,wave,alpha,width,barrel=false){
 ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.beginPath();let open=false;
 for(let step=0;step<=24;step++){
 const progress=from+(to-from)*step/24;
 const point=barrel?surfBarrelFrothFlowPoint(anchor,progress,wave):surfFrothFlowPoint(anchor,progress,wave);
-const edge=surfBreakEdge(point.y,wave),inside=point.x>=edge-surfBarrelDepth(point.y)-12;
-if(point.x>edge+3||inside!==barrel||(!barrel&&point.y<surfFaceCrest(point.x,wave)+1)){open=false;continue;}
+const edge=barrel&&point.y<94?surfLipCrown(wave)+Math.sqrt(Math.max(0,18*18-Math.pow(point.y-94,2))):surfBreakEdge(point.y,wave);
+if(point.x>edge+3||(!barrel&&point.y<surfFaceCrest(point.x,wave)+1)){open=false;continue;}
 if(!open){ctx.moveTo(point.x,point.y);open=true;}else ctx.lineTo(point.x,point.y);
 }
 ctx.stroke();
 }
+function surfFrothRibbonSpan(phase,length,start=0,end=1){
+// A whole ribbon must pass the crest before its cycle restarts at the trough.
+// Once its head rolls out of sight, its tail keeps travelling up to the lip.
+const head=start+phase*(end-start+length);
+return {from:Math.max(start,head-length),to:Math.min(end,head)};
+}
 function drawSurfFaceFroth(wave){
 const time=surfClock*.001,scroll=wave.scroll,crown=surfLipCrown(wave);
 ctx.save();ctx.lineCap='round';ctx.setLineDash([]);ctx.strokeStyle='#effff5';
-// The exposed face carries straight rising streaks up to its crest.
+// Crest anchors fan the flowing ribbons out across the flatter shoulder and trough.
 for(let i=0;i<33;i++){
 const grain=surfFoamNoise(i+4100),phase=(time*(.32+grain*.07)+surfFoamNoise(i+4200))%1;
 const anchor=((i*27.71+scroll*.86)%550+550)%550-35;
-if(anchor>crown+25)continue;
-const tip=phase*.98,length=.08+grain*.08,from=Math.max(0,tip-length);
-const fade=Math.min(1,phase*9,(1-phase)*9);
-drawSurfFrothRibbon(anchor,from,tip,wave,(.2+grain*.22)*fade,.4+grain*.45);
+const span=surfFrothRibbonSpan(phase,.16+grain*.12);
+drawSurfFrothRibbon(anchor,span.from,span.to,wave,.2+grain*.22,.4+grain*.45);
 }
-// Curling paths are clipped to the shaded interior of the barrel.
+// Only curved roof fragments use this pass. Fixed rising lanes beside the
+// lip look like vertical jets and duplicate the moving face ribbons.
 ctx.strokeStyle='#e7fff1';
 for(let i=0;i<3;i++){
 const grain=surfFoamNoise(i+4400),phase=(time*.38+grain)%1;
-const anchor=crown+5-i*22+(wave.scroll*.14)%10;
-const tip=.83+phase*.17,start=Math.max(.43,tip-.36-grain*.1);
-drawSurfFrothRibbon(anchor,start,tip,wave,.18+grain*.16,.45+grain*.35,true);
+const anchor=crown-10-i*2;
+const span=surfFrothRibbonSpan(phase,.055+grain*.025,.76,1);
+drawSurfFrothRibbon(anchor,span.from,span.to,wave,.18+grain*.16,.45+grain*.35,true);
 }
 ctx.restore();
 }
@@ -652,7 +669,7 @@ const x=((i*29.71+wave.scroll*1.04)%550+550)%550-20;
 const crest=surfBrokenCrestY(x,sprayPeak),y=crest+5+phase*(276-crest);
 if(x<surfBreakEdge(y,wave)+18||x<sprayPeak.x)continue;
 const endY=Math.min(282,y+11+grain*14),sweep=2+grain*4;
-ctx.globalAlpha=(.18+grain*.26)*Math.min(1,phase*8,(1-phase)*8);ctx.lineWidth=.4+grain*.4;
+ctx.globalAlpha=.18+grain*.26;ctx.lineWidth=.4+grain*.4;
 ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+1,y+4,x+sweep*.5,endY-4,x+sweep,endY);ctx.stroke();
 surfWaterDrop(x+sweep*.6,endY-2,.35+grain*.3,.3,'#edfff2');
 }
@@ -665,6 +682,9 @@ ctx.save();ctx.translate(0,279*(1-size));ctx.scale(1,size);
 const crest=[];for(let x=0;x<=480;x+=1.5)crest.push([x,surfFaceCrest(x,wave)]);
 const faceLight=surfWaterGradient(92,285,[[0,'#47acb9'],[.13,'#297e9e'],[.48,'#1f648c'],[.78,'#297c9e'],[1,'#58bfc1']],'#287f9c');
 surfWaterShape([...crest,[480,285],[0,285]],faceLight);
+// Keep face texture and barrel shading on the tapered water silhouette.
+ctx.save();ctx.beginPath();crest.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+ctx.lineTo(480,285);ctx.lineTo(0,285);ctx.closePath();ctx.clip();
 // Faint stretched reflections curve down the face instead of sitting on a square grid.
 ctx.lineWidth=.55;
 for(let i=0;i<90;i++){
@@ -707,6 +727,7 @@ for(let y=181;y<=274;y+=3){const x=surfBreakEdge(y,wave)-surfBarrelDepth(y)*(.85
 }
 ctx.globalAlpha=1;
 drawSurfFaceFroth(wave);
+ctx.restore();
 // The spent wave starts at the spray peak, then settles lower the farther it trails behind.
 const sprayPeak=surfLipSprayPeak(wave),brokenCrest=[];
 for(let x=sprayPeak.x;x<=514;x+=3){
@@ -782,28 +803,41 @@ function surfLipSprayPeak(wave){
 // The strongest droplets have the highest apex; reuse their actual ballistic path.
 return surfLipSprayPoint(1,120/(2*155),surfLipCrown(wave));
 }
+function surfCrestFrothProfile(x,wave){
+const build=Math.pow(Math.exp(-Math.max(0,surfLipCrown(wave)-x)/150),1.2);
+return {build,width:1+18*build,density:1+12*build,alpha:.28+.55*build};
+}
 function drawSurfWaveLip(wave){
 const size=surfRideScale(),time=surfClock*.001;
 ctx.save();ctx.translate(0,279*(1-size));ctx.scale(1,size);
-// Light on the offshore crest stays thin until it reaches the falling sheet.
+// A fine shoulder crest gradually becomes a broad, broken foam edge at the curl.
 const crown=surfLipCrown(wave);
-ctx.strokeStyle='#d5f8ed';ctx.lineWidth=.85;ctx.beginPath();
+ctx.strokeStyle='#d5f8ed';ctx.lineWidth=.65;ctx.globalAlpha=.5;ctx.beginPath();
 for(let x=0;x<crown;x+=1.5){const y=surfFaceCrest(x,wave);if(!x)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
-for(let x=0;x<crown;x+=5){const grain=surfFoamNoise(Math.floor((x-wave.scroll)/5));if(grain>.65){ctx.globalAlpha=.4;surfWaterDrop(x,surfFaceCrest(x,wave)+2,1.3,.45,'#a6eee2');}}
-ctx.globalAlpha=1;
-// Froth runs along the whole crest and builds into a thicker aerated edge at the break.
-const crestTop=[],crestBottom=[];
-for(let x=0;x<crown;x+=2){
-const near=Math.exp(-Math.max(0,crown-x)/80),grain=surfFoamNoise(Math.floor((x-wave.scroll)/4)+6800),y=surfFaceCrest(x,wave);
-crestTop.push([x,y-.6-near*(1.5+grain*2)]);crestBottom.unshift([x,y+.8+near*(2+grain*3)]);
+// A translucent fringe and a denser uneven core blend into the curling sheet.
+for(let layer=0;layer<2;layer++){
+const crestTop=[],crestBottom=[],spread=layer? .55:1;
+for(let x=0;x<=crown;x+=1.5){
+const {width}=surfCrestFrothProfile(x,wave),grain=surfFoamNoise(Math.floor((x-wave.scroll)/3)+6800),y=surfFaceCrest(x,wave);
+crestTop.push([x,y-spread*(.3+width*(.25+grain*.2))]);
+crestBottom.unshift([x,y+spread*(.4+width*(.4+grain*.35))]);
 }
-if(crestTop.length){ctx.globalAlpha=.28;surfWaterShape([...crestTop,...crestBottom],'#edfff2');}
-for(let x=0;x<crown;x+=3){
-const near=Math.exp(-Math.max(0,crown-x)/80),grain=surfFoamNoise(Math.floor((x-wave.scroll)/3)+6900),y=surfFaceCrest(x,wave);
-ctx.globalAlpha=.3+near*.5;
-for(let i=0;i<1+Math.floor(near*5);i++){
-const f=surfFoamNoise(Math.floor(x)+i*37+7000),phase=(time*.7+f)%1;
-surfWaterDrop(x+f*2,y+(phase-.4)*(1.3+near*7),.35+f*(.3+near*.65),.25+near*f*.8,'#f0fff3');
+if(crestTop.length){ctx.globalAlpha=layer?.48:.17;surfWaterShape([...crestTop,...crestBottom],layer?'#eafff1':'#c6f7e7');}
+}
+for(let x=0;x<crown;x+=2){
+const {build,width,density,alpha}=surfCrestFrothProfile(x,wave),grain=surfFoamNoise(Math.floor((x-wave.scroll)/2)+6900);
+ctx.globalAlpha=alpha;
+for(let i=0;i<Math.ceil(density);i++){
+const f=surfFoamNoise(Math.floor(x-wave.scroll)+i*37+7000),phase=(time*.7+f)%1;
+const px=x+f*2,y=surfFaceCrest(px,wave)+(f-.4)*width+Math.sin(phase*Math.PI*2)*(.2+build*.8);
+surfWaterDrop(px,y,.3+f*(.35+build*1.6),.2+build*(.35+f*1.1),'#f0fff3');
+// Fine spray starts along the thickening crest, before the main curl plume.
+if(i===0&&grain>.5){
+const drift=(phase-.5)*build*5;
+ctx.globalAlpha=alpha*.5;
+surfWaterDrop(px+drift,surfFaceCrest(px+drift,wave)-1-build*(2+grain*9),.25+build*grain*.5,.3+build*.5,'#eafff0');
+ctx.globalAlpha=alpha;
+}
 }
 }
 ctx.globalAlpha=1;

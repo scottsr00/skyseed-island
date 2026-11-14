@@ -35,12 +35,22 @@ a wave fixes its height for that ride; paddle-out controls show the available si
 ## Riding artwork
 
 The face-on riding view uses a broad concave blue wave face with continuous lighting gradients,
-smooth water contours, a wider hollow barrel with a dark roof and reflected light along its inner
+a crest that lowers smoothly ahead of the curling lip via `surfFaceCrest()`, smooth water contours, a wider hollow barrel with a dark roof and reflected light along its inner
 wall, and a translucent falling curtain tapering toward a later impact farther right. Fine rivulets,
 rising white froth ribbons that bend around the breaking lip, subpixel droplets, and irregular foam
-eddies add surface detail. Froth runs along the whole crest, thickening toward the break, while face
-ribbons rise rapidly around the rolling surface. The crashing lip has a dense boiling foam core with
-porous texture and a wider impact plume; its spent whitewater extends to the right edge, tapering as
+eddies add surface detail. `surfCrestFrothProfile()` gradually increases the crest foam’s width,
+density, and brightness toward the curl; a broken core, translucent fringe, and fine spray blend
+the shoulder into the falling lip. Froth runs along the whole crest, while face
+ribbons follow `surfFaceFlowPoint()`: a pronounced quarter-oval arc with a shallow trough
+stands up gradually toward the breaking curl. The upper open face retains a diagonal slope as
+water rolls over the back; it does not turn into vertical streaks. `surfBarrelFrothFlowPoint()` continues the
+slanted rising wall through a sheared oval roof before folding forward with the lip. The separate
+barrel froth pass draws only curved roof fragments, avoiding fixed upward jets beside the curl.
+Face, roof, and post-lip streaks keep constant opacity throughout their travel.
+`surfFrothRibbonSpan()` keeps each rising ribbon alive until its tail has passed the lip; the
+head rolls out of sight first, then the remaining tail follows. Face ribbons use surface clipping
+instead of being removed when their scrolling anchor approaches the curl. The crashing lip has a
+dense boiling foam core with porous texture and a wider impact plume; its spent whitewater extends to the right edge, tapering as
 it ages. Crest plumes, falling fingers of whitewater, and dense broken foam at the base follow the
 supplied surfing screenshot as a visual reference. The surfer flexes knees, shifts weight, and
 counterbalances with their arms; stronger turns and higher speed generate larger rail spray and a

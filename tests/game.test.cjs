@@ -2731,7 +2731,7 @@ assert.equal(g.run('catchSurfWave()'),true);
 const size=g.run('surfSession.waveSize'),face=g.run('279-surfRideCrest(surfRideView().riderX)');
 assert.ok(size>lastSize);assert.ok(face>lastFace);
 assert.equal(size,g.run(`surfWaveSize(${distance})`));
-if(distance<280)assert.ok(size<1);else {assert.equal(size,1);assert.ok(Math.abs(g.run('surfRideCrest(224)-surfBaseCrest(224)'))<1e-9);}
+if(distance<280)assert.ok(size<1);else {assert.equal(size,1);assert.ok(Math.abs(g.run('surfRideCrest(224)-surfFaceCrest(224,surfRideView())'))<1e-9);}
 g.run('advanceSurfing(100);draw()');assert.equal(g.run('surfSession.waveSize'),size);
 lastSize=size;lastFace=face;
 }
@@ -2772,7 +2772,7 @@ assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSessio
 });
 
 test('surf lip leads left at the crest and crashes farther right with crumbling impact spray',()=>{
-const g=surfGame();g.run(`surfSession.phase='riding';surfSession.waveSize=1;surfSession.x=.85;surfSession.y=.15;const taperView=surfRideView()`);
+const g=surfGame();g.run(`surfSession.phase='riding';surfSession.waveSize=1;surfSession.x=.87;surfSession.y=.15;const taperView=surfRideView()`);
 assert.ok(g.run('surfBreakEdge(274,taperView)-surfBreakEdge(100,taperView)')>40);
 assert.equal(g.run('surfBarrelState().overrun'),true);
 g.run('surfSession.y=.8');assert.equal(g.run('surfBarrelState().overrun'),false);
@@ -2783,12 +2783,81 @@ assert.ok(g.run('baseSpray.some(([x,y])=>x<impactX&&y<274)'));
 assert.ok(g.run('baseSpray.some(([x,y])=>x>impactX&&y<274)'));
 });
 
-test('open-face streaks only rise, while barrel streaks follow the clockwise curl',()=>{
-const g=surfGame();g.run(`surfSession.phase='riding';const flowView=surfRideView();const flowAnchor=surfLipCrown(flowView)-30;const facePath=[0,.25,.5,.75,1].map(p=>surfFrothFlowPoint(flowAnchor,p,flowView))`);
-assert.ok(g.run('facePath.every((p,i,points)=>!i||p.y<points[i-1].y)'));
-g.run(`const barrelTop=surfBarrelFrothFlowPoint(flowAnchor,Math.PI/2/2.14,flowView),barrelDown=surfBarrelFrothFlowPoint(flowAnchor,1,flowView)`);
-assert.ok(g.run('barrelDown.y>barrelTop.y&&barrelDown.x>barrelTop.x'));
+test('surf face loses height progressively ahead of the curling lip at every riding size',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';const taperView=surfRideView();const taperCrown=surfLipCrown(taperView)`);
+const heights=[0,30,90,180,300].map(distance=>g.run(`279-surfFaceCrest(taperCrown-${distance},taperView)`));
+assert.ok(heights.every((height,i)=>!i||height<heights[i-1]));
+assert.ok(heights.at(-1)>heights[0]*.65&&heights.at(-1)<heights[0]*.8,'far shoulder stays full with a gentle taper');
+for(const size of [.48,.7,1]){
+g.run(`surfSession.waveSize=${size}`);
+assert.ok(Math.abs(g.run('279-surfRideCrest(taperCrown-180)')-heights[3]*size)<1e-8);
+g.run('drawSurfGame()');
+}
+});
 
+test('face froth fans across the shoulder, steepens up the face, and reaches its crest',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';const flowView=surfRideView();const crown=surfLipCrown(flowView)`);
+let previousSlope=0;
+for(const distance of [220,120,50,18]){
+const anchor=g.run(`crown-${distance}`);
+const points=g.run(`[0,.05,.25,.5,.75,.95,1].map(p=>surfFrothFlowPoint(${anchor},p,flowView))`);
+const slopes=points.slice(1).map((p,i)=>(points[i].y-p.y)/(points[i].x-p.x));
+assert.ok(points.every((p,i)=>!i||p.y<points[i-1].y));
+assert.ok(slopes.every((s,i)=>!i||s>slopes[i-1]),'ribbons steepen from trough to crest');
+assert.ok(slopes[2]>previousSlope,'face is steeper nearer the curl');previousSlope=slopes[2];
+assert.ok(Math.abs(points.at(-1).y-g.run(`surfFaceCrest(${anchor},flowView)+2`))<1e-8);
+assert.equal(points.at(-1).x,anchor);
+const arc=g.run(`[.25,.5,.75].map(p=>surfFrothFlowPoint(${anchor},p,flowView))`);
+const [start,mid,end]=arc,dx=end.x-start.x,dy=end.y-start.y;
+const bend=Math.abs(dx*(start.y-mid.y)-(start.x-mid.x)*dy)/Math.hypot(dx,dy);
+assert.ok(bend>5,'the rising ribbon has a visible arc rather than a nearly straight diagonal');
+assert.ok(slopes.at(-1)<4,'even the upper face stays slanted in camera space');
+}
+});
+
+test('barrel froth follows the rising wall continuously through the roof before folding down',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';const flowView=surfRideView();const crown=surfLipCrown(flowView)`);
+for(const radius of [10,12,14]){
+const point=p=>g.run(`surfBarrelFrothFlowPoint(crown-${radius},${p},flowView)`);
+const base=point(0),join=point(.76),top=point(.88),end=point(1);
+assert.equal(base.y,279);assert.ok(Math.abs(join.y-94)<1e-8);
+assert.ok(top.y<join.y&&end.y>top.y,'passes through the highest part of the curl');
+assert.ok(top.x>join.x&&end.x>top.x,'folds clockwise toward the falling lip');
+const before=point(.76-1e-6),after=point(.76+1e-6);
+assert.ok(Math.hypot(after.x-before.x,after.y-before.y)<.001,'continuous wall to roof');
+assert.ok(join.x<before.x&&join.y<before.y,'wall retains its slant at the roof');
+assert.ok(Math.abs((join.x-before.x)/(join.y-before.y)-(after.x-join.x)/(after.y-join.y))<.001,'slanted wall and roof have matching tangents');
+g.run(`const roofPoints${radius}=[];ctx.moveTo=ctx.lineTo=(x,y)=>roofPoints${radius}.push({x,y});drawSurfFrothRibbon(crown-${radius},.76,1,flowView,1,1,true)`);
+assert.ok(g.run(`Math.min(...roofPoints${radius}.map(p=>p.y))`)<=top.y+1e-8,'rendering keeps the top of the curl visible');
+}
+g.run('drawSurfWaveFace();surfSession.waveSize=.48;drawSurfWaveFace()');
+g.run(`const roofRibbons=[];drawSurfFrothRibbon=(...args)=>{if(args[6])roofRibbons.push(args)};for(const clock of [0,600,1800]){surfClock=clock;drawSurfFaceFroth(flowView)}`);
+assert.equal(g.run('roofRibbons.length'),9);
+assert.ok(g.run('roofRibbons.every(args=>args[1]>=.76&&args[2]<=1)'), 'the barrel pass emits only curved roof fragments, never upward columns');
+});
+
+test('froth ribbons only leave the face after their entire length rolls over the lip',()=>{
+const g=surfGame();
+for(const [start,end,length] of [[0,1,.24],[.76,1,.07]]){
+const span=phase=>g.run(`surfFrothRibbonSpan(${phase},${length},${start},${end})`);
+const reachesLip=(end-start)/(end-start+length),atLip=span(reachesLip),exiting=span((reachesLip+1)/2),last=span(1-1e-6),next=span(0);
+assert.ok(Math.abs(atLip.to-end)<1e-8);
+assert.ok(Math.abs((atLip.to-atLip.from)-length)<1e-8,'whole streak survives until its head reaches the lip');
+assert.equal(exiting.to,end);assert.ok(exiting.from>atLip.from&&exiting.from<end,'tail continues up after the head leaves');
+assert.ok(end-last.from<.00001,'only an invisible final sliver remains before recycling');
+assert.equal(next.to,start);assert.equal(next.from,start,'new streak enters at the trough with no visible reset');
+}
+g.run(`const driftingRibbons=[];drawSurfFrothRibbon=(...args)=>{if(!args[6])driftingRibbons.push(args)};surfClock=1500;drawSurfFaceFroth({...surfRideView(),breakX:180,scroll:250})`);
+assert.equal(g.run('driftingRibbons.length'),33,'scrolling ribbons are clipped by the water rather than deleted near the curl');
+});
+
+test('crest froth thickens gradually along the shoulder into the curling lip',()=>{
+const g=surfGame();g.run(`surfSession.phase='riding';const frothView=surfRideView();const frothCrown=surfLipCrown(frothView)`);
+const profiles=[320,220,140,80,40,0].map(distance=>g.run(`surfCrestFrothProfile(frothCrown-${distance},frothView)`));
+for(const property of ['width','density','alpha'])assert.ok(profiles.every((p,i)=>!i||p[property]>profiles[i-1][property]),property+' builds continuously toward the curl');
+assert.ok(profiles[2].width>4,'foam starts thickening well before the curl');
+assert.ok(profiles.at(-1).width>profiles[0].width*4,'the crest blends into a broad curling lip');
+g.run('drawSurfWaveLip(frothView);surfSession.waveSize=.48;drawSurfWaveLip(frothView)');
 });
 
 test('lip spray arcs clockwise from the back, forward and downward under gravity',()=>{
