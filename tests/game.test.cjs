@@ -2219,16 +2219,30 @@ assert.equal(g.run('sharkWater(WORLD.left,900)'),false);assert.equal(g.run('boat
 g.run('swimming=false;player.x=-1000;player.y=1750;draw()');assert.equal(g.run('onMainlandBeach()'),true);
 });
 
-for(const vessel of ['ferry','fishing'])test(`${vessel} twin outboards swivel smoothly, center, and reverse their steering angle`,()=>{
+for(const vessel of ['ferry','fishing','speedboat'])test(`${vessel} outboards swivel smoothly, center, and keep their steering direction in reverse`,()=>{
 const g=game();g.run(`boating=true;state.ferryRemaining=FERRY_RIDE_DURATION;activeVessel=${JSON.stringify(vessel)};player.x=1100;player.y=1400;resetBoatMotion();boatMotion.velocity=80;driveBoat(40,1,1)`);
 const early=g.run('boatMotion.steering');assert.ok(early<0&&early>-.48);
 g.run('driveBoat(400,1,1)');assert.ok(g.run('boatMotion.steering')<early);
 g.run('let angles=[];ctx.rotate=a=>angles.push(a);drawOutboardMotors(activeVessel,true)');
-assert.equal(g.run('angles.length'),2);assert.equal(g.run('angles[0]'),g.run('angles[1]'));assert.ok(g.run('angles[0]')<0);
+assert.equal(g.run('angles.length'),vessel==='speedboat'?3:2);assert.equal(g.run('angles[0]'),g.run('angles[1]'));assert.ok(g.run('angles[0]')<0);
 g.run('driveBoat(500,0,0)');assert.ok(Math.abs(g.run('boatMotion.steering'))<.01);
-g.run('boatMotion.velocity=-40;driveBoat(400,-1,1)');assert.ok(g.run('boatMotion.steering')>0);
-g.run('driveBoat(500,-1,-1)');assert.ok(g.run('boatMotion.steering')<0);
+g.run('boatMotion.velocity=-40;driveBoat(400,-1,1)');assert.ok(g.run('boatMotion.steering')<0);
+g.run('driveBoat(500,-1,-1)');assert.ok(g.run('boatMotion.steering')>0);
 g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.steering'),0);
+});
+
+test('boat steering keeps motor direction while the stern follows input in reverse',()=>{
+for(const vessel of ['ferry','fishing','speedboat'])for(const steer of [-1,1]){
+const outcomes=[];
+for(const velocity of [-40,40])for(const throttle of [0,Math.sign(velocity),-Math.sign(velocity)]){
+const g=game();g.run(`boating=true;state.ferryRemaining=FERRY_RIDE_DURATION;activeVessel='${vessel}';player.x=1100;player.y=1400;boatPosition={x:player.x,y:player.y};resetBoatMotion();boatMotion.velocity=${velocity};driveBoat(200,${throttle},${steer});`);
+assert.equal(Math.sign(g.run('boatMotion.heading')),steer*Math.sign(velocity));
+assert.equal(Math.sign(g.run('player.y-1400')),steer,'the moving end follows the steering input');
+assert.equal(Math.sign(g.run('boatMotion.steering')),-steer);
+outcomes.push(g.run('boatMotion.steering'));
+}
+for(const angle of outcomes)assert.ok(Math.abs(angle-outcomes[0])<1e-9);
+}
 });
 
 for(const vessel of ['ferry','fishing','speedboat'])test(`${vessel} hull wake moves aft onto plane and returns to the bow when slowing`,()=>{
@@ -3981,4 +3995,212 @@ const restored=game(null,g.snapshot());assert.equal(restored.run('boatMotion.hea
 assert.equal(restored.run(`JSON.stringify(boatPosition)`),restored.run(`JSON.stringify((()=>{const p=dockedBoatPose(${name},'ferry');return {x:p.x,y:p.y};})())`));assert.equal(restored.run('canBoardIslandBoat()'),true);
 }
 const offshore=game();offshore.run('state.ferryTicket=true;boardFerry();player.x=1200;player.y=1200;boatPosition={x:1200,y:1200};exitBoat();advanceSwimming(FISH_CAST_DURATION);advanceSwimming(700);save()');const restored=game(null,offshore.snapshot());assert.equal(restored.run('boatPosition.x'),1200);assert.equal(restored.run('boatPosition.y'),1200);
+});
+
+function boatWaveGame(vessel='fishing'){
+const g=game();
+g.run(`state.catches={bass:5};state.speedboat=true;state.ferryRemaining=FERRY_RIDE_DURATION;boating=true;activeVessel='${vessel}';resetBoatMotion();boatMotion.heading=-Math.PI/2;boatMotion.velocity=140;frame=60;
+const waveTime=frame*16.667,lip=beachWaveProfile(1100,0,waveTime).front;
+player.x=lip;player.y=beachWaveSurfaceY(lip,0,waveTime)+BOAT_WAKE_HULLS[activeVessel].edge[0][0]+2;boatPosition={x:player.x,y:player.y};`);
+return g;
+}
+test('coastal boat jumps scale with lip proximity, offshore approach, speed and vessel size',()=>{
+const g=boatWaveGame();
+const lip=g.run('boatWaveContact(player.x,player.y,boatMotion.heading,activeVessel,0,waveTime).strength');
+const face=g.run('boatWaveContact(player.x+180,player.y,boatMotion.heading,activeVessel,0,waveTime).strength');
+assert.ok(lip>face*3);
+const impulse=(strength,heading,velocity,vessel)=>g.run(`boatWaveImpulse(${strength},${heading},${velocity},'${vessel}')`);
+const fishing=impulse(lip,-Math.PI/2,140,'fishing');
+assert.ok(fishing>impulse(lip,-Math.PI/2,140,'speedboat'));
+assert.ok(impulse(lip,-Math.PI/2,140,'speedboat')>impulse(lip,-Math.PI/2,140,'ferry'));
+assert.ok(fishing>impulse(lip,Math.PI/2,140,'fishing')*2);
+assert.ok(fishing>impulse(lip,0,140,'fishing'));
+assert.ok(fishing>impulse(face,-Math.PI/2,140,'fishing'));
+assert.ok(fishing>impulse(lip,-Math.PI/2,35,'fishing'));
+});
+test('crossing a coastal crest throws bow spray, jumps once, and splashes at the landing position',()=>{
+const g=boatWaveGame();
+g.run('advanceBoatWaves(16);player.y-=4;advanceBoatWaves(16)');
+assert.ok(g.run('boatMotion.waveVelocity')>50);
+assert.ok(g.run('boatMotion.spray.filter(p=>p.wave).length')>0&&g.run('boatMotion.spray.length')<96);
+assert.ok(Math.abs(g.run('boatMotion.spray[0].y-player.y+25'))<.001,'impact is at the bow');
+g.run('const initialSpray=boatMotion.spray.length;player.y-=20;boatPosition={x:player.x,y:player.y};advanceBoatWaves(250)');
+assert.ok(g.run('boatMotion.waveHeight')>10);
+assert.ok(g.run('boatMotion.spray.length')>g.run('initialSpray'));
+g.run('for(let i=0;i<40;i++){player.y-=2;advanceBoatWaves(16);}for(let i=0;i<120;i++)advanceBoatWaves(16)');
+assert.equal(g.run('boatMotion.waveHeight'),0);
+assert.equal(g.run('boatMotion.waveSerial'),2,'one impact and one landing');
+assert.equal(g.run('boatMotion.spray.filter(p=>p.wave).length'),328);
+assert.equal(g.run('boatMotion.spray.at(-1).y'),g.run('player.y'));
+});
+test('coastal jumps ignore stationary fishing and anchoring, clear on exit, and do not cross wave wraps',()=>{
+for(const setup of ['boatMotion.velocity=0','fishingActive=true','boatAnchor={x:0,y:0,elapsed:0,casting:true}']){
+const g=boatWaveGame();g.run(`advanceBoatWaves(16);${setup};player.y-=4;advanceBoatWaves(16)`);
+assert.equal(g.run('boatMotion.waveHeight||0'),0,setup);
+}
+const g=boatWaveGame();g.run('advanceBoatWaves(16);player.y-=200;advanceBoatWaves(16)');
+assert.equal(g.run('boatMotion.waveHeight||0'),0);
+g.run('boatMotion.waveHeight=20;boatMotion.waveVelocity=30;boating=false;advanceBoatWaves(16)');
+assert.equal(g.run('boatMotion.waveHeight'),0);assert.equal(g.run('boatMotion.waveContacts'),null);
+g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.spray.length'),0);
+});
+test('airborne boat render lifts the hull and rider above a water-fixed shadow without emitting wakes',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.waveHeight=20;boatMotion.waveVelocity=40;boatMotion.waveSplashes=[{x:player.x,y:player.y,age:100,impact:80}];
+let hullY,shadowY,riderY;const originalHull=beginBoatHull,originalShadow=drawBoatShadow,originalRider=drawSeatedBoatRider;
+beginBoatHull=(x,y,...args)=>{hullY=y;originalHull(x,y,...args);};drawBoatShadow=(x,y,...args)=>{shadowY=y;originalShadow(x,y,...args);};drawSeatedBoatRider=(x,y,...args)=>{riderY=y;originalRider(x,y,...args);};
+${vessel==='fishing'?'fishingBoatArt':vessel==='ferry'?'ferryArt':'speedboatArt'}(player.x,player.y);
+recordHullWake(boatMotion,{x:player.x-12,y:player.y},player,0,activeVessel);`);
+assert.equal(g.run('shadowY'),g.run('player.y'));
+assert.equal(g.run('hullY'),g.run('player.y-20'));
+assert.equal(g.run('riderY'),g.run(`player.y-20-Math.sin(boatMotion.heading)*${vessel==='ferry'?19:vessel==='speedboat'?11:3}-2`));
+assert.equal(g.run('boatMotion.wake.length'),0);
+assert.equal(g.run('boatMotion.waveHeight'),20,'rendering does not advance flight');
+}
+});
+
+test('coastal flight keeps settling while an anchor is thrown or fishing starts',()=>{
+for(const mode of ['anchor','fishing']){
+const g=boatWaveGame();g.run('advanceBoatWaves(16);player.y-=4;advanceBoatWaves(16)');
+if(mode==='anchor')g.run("boatAnchor={x:player.x+100,y:player.y,elapsed:0,casting:true};advanceBoatAnchor(100)");
+else g.run('fishingActive=true;stopBoatPropulsion();advanceBoatMotion(100)');
+assert.ok(g.run('boatMotion.waveHeight')>0);
+assert.equal(g.run('fishingAngler().y'),g.run('player.y-boatMotion.waveHeight'));
+g.run('boatAnchor=null;for(let i=0;i<120;i++)advanceBoatMotion(16)');
+assert.equal(g.run('boatMotion.waveHeight'),0);
+assert.equal(g.run('boatMotion.waveSerial'),2);
+}
+});
+
+test('bow wave spray renders immediately above the hull and pushes water mostly outward',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=boatWaveGame(vessel);
+g.run('advanceBoatWaves(16);player.y-=4;advanceBoatWaves(16)');
+assert.ok(g.run('boatMotion.spray.filter(p=>p.bow).length')>0&&g.run('boatMotion.spray.length')<96);
+assert.ok(g.run('boatMotion.spray.every(p=>p.vz>0&&p.size>=.2)'));
+assert.ok(g.run('boatMotion.spray.some(p=>p.vx<0)&&boatMotion.spray.some(p=>p.vx>0)'));
+assert.ok(g.run('boatMotion.spray.every(p=>Math.abs(p.vx)>Math.abs(p.vy)*2)'), 'outward spray dominates forward carry at the offshore bow');
+g.run(`let drops=0;const originalEllipse=ellipse;ellipse=(...args)=>{drops++;originalEllipse(...args);};
+drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,false);`);
+assert.equal(g.run('drops'),0,'bow spray is not buried under the boat');
+g.run('drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true)');
+assert.equal(g.run('drops'),g.run('boatMotion.spray.length'),'droplets are visible in the impact frame');
+assert.equal(g.run('boatMotion.spray[0].age'),0,'rendering does not age spray');
+}
+});
+
+for(const phase of ['casting','retrieving'])test(`anchor ${phase} keeps ambient animations running while the boat waits`,()=>{
+const g=game();
+g.run(`state.catches={bass:5};launchBoat();player.x=600;player.y=350;boatPosition={x:600,y:350};state.surfRental=true;throwBoatAnchor();`);
+if(phase==='retrieving')g.run('boatAnchor.casting=false;retrieveBoatAnchor()');
+const before=g.run('({surf:surfClock,dragon:petDragonPhase,frame,wave:surfWaveY(1200,0)})');
+g.run('keys.add("right");advanceSwimming(200);driveBoat(200,1,1);moveExplorer(20,0);draw()');
+assert.equal(g.run('surfClock'),before.surf+200);
+assert.ok(g.run('petDragonPhase')>before.dragon);
+assert.equal(g.run('frame'),before.frame+1);
+assert.notEqual(g.run('surfWaveY(1200,0)'),before.wave);
+assert.equal(g.run('boatAnchor.'+(phase==='casting'?'elapsed':'retrieveElapsed')),200);
+assert.equal(g.run('player.x'),600);assert.equal(g.run('player.y'),350);
+assert.equal(g.run('boatPosition.x'),600);assert.equal(g.run('boatPosition.y'),350);
+});
+
+test('bow wave spray stays mostly lateral at every heading and in reverse',()=>{
+const g=boatWaveGame();
+for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*1.5])for(const velocity of [-70,35,140,206.5]){
+g.run(`boatMotion.spray=[];boatMotion.velocity=${velocity};emitBoatWaveSpray(player.x,player.y,${heading},80)`);
+assert.ok(g.run(`boatMotion.spray.every(p=>Math.abs(-Math.sin(${heading})*p.vx+Math.cos(${heading})*p.vy)>Math.abs(Math.cos(${heading})*p.vx+Math.sin(${heading})*p.vy)*2)`), `heading ${heading}, speed ${velocity}`);
+}
+});
+
+test('wave impact spray forms a dense sheet along both sides of the full hull',()=>{
+for(const vessel of ['fishing','speedboat','ferry'])for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI]){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.heading=${heading};emitBoatWaveSpray(player.x,player.y,boatMotion.heading,80);
+const c=Math.cos(boatMotion.heading),s=Math.sin(boatMotion.heading),hull=BOAT_WAKE_HULLS[activeVessel].edge;
+const along=boatMotion.spray.map(p=>(p.x-player.x)*c+(p.y-player.y)*s);
+const across=boatMotion.spray.map(p=>-(p.x-player.x)*s+(p.y-player.y)*c);`);
+const length=g.run('hull[0][0]-hull.at(-1)[0]');
+assert.ok(g.run('boatMotion.spray.length')>=length*2);
+assert.ok(Math.abs(g.run('Math.max(...along)'))<1e-8);
+assert.ok(Math.abs(g.run('Math.min(...along)')+length)<1e-8);
+for(let section=0;section<4;section++)for(const side of [-1,1]){
+assert.ok(g.run(`along.some((a,i)=>a<=-${length*section/4}+1e-8&&a>=-${length*(section+1)/4}-1e-8&&across[i]*${side}>0)`), `${vessel}: section ${section}, side ${side}`);
+}
+}
+});
+
+test('outward wave spray clears the passing hull and is masked behind the raised deck',()=>{
+for(const vessel of ['fishing','speedboat','ferry'])for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI]){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.heading=${heading};emitBoatWaveSpray(player.x,player.y,boatMotion.heading,80);
+const c=Math.cos(boatMotion.heading),s=Math.sin(boatMotion.heading),edge=BOAT_WAKE_HULLS[activeVessel].edge;
+const passingHullClear=t=>boatMotion.spray.every(p=>{
+const along=edge[0][0]+(p.x+p.vx*t-player.x-c*140*t)*c+(p.y+p.vy*t-player.y-s*140*t)*s;
+if(along<edge.at(-1)[0]||along>edge[0][0])return true;
+const pair=edge.findIndex(point=>point[0]<=along),j=Math.max(1,pair),[ax,ay]=edge[j-1],[bx,by]=edge[j];
+const width=ay+(by-ay)*(ax-along)/(ax-bx);
+return Math.abs(-(p.x+p.vx*t-player.x-c*140*t)*s+(p.y+p.vy*t-player.y-s*140*t)*c)>=width+.39;
+});`);
+for(const t of [0,.01,.05,.15,.3,.5]){
+assert.ok(g.run(`passingHullClear(${t})`), `${vessel}: spray stays outside as hull passes at ${t}s`);
+}
+g.run(`boatMotion.waveHeight=18;boatMotion.roll=.2;boatPosition={x:player.x,y:player.y};
+let clipRule,outline=[],points=[];ctx.rect=()=>{};ctx.moveTo=(x,y)=>{points=[[x,y]];};ctx.lineTo=(x,y)=>points.push([x,y]);ctx.clip=rule=>{clipRule=rule;outline=points.slice();};
+drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true);`);
+assert.equal(g.run('clipRule'),'evenodd');
+assert.ok(g.run('inside(boatPosition.x,boatPosition.y-boatMotion.waveHeight-2,outline)'),'deck is excluded from foreground spray');
+}
+});
+
+test('wave spray progresses from bow to stern with hull crossing rather than elapsed time',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=boatWaveGame(vessel);
+g.run('advanceBoatWaves(16);player.y-=4;advanceBoatWaves(16)');
+const first=g.run('boatMotion.spray.length');
+assert.ok(first>0&&first<30);
+g.run('advanceBoatWaves(40)');assert.equal(g.run('boatMotion.spray.length'),first,'no new hull section has crossed');
+g.run('player.y-=12;advanceBoatWaves(16)');
+const middle=g.run('boatMotion.spray.length');
+assert.ok(middle>first);
+assert.ok(g.run('boatMotion.waveSpraySweep.next')<g.run('Math.ceil(BOAT_WAKE_HULLS[activeVessel].edge[0][0]-BOAT_WAKE_HULLS[activeVessel].edge.at(-1)[0])'));
+g.run('for(let i=0;i<45;i++){player.y-=2;advanceBoatWaves(16);}');
+assert.equal(g.run('boatMotion.waveSpraySweep'),null);
+assert.equal(g.run('boatMotion.spray.filter(p=>p.bow).length'),g.run('(BOAT_WAKE_HULLS[activeVessel].edge[0][0]-BOAT_WAKE_HULLS[activeVessel].edge.at(-1)[0])*6'));
+assert.ok(g.run('boatMotion.spray.some(p=>!p.bow)')||g.run('boatMotion.waveHeight')>0);
+}
+});
+
+test('progressive wave spray originates at the tapered hull rather than the maximum beam',()=>{
+for(const vessel of ['fishing','speedboat','ferry'])for(const heading of [0,Math.PI/4,Math.PI/2,Math.PI]){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.heading=${heading};emitBoatWaveSpray(player.x,player.y,boatMotion.heading,80);
+const edge=BOAT_WAKE_HULLS[activeVessel].edge,c=Math.cos(boatMotion.heading),s=Math.sin(boatMotion.heading);`);
+assert.ok(g.run(`boatMotion.spray.every(p=>{
+const along=edge[0][0]+(p.x-player.x)*c+(p.y-player.y)*s;
+const j=Math.max(1,edge.findIndex(point=>point[0]<=along+1e-8));
+const [ax,ay]=edge[j-1],[bx,by]=edge[j],width=ay+(by-ay)*(ax-along)/(ax-bx);
+const across=Math.abs(-(p.x-player.x)*s+(p.y-player.y)*c);
+return Math.abs(across-width-.4)<1e-8;
+})`), `${vessel}: every spray origin follows the hull outline`);
+assert.ok(g.run('Math.hypot(boatMotion.spray[0].x-player.x,boatMotion.spray[0].y-player.y)')<.5,'first spray starts at the pointed nose');
+}
+});
+
+test('wave spray mixes abundant varied droplets and fading mist with shorter outward reach',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=boatWaveGame(vessel);
+g.run('emitBoatWaveSpray(player.x,player.y,boatMotion.heading,80);const mist=boatMotion.spray.filter(p=>p.mist),drops=boatMotion.spray.filter(p=>!p.mist);');
+assert.equal(g.run('boatMotion.spray.length'),g.run('(BOAT_WAKE_HULLS[activeVessel].edge[0][0]-BOAT_WAKE_HULLS[activeVessel].edge.at(-1)[0])*6'));
+assert.equal(g.run('mist.length'),g.run('boatMotion.spray.length/3'));
+assert.ok(g.run('drops.some(p=>p.size<.6)&&drops.some(p=>p.size>4)'),'fine drops and larger splashes');
+assert.ok(g.run('mist.every(p=>p.size<.8&&p.life<.3)'),'short-lived fine mist');
+assert.ok(g.run('drops.reduce((sum,p)=>sum+Math.hypot(p.vx,p.vy)*p.life,0)/drops.length')<25,'compact outward splash');
+g.run(`boatMotion.spray=mist;for(const p of mist)p.age=p.life*.5;
+let alphas=[];const oldEllipse=ellipse;ellipse=(...args)=>{alphas.push(ctx.globalAlpha);oldEllipse(...args);};drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true);`);
+assert.equal(g.run('alphas.length'),g.run('mist.length'));
+assert.ok(g.run('alphas.every(alpha=>alpha>0&&alpha<.1)'),'mist fades as a translucent haze');
+g.run('for(const p of mist)p.age=p.life;alphas=[];drawBoatTrimSpray(player.x,player.y,boatMotion.heading,activeVessel,true)');
+assert.equal(g.run('alphas.length'),0,'mist disappears without a heavy landing splash');
+}
 });

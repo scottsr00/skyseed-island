@@ -67,7 +67,8 @@ needed by parallel hulls beside narrow island shorelines. Saved ferries parked b
 adopt the snug berth on reload; occupied rides and offshore/beach moorings retain their positions. Offshore, the rider first throws an anchor with an unfurling
 rope, then dives into the sea. The boat stays still during the throw and the rope remains while it
 is moored. Anchor throws land in clear water at least 72 pixels from the boat. Reboarding
-automatically hauls the rope and anchor aboard before steering resumes; beach moorings retain their
+automatically hauls the rope and anchor aboard before steering resumes. Ambient world updates
+continue during both throwing and hauling; only the rider and boat controls wait. Beach moorings retain their
 anchor position across reloads. Swim with WASD/arrows, walk onto shore, or use E beside your parked
 boat to reboard. Fish from your boat or return it to the dock; Crystal Cavern can be reached without
 a ferry pass. Sponsorship is saved per age level.
@@ -121,8 +122,10 @@ boat. Turns and long moves stop before contact; reverse lets a boat move away. B
 provide hull clearance beside docks.
 
 Boat driving: Up/W applies forward thrust, Down/S brakes before reversing, and Left/A or Right/D
-steers smoothly relative to the bow. The vessels accelerate gradually, coast when released, and stop
-their momentum on collision.
+steers smoothly relative to travel. The steering wheel and outboards keep the same input direction
+while reversing; hull rotation reverses so the stern follows that input when backing up.
+Turning follows actual velocity, including coasting and braking before a direction change.
+The vessels accelerate gradually, coast when released, and stop their momentum on collision.
 
 Press Space while driving a boat to trim the outboard motors: five separate presses raise trim from
 0 to 5, then five lower it back to 0. Trim positions 1–4 widen the spray and add up to 18% forward
@@ -132,6 +135,18 @@ at maximum trim takes about 11 seconds to reach its reduced forward top speed. T
 rooster tail stays full-sized under forward throttle even from a standstill. Lowering back to 4
 restores propulsion; spray fades after releasing the throttle. Holding Space does not repeat trim
 changes, and Space still casts while fishing.
+
+Coastal crests launch moving boats through `advanceBoatWaves()`, using the same wave surface
+and repeating breaking lips as the beach renderer. Heading offshore into the break, proximity
+to the lip, wave size, and speed increase the jump. Fishing boats jump highest, speedboats less,
+and ferries make a small hop. `advanceBoatWaveSpray()` emits spray progressively from bow
+to stern as each hull section crosses the same crest, including during a jump. The dense
+sheets cover both sides of the full hull with six particles per section: a mix of fine drops,
+larger splashes, and translucent mist. Spray travels mostly outward with slight forward carry,
+but falls sooner to keep it close to the boat; mist expands and fades quickly. Droplets start on the tapered hull outline, including the pointed bow. Their outward
+velocity clears the widening hull as the boat advances. Far-side spray is masked behind the raised deck; ballistic landings throw a radial splash
+and expanding foam ring. Hulls and riders rise together above water-fixed shadows, with no
+new wake emitted while airborne. These effects are session-only and reset with boat motion.
 
 ## Fuel and fishing
 

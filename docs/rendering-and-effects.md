@@ -140,7 +140,17 @@ outboard steering. The tow-boat driver has a matching wheel. World-space wakes a
 on the water. Boat shadows use soft oval footprints so a hard-edged shadow cannot resemble
 a rectangular hull beneath the banked deck.
 
-## Dragon shadow
+## Dragon animation and shadow
+
+`petDragonPose()` derives a render-only pose from the simulation phase and flight stage.
+Articulated wing wrists and membrane fingers flex through each beat; the tail tip lags its
+base, airborne legs tuck, swimming legs paddle, and the resting dragon breathes and blinks.
+Landing progressively folds the wings and extends the feet.
+Flight headings toward screen up/down blend into a dorsal view: centered back plates,
+a top-facing skull, paired horns and two eyes replace the side profile. The same pose
+projects into the shadow; horizontal flight retains its side view. Shaded scales, belly plates,
+claws, horns, and a highlighted eye keep the violet-and-gold pet readable at native size.
+The mouth remains anchored to the existing fire origin and collision sampling.
 
 `drawPetDragonBody()` supplies the colored dragon and its ground silhouette from the same
 wing, tail, body, leg, head, and horn geometry. The shadow follows heading, mirrored facing,
