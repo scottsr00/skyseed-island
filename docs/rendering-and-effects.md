@@ -146,9 +146,10 @@ a rectangular hull beneath the banked deck.
 Articulated wing wrists and membrane fingers flex through each beat; the tail tip lags its
 base, airborne legs tuck, swimming legs paddle, and the resting dragon breathes and blinks.
 Landing progressively folds the wings and extends the feet.
-Flight headings toward screen up/down blend into a dorsal view: centered back plates,
+Flight and swimming headings toward screen up/down blend into a dorsal view: centered back plates,
 a top-facing skull, paired horns and two eyes replace the side profile. The same pose
-projects into the shadow; horizontal flight retains its side view. Shaded scales, belly plates,
+projects into the shadow; horizontal travel retains its side view. The swimming waterline
+wraps around the body as the view moves overhead. Shaded scales, belly plates,
 claws, horns, and a highlighted eye keep the violet-and-gold pet readable at native size.
 The mouth remains anchored to the existing fire origin and collision sampling.
 

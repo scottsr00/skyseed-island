@@ -1835,7 +1835,7 @@ function petDragonPose(){
 const stage=dragonFlight?.stage,water=stage==='swimming',air=!!stage&&!water;
 const phase=petDragonPhase,beat=Math.sin(phase),recovery=Math.sin(phase-.65);
 const settle=['takeoff','landing','splashdown'].includes(stage)?Math.min(1,dragonFlight.altitude/18):1;
-return {water,air,overhead:air?Math.sin(dragonFlight.heading)**2:0,breath:Math.sin(phase*.32)*.35,
+return {water,air,overhead:dragonFlight?Math.sin(dragonFlight.heading)**2:0,breath:Math.sin(phase*.32)*.35,
 span:water?7+beat*.7:air?6+(4+(beat+1)*7)*settle:6+Math.sin(phase*.32)*.35,
 sweep:air?recovery*4:water?Math.sin(phase*.7):0,
 tail:Math.sin(phase*(water?.9:.55))* (water?5:air?3.5:2),
@@ -1931,7 +1931,7 @@ ctx.save();ctx.translate(x+shake*12,y-height);ctx.rotate(heading+shake);
 if(Math.cos(heading)<0)ctx.scale(1,-1);
 drawPetDragonBody(pose,inWater);
 drawPetDragonWater();
-if(inWater){ctx.globalAlpha=.5;ctx.strokeStyle='#d3efe3';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(0,2,21,7,0,0,Math.PI);ctx.stroke();ctx.globalAlpha=1;}ctx.restore();
+if(inWater){ctx.globalAlpha=.5;ctx.strokeStyle='#d3efe3';ctx.lineWidth=.8;ctx.beginPath();ctx.ellipse(0,2*(1-pose.overhead),21,7,0,0,Math.PI*(1+pose.overhead));ctx.stroke();ctx.globalAlpha=1;}ctx.restore();
 if(flight){character(x,y-height-4);if(inWater)directionalSwimGear(x,y-19);}
 else{ctx.fillStyle='#f7e3ad';ctx.font='bold 8px monospace';ctx.textAlign='center';ctx.fillText('PET DRAGON',x,y-34);}
 }
