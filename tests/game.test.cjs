@@ -1904,6 +1904,28 @@ g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');assert.equa
 g.run('startDive({x:600,y:350});advanceSwimming(700);advancePower(180000)');assert.equal(g.run('swimming'),true);assert.equal(g.run('state.power'),100);assert.equal(g.run('currentProfile().power'),100);
 g.run('returnBoat();state.catches={barracuda:5};launchBoat()');assert.equal(g.run('boating'),true);
 });
+test('authenticated admin surfing preserves energy through paddling, wave phases, retries and swimming exits',()=>{
+const g=game({beachPass:true,power:12});
+g.node('#adminPassword').value='11111';g.node('#adminOverrideForm').onsubmit({preventDefault(){}});
+g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;openSurfShack()');
+assert.equal(g.run('surfSession.phase'),'paddling');
+const unchanged=()=>{
+assert.equal(g.run('adminMode'),true);
+assert.equal(g.run('state.power'),100);
+assert.equal(g.run('currentProfile().power'),100);
+assert.equal(g.node('#powerValue').textContent,'∞ Unlimited');
+};
+g.run('keys.add("up");for(let i=0;i<1500;i++)advanceSwimming(40);keys.clear()');unchanged();
+for(const phase of ['takeoff','popup','riding','airborne','wipeout']){
+g.run(`prepareSurfTakeoff();Object.assign(surfSession,{phase:${JSON.stringify(phase)},popTime:0,wipeoutTime:0,airHeight:1,airV:1});for(let i=0;i<25;i++)advanceSwimming(40)`);
+unchanged();
+}
+g.run('finishSurfHeat()');g.node('#surfRetry').onclick();
+assert.equal(g.run('surfSession.phase'),'paddling');unchanged();
+g.run('exitSurfing();advanceSwimming(1000)');assert.equal(g.run('swimming'),true);unchanged();
+g.run('exitAdminMode();advanceSwimming(1000)');assert.ok(g.run('state.power')<100);
+});
+
 test('exiting admin mode restores normal limits and safely lands a zero-power swimmer',()=>{
 const g=game({power:0,solved:[],upgrades:[]});g.node('#adminPassword').value='11111';g.run('applyAdminOverride();state.power=0;swimming=true;player.x=600;player.y=350');g.node('#exitAdminMode').onclick();assert.equal(g.run('adminMode'),false);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('hasSwimPower()'),false);assert.equal(g.node('#powerValue').textContent,'0 / 100');assert.equal(g.node('#exitAdminMode').hidden,true);
 });
@@ -2950,7 +2972,7 @@ const g=surfGame();g.run(`setSurfTestRide();surfSession.speed=.7;surfSession.ang
 assert.equal(g.run('surfSession.phase'),'riding');
 g.run(`handleSurfKey(' ',airEvent);advanceSurfing(16)`);assert.equal(g.run('surfSession.phase'),'airborne');
 const touch=surfGame();touch.run(`setSurfTestRide();surfSession.speed=.7;surfSession.angle=Math.PI+.6;surfSession.y=.025;updateSurfUI()`);
-assert.match(touch.node('#surfAction').textContent,/Air at crest/);
+assert.equal(touch.node('#surfAction').textContent,'Air - Tap Space, Snap - Hold Space');
 touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});touch.run('advanceSurfing(16)');assert.equal(touch.run('surfSession.phase'),'airborne');
 const snapshot=touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])');
 touch.run(`surfSession.paused=true;keys.add('right');advanceSurfing(1000)`);assert.equal(touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])'),snapshot);
@@ -3089,6 +3111,38 @@ const pose=g.run('JSON.stringify(surfRiderPose())');g.run('surfSession.paused=tr
 g.run('surfSession.paused=false');g.node('#challenge').showModal();g.run('advanceSurfing(300)');assert.equal(g.run('JSON.stringify(surfRiderPose())'),pose);g.node('#challenge').close();
 g.run('prepareSurfTakeoff(.7)');assert.equal(g.run('surfSession.armTurn'),0);
 g.run('surfSession.armTurn=1;prepareSurfPaddleOut(true)');assert.equal(g.run('surfSession.armTurn'),0);
+});
+test('surf held aerial grabs tuck the pose and boost spins in either direction without changing flight',()=>{
+for(const key of ['left','right']){
+const normal=surfGame(),grab=surfGame();
+for(const g of [normal,grab])g.run(`setSurfTestRide();Object.assign(surfSession,{phase:'airborne',x:.2,y:.012,airHeight:3,airV:0,airSpin:0,speed:.75});keys.add('${key}')`);
+grab.run("handleSurfKey(' ',{repeat:false,preventDefault(){}})");
+for(const g of [normal,grab])g.run('advanceSurfing(500)');
+assert.ok(grab.run('Math.abs(surfSession.airSpin)')>normal.run('Math.abs(surfSession.airSpin)')*1.45);
+assert.equal(grab.run('surfSession.airHeight'),normal.run('surfSession.airHeight'));assert.equal(grab.run('surfSession.x'),normal.run('surfSession.x'));
+assert.ok(grab.run('surfRiderPose().crouch')>normal.run('surfRiderPose().crouch')+6);
+assert.ok(grab.run('surfRiderPose().torsoHeight')<normal.run('surfRiderPose().torsoHeight'));
+grab.run('surfSession.airGrab=1;var gripPose=surfRiderPose(),gripArms=surfRiderArms(gripPose,0,-10)');
+for(const [i,side] of [[0,-1],[1,1]]){
+assert.equal(grab.run(`gripArms[${i}].hand[0]`),side*1.5);assert.ok(Math.abs(grab.run(`gripArms[${i}].hand[1]-(${side})*gripPose.grabRail`))<1e-9);
+}
+grab.run("keys.delete(' ');advanceSurfing(250)");assert.ok(grab.run('surfSession.airGrab')<.07);
+grab.run('prepareSurfTakeoff(.7)');assert.equal(grab.run('surfSession.airGrab'),0);
+}
+});
+test('surf grab must be released before landing for both keyboard and touch',()=>{
+for(const touch of [false,true])for(const release of [false,true]){
+const g=surfGame();g.run("setSurfTestRide();Object.assign(surfSession,{phase:'airborne',x:.3,y:.012,airHeight:.001,airV:-1,airSpin:-Math.PI/2,airGrab:1})");
+if(touch)g.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});else g.run("handleSurfKey(' ',{repeat:false,preventDefault(){}})");
+if(release){if(touch)g.node('#surfAction').onpointerup();else g.run("keys.delete(' ')");}
+g.run('advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),release?'riding':'wipeout');assert.equal(g.run('surfSession.airGrab'),0);
+if(release)assert.equal(g.run('surfSession.lastTrick.name'),'Air');else{assert.equal(g.run('surfSession.score'),0);assert.match(g.run('surfSession.message'),/Release Space/);}
+}
+});
+test('surf aerial grab animation freezes for pause and dialogs',()=>{
+const g=surfGame();g.run("setSurfTestRide();Object.assign(surfSession,{phase:'airborne',x:.2,y:.012,airHeight:3,airV:0,airSpin:0,speed:.75});keys.add(' ');keys.add('right');advanceSurfing(120);surfSession.paused=true");
+const before=g.run('JSON.stringify([surfSession.airGrab,surfSession.airSpin,surfRiderPose()])');g.run('advanceSurfing(400);drawSurfGame();drawSurfGame()');assert.equal(g.run('JSON.stringify([surfSession.airGrab,surfSession.airSpin,surfRiderPose()])'),before);
+g.run('surfSession.paused=false');g.node('#challenge').showModal();g.run('advanceSurfing(400)');assert.equal(g.run('JSON.stringify([surfSession.airGrab,surfSession.airSpin,surfRiderPose()])'),before);g.node('#challenge').close();
 });
 test('surf aerial spins rotate the torso and planted feet together around the board',()=>{
 const g=surfGame();g.run(`setSurfTestRide();surfSession.phase='airborne';surfSession.airSpin=0;
@@ -5179,7 +5233,7 @@ test('surf paddling jump off uses keyboard and button to swim in place without p
 for(const touch of [false,true]){
 const g=surfGame();g.run("player.y=beachShoreY(player.x)-140;surfSession.score=123;surfSession.paddleHeading=-Math.PI/2;keys.add('up');updateSurfUI()");
 const position=g.run('JSON.stringify([player.x,player.y])');
-assert.equal(g.node('#surfQuit').textContent,'Jump off · X');assert.equal(g.node('#surfPause').hidden,true);
+assert.equal(g.node('#surfQuit').hidden,true);assert.equal(g.node('#surfPause').hidden,true);
 g.run('handleSurfKey("p",{repeat:false,preventDefault(){}})');assert.equal(g.run('surfSession.paused'),false);
 if(touch)g.node('#surfQuit').onclick();else g.run('handleSurfKey("x",{repeat:false,preventDefault(){}})');
 assert.equal(g.run('surfSession'),null);assert.equal(g.run('swimming'),true);assert.equal(g.run('JSON.stringify([player.x,player.y])'),position);

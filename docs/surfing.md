@@ -246,6 +246,13 @@ During an air, `drawSurfRider()` rotates the entire stance (hips, legs, torso, h
 arms) around the board center by the same `airSpin` used for the board. Feet are drawn
 in that shared frame without applying the spin twice. This keeps the rider attached
 through upright, sideways, and inverted rotations; landing returns to the riding pose.
+Hold Space (or hold the touch action) in the air to grab both board rails and tuck the
+knees and torso down. `airGrab` blends in/out over 90 ms and increases left/right spin
+speed by up to 60%, with hands remaining on opposite rails in the shared rotating frame.
+Release the grab before touchdown; landing while Space/the touch action is still held
+causes a wipeout and banks no aerial points. A released grab is allowed to finish its
+visual blend while landing. Landing, wipeout, and new waves reset the grab.
+The airborne action label reminds the player to release before landing.
 Use left/right for spins, then land with the
 visible nose pointing anywhere down the face (the open lower half-circle), including back toward
 the curl. Horizontal and upward landings wipe out. `surfAerialTrick()` names completed rotations **Single / Double / Triple / Quad Alleyoop**
@@ -267,7 +274,7 @@ increasing smoothly to 2× at the crown. Distance is absolute, so going behind t
 does not increase the reward further. The multiplier is captured at air takeoff or snap
 initiation, then the final points are rounded and banked only on a successful completion.
 It is independent of snap quality, rotation count, and caught wave size. Heats last 90 seconds or three
-wipeouts; another heat uses the same rental. While paddling, the centered action buttons offer Catch wave and Jump off (X); jumping off leaves the explorer swimming at the same position, and pause is unavailable. During wave riding, P pauses and X returns to the beach. Touch buttons
+wipeouts; another heat uses the same rental. While paddling, Catch wave sits at bottom center; the Jump off (X) reminder is hidden, with no onscreen directional arrows; arrows / WASD still move the surfer. Jumping off leaves the explorer swimming at the same position, and pause is unavailable. During wave riding, P pauses and X returns to the beach; their onscreen buttons are hidden. X still jumps off while paddling, and Another heat remains available at results. Touch buttons
 mirror the controls. Best scores, rental state, and safe beach positions persist. Controls take
 inspiration from the [California Games Lynx
 manual](https://atariage.com/manual_html_page.php?SoftwareID=2413); original procedural wave artwork
@@ -277,12 +284,17 @@ Sandbox](https://store.steampowered.com/app/4480760/Surf_Sandbox/).
 ## Surf HUD
 
 Large speed sits at top left, completed tricks at top center, and large points at top right
-with the heat timer directly below. The directional pad and action button are enlarged and
-separated at the lower corners, with compact variants for narrow and short screens.
+with the heat timer directly below. The Space action button stays at bottom center during both paddling and wave riding, with compact variants for narrow and short
+screens. Directional buttons are hidden; arrows / WASD steer the surfer.
 `recordSurfTrick()` keeps up to 12 completed tricks for the current heat; the center shows the
 latest name and bonus plus the previous three. It survives wave retries and resets for a new
-heat. Instructions stay in a separate lower message so they do not replace completed tricks.
-The action button retains its existing keyboard/touch behavior and hold-to-snap support.
+heat. Commentary and instructions sit at the upper left above the wave, below the speed
+display. The fixed Breaking Wave and
+Hold a direction / Tighten your turn canvas labels are removed. Paddle-out instructions
+retain their existing position.
+The compact, semi-transparent action button keeps **Air - Tap Space, Snap - Hold Space**
+on one line while riding and retains its existing keyboard/touch behavior. Catch and paddle phases keep
+their contextual labels.
 
 ## Change boundaries and verification
 

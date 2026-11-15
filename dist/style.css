@@ -373,11 +373,35 @@ html:has(.map-app){width:100%;height:100%;overflow:hidden}.map-app{width:100%;he
 @media(max-width:600px){.map-suggestions{left:164px;right:12px}}
 @media(max-height:550px) and (pointer:coarse){.map-suggestions{left:240px}}
 
-/* Center paddle-out actions; lift the directional pad when space is tight. */
-.map-stage[data-surf-view="paddling"] .surf-touch-controls #surfAction{position:absolute;left:50%;transform:translateX(-50%);width:auto;min-width:0;max-width:220px;min-height:44px;padding:10px 12px;font:bold 12px/1.4 monospace;border-radius:6px;bottom:0}
-.map-stage[data-surf-view="paddling"] .surf-session-actions{left:50%;right:auto;transform:translateX(-50%);justify-content:center;max-width:90%}
-@media(max-width:800px){.map-stage[data-surf-view="paddling"] .surf-direction-pad{margin-bottom:110px}}
+/* Paddle-out actions share one centered row; movement stays on the keyboard. */
+.map-stage[data-surf-view="paddling"] .surf-overlay{display:grid;grid-template-columns:max-content max-content;justify-content:center;align-content:end;gap:8px;padding:0 8px max(18px,env(safe-area-inset-bottom))}
+.map-stage[data-surf-view="paddling"] .surf-overlay[hidden]{display:none}
+.map-stage[data-surf-view="paddling"] .surf-direction-pad{display:none}
+.map-stage[data-surf-view="paddling"] .surf-touch-controls{display:contents}
+.map-stage[data-surf-view="paddling"] .surf-touch-controls #surfAction{position:static;transform:none;grid-column:1;grid-row:1;width:auto;min-width:0;max-width:none;min-height:44px;padding:10px 12px;font:bold 12px/1.4 monospace}
+.map-stage[data-surf-view="paddling"] .surf-session-actions{position:static;transform:none;grid-column:2;grid-row:1;max-width:none;flex-wrap:nowrap}
+.map-stage[data-surf-view="paddling"] .surf-session-actions button{min-height:44px;padding:10px 12px;font-size:12px}
 
 /* All action buttons share Catch Wave's gently rounded rectangular shape. */
 :root{--action-button-radius:6px}
 button{border-radius:var(--action-button-radius)!important}
+
+/* Surf commentary sits above the wave on the left; steering stays on the keyboard. */
+.surf-overlay .surf-direction-pad{display:none}
+.map-stage[data-surf-view="riding"] .surf-touch-controls{justify-content:flex-end}
+.map-stage[data-surf-view="riding"] .surf-message{top:max(130px,calc(50% - min(14.375vw,23vh)));right:auto;bottom:auto;left:18px;transform:none;width:min(420px,calc(100% - 36px));margin:0;text-align:left}
+@media(max-width:600px){.map-stage[data-surf-view="riding"] .surf-message{left:12px;right:auto;width:calc(100% - 24px)}}
+@media(max-height:500px){.map-stage[data-surf-view="riding"] .surf-message{top:104px;max-width:420px}}
+
+/* Center the Space action along the bottom in every surfing phase. */
+.map-stage[data-surf-view] .surf-touch-controls{display:contents}
+.map-stage[data-surf-view] .surf-overlay .surf-touch-controls #surfAction{position:absolute;top:auto;left:50%;right:auto;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);grid-column:auto;grid-row:auto}
+@media(max-width:600px){.map-stage[data-surf-view] .surf-overlay .surf-touch-controls #surfAction{bottom:max(12px,env(safe-area-inset-bottom))}}
+
+.map-stage[data-surf-view="paddling"] .surf-session-actions{position:absolute;left:max(12px,env(safe-area-inset-left));right:auto;top:auto;bottom:max(18px,env(safe-area-inset-bottom));transform:none}
+
+/* Let the wave show through the Space control while keeping its instructions legible. */
+.map-stage[data-surf-view] .surf-overlay .surf-touch-controls #surfAction{background:#ffdc8780;border-color:#46644f88;box-shadow:0 3px 0 #174a5533}
+
+/* Keep the Space instructions in one compact row on desktop and phones. */
+.map-stage[data-surf-view] .surf-overlay .surf-touch-controls #surfAction{white-space:nowrap;width:max-content;min-width:0;max-width:calc(100% - 24px);min-height:36px;padding:8px 12px;font:bold clamp(10px,2.6vw,12px)/1.2 monospace}
