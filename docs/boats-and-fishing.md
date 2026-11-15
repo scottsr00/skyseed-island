@@ -138,14 +138,19 @@ changes, and Space still casts while fishing.
 
 Coastal crests launch moving boats through `advanceBoatWaves()`, using the same wave surface
 and repeating breaking lips as the beach renderer. Heading offshore into the break, proximity
-to the lip, wave size, and speed increase the jump. Fishing boats jump highest, speedboats less,
+to the lip, wave size, speed, and motor trim increase the jump. Each trim level adds 12% of
+the neutral-trim launch velocity, so trim 5 reaches about 2.56 times the jump height of trim 0
+at the same impact speed. Fishing boats jump highest, speedboats less,
 and ferries make a small hop. `advanceBoatWaveSpray()` emits spray progressively from bow
 to stern as each hull section crosses the same crest, including during a jump. The dense
 sheets cover both sides of the full hull with six particles per section: a mix of fine drops,
 larger splashes, and translucent mist. Spray travels mostly outward with slight forward carry,
 but falls sooner to keep it close to the boat; mist expands and fades quickly. Droplets start on the tapered hull outline, including the pointed bow. Their outward
 velocity clears the widening hull as the boat advances. Far-side spray is masked behind the raised deck; ballistic landings throw a radial splash
-and expanding foam ring. Hulls and riders rise together above water-fixed shadows, with no
+and expanding foam ring. Higher trim also raises the bow around the stern during flight.
+Trimmed boats touch down stern-first, then flatten over 140–300 ms as landing spray and foam
+travel along the hull from stern to bow. Neutral trim retains the flat radial landing splash.
+Hull, cabin, and rider share the pitch motion above water-fixed shadows, with no
 new wake emitted while airborne. These effects are session-only and reset with boat motion.
 
 ## Fuel and fishing

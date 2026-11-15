@@ -63,7 +63,11 @@ a committed bottom turn closes the deck toward an edge-on rail. This changes boa
 without distorting the nose direction or planted feet;
 the rider looks along the direction of travel. The crest and falling lip render before every
 rider pose, keeping foam behind the surfer. The pop-up switches to an opaque standing pose
-after the feet plant, avoiding a transparent silhouette during the transition. Landings compress the stance and kick up a short burst
+after the feet plant, avoiding a transparent silhouette during the transition. `emitSurfLipSpray()` adds a crest-anchored fan of spray on takeoff and carving within the
+top 17% of the face. Spray grows with speed, turn rate, and the closest approach to the lip
+during that climb, so later, sharper top turns throw a larger fan. `drawSurfLipSpray()` draws
+the drifting droplets above the lip and behind the rider. It ages with simulation time,
+freezes on pause/dialogs, and resets on the next wave. Landings compress the stance and kick up a short burst
 of spray.
 
 ## Controls and scoring
@@ -106,8 +110,10 @@ adds turn/landing rail spray. Pauses/dialogs freeze trails, airs stop emission w
 foam fades, and each new wave resets the samples. `surfWipeout()` captures the starting screen position, board heading, and whether the fall began
 in the air. `surfWipeoutPose()` / `drawSurfWipeout()` tumble the detached rider down to the trough
 in 0.95 seconds, then submerge the body beneath the trough over 0.28 seconds. A short splash
-and foam rings feed rising ribbons: `drawSurfWipeoutSplash()` uses `surfFaceFlowPoint()` to
-carry the impact foam up and around the face with the ambient streaks. `drawSurfWipeoutBoard()` tosses
+and foam rings feed a moving patch of overlapping foam lobes, pores, and white bubbles.
+`drawSurfWipeoutSplash()` carries this patch up the face; `surfFaceFlowTangent()` locates
+the ambient streak at its current position so its short flecks follow the nearby water angles.
+The splash leaves no long trail behind it. `drawSurfWipeoutBoard()` tosses
 an intact board alongside ordinary falls; air wipeouts split the original deck into two jagged
 halves that spin apart. `surfWipeoutBoardPose()` then carries each floating piece along the
 same local foam flow up the face, aligns it with the water, and rolls it out of sight over

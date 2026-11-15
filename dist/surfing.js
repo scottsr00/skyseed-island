@@ -32,7 +32,7 @@ function prepareSurfPaddleOut(retry=false){
 const s=surfSession;if(!s)return;
 Object.assign(s,{phase:'paddling',x:.43,y:.48,angle:Math.PI-.12,speed:.4,vx:0,vy:0,
 paddleTime:retry?500:0,paddleEffort:0,paddlePhase:0,paddleHeading:-Math.PI/2,waveSize:1,
-scroll:0,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airV:0,airSpin:0,airTurns:0,
+scroll:0,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,lipSpray:[],lipSprayClock:0,crestApproach:1,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airV:0,airSpin:0,airTurns:0,
 pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,bands:[],
 message:'Paddle out with arrows / WASD. Press Space near a curling lip to catch the wave.'});
 player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-(retry?105:12);keys.clear();
@@ -53,7 +53,7 @@ function prepareSurfTakeoff(waveSize=surfRideScale()){
 const s=surfSession;if(!s)return;
 Object.assign(s,{phase:'takeoff',x:.50,y:.025,angle:Math.PI/2,speed:.18,waveSize,scroll:0,
 paddleTime:0,paddlePower:.24,paddleProgress:0,paddleAge:0,strokeAge:1000,strokeSide:1,paddleStrokes:0,
-popTime:0,popStartX:.50,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airSpin:0,airV:0,airTurns:0,
+popTime:0,popStartX:.50,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,lipSpray:[],lipSprayClock:0,crestApproach:1,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airSpin:0,airV:0,airTurns:0,
 pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,bands:[],
 message:'Tap Space repeatedly to paddle toward you and catch the wave!'});
 keys.clear();
@@ -193,6 +193,7 @@ if(barrel.overrun){surfWipeout('The breaking wave caught you! Link up / down car
 if(s.y>1.03){surfWipeout('Too low on the wave! Carve back up before reaching the trough.');continue;}
 if((s.airRequest||0)>0){
 if(s.y<=.075&&heading<-.2&&s.speed>=.48){
+emitSurfLipSpray(s,1+s.speed/.85,'air');
 s.phase='airborne';s.turnInput=0;s.turnHold=0;s.y=.012;s.airHeight=.01;s.airV=1.4+s.speed*.65;s.airSpin=0;s.airTurns=0;s.airRequest=0;
 s.message='AIR! Left / right spin. Land with the nose pointing down, toward either side.';
 }else s.airRequest=Math.max(0,s.airRequest-ms);
@@ -629,6 +630,8 @@ return {coverage,half:coverage>=.25&&coverage<=.75,overrun:wave.riderX+3>=edge,e
 function advanceSurfWake(s,ms){
 s.wake=(s.wake||[]).filter(mark=>(mark.age+=ms)<1300);
 s.landingSpray=Math.max(0,(s.landingSpray||0)-ms);
+s.lipSpray=(s.lipSpray||[]).filter(mark=>(mark.age+=ms)<900);
+s.lipSprayClock=Math.max(0,(s.lipSprayClock||0)-ms);
 if(s.hullWake)ageBoatWake(s.hullWake,ms);
 }
 function surfWakePosition(s){
@@ -660,6 +663,11 @@ ctx.translate(s.scroll||0,0);drawBoatWake(s.hullWake);ctx.restore();
 function advanceSurfRidingArt(s,ms,previousAngle){
 recordSurfHullWake(s,ms);
 const rate=Math.atan2(Math.sin(s.angle-previousAngle),Math.cos(s.angle-previousAngle))/(ms/1000);
+s.crestApproach=s.y>.25?1:Math.min(s.crestApproach??1,s.y);
+if(s.y<.17&&Math.abs(rate)>.45&&!s.lipSprayClock){
+const late=Math.max(0,Math.min(1.3,(.17-s.crestApproach)/.19));
+emitSurfLipSpray(s,(.25+late*1.25)*Math.min(1,s.speed/.65)*Math.min(1.2,Math.abs(rate)/3),'carve');s.lipSprayClock=80;
+}
 const blend=1-Math.exp(-ms/150),target=Math.max(-1,Math.min(1,rate/3));
 s.carveLean=(s.carveLean||0)+(target-(s.carveLean||0))*blend;
 const strength=Math.min(1,Math.max(Math.abs(rate)/3,Math.abs(Math.sin(s.angle))*.3));
@@ -670,6 +678,30 @@ s.wakeClock-=32;
 const {riderX}=surfRideView(s),crest=surfRideCrest(riderX),y=crest+s.y*(279-crest);
 s.wake.push({x:riderX-(s.scroll||0),y,speed:s.speed,strength:s.carveStrength,side:-Math.sign(s.carveLean||Math.sin(s.angle)||1),angle:s.angle-Math.PI,age:s.wakeClock,seed:Math.floor((s.scroll||0)*7),landing:(s.landingSpray||0)/400});
 }
+}
+function emitSurfLipSpray(s,power,kind){
+if(power<.08)return;
+const {riderX}=surfRideView(s),contactX=riderX-Math.cos(s.angle)*12;
+s.lipSpray??=[];
+s.lipSpray.push({x:contactX-(s.scroll||0),y:surfRideCrest(contactX)+1,power,side:-Math.sign(Math.cos(s.angle)||-1),age:0,seed:Math.floor(s.scroll||0)+s.lipSpray.length*71,kind});
+if(s.lipSpray.length>16)s.lipSpray.shift();
+}
+function drawSurfLipSpray(){
+const s=surfSession;if(!s)return;
+ctx.save();
+for(const mark of s.lipSpray||[]){
+const t=mark.age/900,power=mark.power,scale=surfRideScale(s),count=Math.ceil(8+power*17);
+for(let i=0;i<count;i++){
+const grain=surfFoamNoise(mark.seed+i*17),fan=surfFoamNoise(mark.seed+i*31+91);
+const x=mark.x+(s.scroll||0)+mark.side*t*(10+power*(24+fan*55))*scale;
+const y=mark.y-t*(14+power*(24+grain*62))*scale+t*t*83*scale;
+ctx.globalAlpha=(1-t)*(.35+grain*.5);
+// Short teardrops and a fine mist form a fan above the rail's crest contact.
+surfWaterDrop(x,y,.35+grain*.8,.55+grain*(.5+power*.5),i%3?'#effff5':'#b8e9e0');
+if(i%4===0){ctx.globalAlpha=(1-t)*.12;surfWaterDrop(x+1,y+1,1.5+power,1+grain,'#dcfff2');}
+}
+}
+ctx.restore();
 }
 function surfWakePower(mark){return Math.min(1,mark.speed/.85)*(.2+mark.strength*.8)+(mark.landing||0)*.5;}
 function drawSurfBoardWake(){
@@ -1197,22 +1229,40 @@ const spread=.35,topX=bottomX+(anchor-bottomX)*spread;
 const point=surfFaceFlowPoint(anchor,rise,wave,surfFaceCrest(topX,wave)+2);
 return {x:bottomX+(point.x-bottomX)*spread,y:279-(279-point.y)*surfRideScale()};
 }
+function surfFaceFlowTangent(x,y,wave){
+let anchor=x,rise=0;
+// Locate the ambient streak passing through this patch of water.
+for(let i=0;i<16;i++){
+const top=surfFaceCrest(anchor,wave)+2;
+rise=Math.acos(Math.max(0,Math.min(1,(y-top)/(279-top))))*2/Math.PI;
+anchor+=x-surfFaceFlowPoint(anchor,rise,wave).x;
+}
+const point=surfFaceFlowPoint(anchor,rise,wave),next=surfFaceFlowPoint(anchor,rise+.001,wave);
+return {angle:Math.atan2(next.y-point.y,next.x-point.x),anchor,rise};
+}
 function drawSurfWipeoutSplash(p){
 const wave=surfRideView(),age=(surfSession.wipeoutTime-950)/1000,anchor=surfWipeoutFoamAnchor(p.x,wave);
 ctx.save();ctx.beginPath();ctx.moveTo(0,surfRideCrest(0));for(let x=4;x<=480;x+=4)ctx.lineTo(x,surfRideCrest(x));ctx.lineTo(480,280);ctx.lineTo(0,280);ctx.closePath();ctx.clip();
 ctx.lineCap='round';ctx.lineJoin='round';
-// The splash joins the same rising, curling water flow as the ambient foam.
-for(let i=0;i<18;i++){
-const grain=surfFoamNoise(i+781),head=Math.max(0,(age-grain*.14)*(.43+grain*.07));
-const from=Math.max(0,head-(.1+grain*.09)),to=Math.min(1,head);
-if(from>=1)continue;
-const lane=anchor+(grain-.5)*70;
-ctx.globalAlpha=.45+grain*.35;ctx.strokeStyle=i%3?'#eef9df':'#b8e7dd';ctx.lineWidth=.6+grain*1.3;ctx.beginPath();
-for(let j=0;j<=16;j++){const point=surfWipeoutSplashPoint(lane,from+(to-from)*j/16,wave);if(j===0)ctx.moveTo(point.x,point.y);else ctx.lineTo(point.x,point.y);}
-ctx.stroke();
-if(head<=1){const point=surfWipeoutSplashPoint(lane,head,wave);surfWaterDrop(point.x,point.y,.7+grain,1+grain,ctx.strokeStyle);}
+// A churning patch travels with the water; its small flecks share nearby streak angles.
+const head=age*.43;
+if(head<1.06){
+const point=surfWipeoutSplashPoint(anchor,Math.min(1,head),wave);
+const flow=surfFaceFlowTangent(point.x,point.y,wave),spread=1+Math.min(1,age)*.4;
+ctx.save();ctx.translate(point.x,point.y);ctx.rotate(flow.angle);
+for(let i=0;i<105;i++){
+const grain=surfFoamNoise(i+781),other=surfFoamNoise(i+1781),edge=surfFoamNoise(i+2781);
+const radius=Math.sqrt(grain),angle=other*Math.PI*2;
+const along=Math.cos(angle)*radius*9*spread,across=Math.sin(angle)*radius*15*spread;
+// Overlapping soft foam lobes, darker pores, and fine white bubbles break up the patch.
+ctx.globalAlpha=.12;surfWaterDrop(along,across,2.5+edge*2,1.5+grain,'#d3f3e4');
+ctx.globalAlpha=.55+edge*.35;
+surfWaterDrop(along+Math.sin(age*5+i)*.7,across,1+edge*1.9,.55+grain*.8,i%7===0?'#77bcc0':i%3?'#effff3':'#b8e7dd');
+if(edge>.7){ctx.globalAlpha=.8;surfWaterDrop(along+1,across-1,.5,.5,'#ffffff');}
 }
-// A short impact burst and rings give way to the rising trails.
+ctx.restore();
+}
+// A short impact burst and rings give way to the drifting foam patch.
 if(age<.5){const u=age/.5;ctx.globalAlpha=1-u;ctx.strokeStyle='#eef9df';ctx.lineWidth=1;
 for(let i=0;i<3;i++){ctx.beginPath();ctx.ellipse(p.x,278,5+u*27+i*5,1+u*5+i,0,0,Math.PI*2);ctx.stroke();}
 for(let i=0;i<16;i++){const grain=surfFoamNoise(i+981);surfWaterDrop(p.x+(i%2?1:-1)*(4+grain*25)*u,278-Math.sin(u*Math.PI)*(9+grain*22),.7+grain,1+grain,'#eef9df');}
@@ -1241,6 +1291,7 @@ const wave=drawSurfWaveFace();
 const x=wave.riderX,crest=surfRideCrest(x),face=279-crest,y=crest+s.y*face-s.airHeight*85*surfRideScale(s);
 if(!['takeoff','popup','wipeout','results'].includes(s.phase))drawSurfBoardWake();
 drawSurfWaveLip(wave);
+drawSurfLipSpray();
 // All rider poses are foreground occupants, above the crest and falling lip.
 if(s.phase==='wipeout'){
 drawSurfWipeout();

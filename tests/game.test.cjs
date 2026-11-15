@@ -2868,6 +2868,22 @@ assert.ok(fast.run('surfSession.wake.some(mark=>mark.strength>.4)'));
 assert.ok(fast.run('surfSession.wake.at(-1).y!==surfSession.wake[0].y'));
 });
 
+test('surf top turns and airs throw lip spray, with later and sharper turns making bigger fans',()=>{
+const early=surfGame(),late=surfGame(),low=surfGame();
+for(const [g,y] of [[early,.14],[late,.025],[low,.5]])g.run(`setSurfTestRide();surfSession.y=${y};surfSession.speed=.65;surfSession.angle=Math.PI+.3;keys.add('down');advanceSurfing(220)`);
+assert.ok(early.run('surfSession.lipSpray.length')>0);assert.ok(late.run('surfSession.lipSpray.length')>0);assert.equal(low.run('surfSession.lipSpray.length'),0);
+assert.ok(late.run('Math.max(...surfSession.lipSpray.map(mark=>mark.power))')>early.run('Math.max(...surfSession.lipSpray.map(mark=>mark.power))')*1.5);
+const air=surfGame();air.run(`setSurfTestRide();surfSession.y=.025;surfSession.angle=Math.PI+.6;surfSession.speed=.7;requestSurfAir();advanceSurfing(16)`);
+assert.equal(air.run('surfSession.phase'),'airborne');assert.ok(air.run(`surfSession.lipSpray.some(mark=>mark.kind==='air')`));
+const snapshot=air.run('JSON.stringify(surfSession.lipSpray)');air.run('surfSession.paused=true;advanceSurfing(300);drawSurfGame()');assert.equal(air.run('JSON.stringify(surfSession.lipSpray)'),snapshot);
+air.run('surfSession.paused=false');air.node('#challenge').showModal();air.run('advanceSurfing(300)');assert.equal(air.run('JSON.stringify(surfSession.lipSpray)'),snapshot);air.node('#challenge').close();
+air.run(`surfSession.airHeight=4;advanceSurfing(920)`);assert.equal(air.run('surfSession.lipSpray.length'),0);
+air.run(`emitSurfLipSpray(surfSession,1,'air');prepareSurfTakeoff()`);assert.equal(air.run('surfSession.lipSpray.length'),0);
+const gentle=surfGame(),sharp=surfGame();
+for(const [g,rate] of [[gentle,1],[sharp,4]])g.run(`setSurfTestRide();surfSession.y=.05;surfSession.speed=.65;surfSession.angle=Math.PI;advanceSurfRidingArt(surfSession,16,Math.PI-${rate}*.016)`);
+assert.ok(sharp.run('surfSession.lipSpray[0].power')>gentle.run('surfSession.lipSpray[0].power')*2);
+});
+
 test('surf wipeouts tumble to the trough, separating the rider from an intact or snapped board',()=>{
 for(const fromAir of [false,true]){
 const g=surfGame();g.run(`setSurfTestRide();surfSession.y=.12;surfSession.phase='${fromAir?'airborne':'riding'}';surfSession.airHeight=${fromAir?.5:0};surfSession.airSpin=.4;surfWipeout('Test fall');var wipeoutY=surfWipeoutPose().y;var fragmentSides=[];const realWipeoutBoard=drawSurfWipeoutBoard;drawSurfWipeoutBoard=(side,pose)=>{fragmentSides.push(side);realWipeoutBoard(side,pose)};drawSurfGame()`);
@@ -2893,7 +2909,17 @@ assert.ok(g.run('Math.abs(splashBottom.x-impactX)<.01'));assert.ok(g.run('splash
 g.run(`advanceSurfing(300);var submergedRiders=0;const underwaterRider=drawSurfRider;drawSurfRider=(...args)=>{submergedRiders++;underwaterRider(...args)};drawSurfGame()`);
 assert.equal(g.run('surfWipeoutPose().sink'),1);assert.equal(g.run('submergedRiders'),0);
 g.run(`advanceSurfing(1000);var sharedFoamCalls=0;const wipeoutFlow=surfFaceFlowPoint;surfFaceFlowPoint=(...args)=>{sharedFoamCalls++;return wipeoutFlow(...args)};drawSurfGame()`);
-assert.equal(g.run('surfSession.phase'),'wipeout');assert.ok(g.run('sharedFoamCalls')>100);
+assert.equal(g.run('surfSession.phase'),'wipeout');assert.ok(g.run('sharedFoamCalls')>0);
+});
+
+test('surf wipeout foam aligns with nearby water streaks and renders as bubbles rather than trails',()=>{
+const g=surfGame();g.run(`setSurfTestRide();surfWipeout('Foam patch');surfSession.wipeoutTime=2200;var foamWave=surfRideView()`);
+for(const rise of [.2,.5,.85]){
+g.run(`var expectedPoint=surfFaceFlowPoint(100,${rise},foamWave),nextPoint=surfFaceFlowPoint(100,${rise}+.001,foamWave),localFoam=surfFaceFlowTangent(expectedPoint.x,expectedPoint.y,foamWave)`);
+assert.ok(g.run('Math.abs(Math.atan2(Math.sin(localFoam.angle-Math.atan2(nextPoint.y-expectedPoint.y,nextPoint.x-expectedPoint.x)),Math.cos(localFoam.angle-Math.atan2(nextPoint.y-expectedPoint.y,nextPoint.x-expectedPoint.x))))<.01'));
+}
+g.run(`var foamBubbles=0,foamLines=0;const foamDrop=surfWaterDrop;surfWaterDrop=(...args)=>{foamBubbles++;foamDrop(...args)};ctx.stroke=()=>{foamLines++};drawSurfWipeoutSplash(surfWipeoutPose())`);
+assert.ok(g.run('foamBubbles')>100);assert.equal(g.run('foamLines'),0);
 });
 
 test('surf broken board halves follow splash flow up the face and over the crest',()=>{
@@ -4397,6 +4423,69 @@ assert.ok(fishing>impulse(lip,Math.PI/2,140,'fishing')*2);
 assert.ok(fishing>impulse(lip,0,140,'fishing'));
 assert.ok(fishing>impulse(face,-Math.PI/2,140,'fishing'));
 assert.ok(fishing>impulse(lip,-Math.PI/2,35,'fishing'));
+});
+test('every boat jumps higher over coastal crests at each higher trim level in both trim directions',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const heights=[];
+for(let trimStep=0;trimStep<10;trimStep++){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.trimStep=${trimStep};advanceBoatWaves(16);player.y-=4;advanceBoatWaves(16)`);
+assert.ok(g.run('boatMotion.waveVelocity')>0,`${vessel}, trim step ${trimStep}: crest launches boat`);
+let peak=0;
+// Keep the hull at the crossing so this measures a single ballistic jump.
+for(let i=0;i<200;i++){
+g.run('advanceBoatWaves(16)');
+peak=Math.max(peak,g.run('boatMotion.waveHeight'));
+if(g.run('boatMotion.waveHeight')===0)break;
+}
+assert.equal(g.run('boatMotion.waveHeight'),0,'higher trim still lands');
+heights.push(peak);
+}
+for(let level=1;level<=5;level++)assert.ok(heights[level]>heights[level-1],`${vessel}: trim ${level} jumps higher`);
+for(let step=6;step<10;step++)assert.equal(heights[step],heights[10-step],`${vessel}: lowering trim restores the same jump height`);
+}
+});
+test('trimmed coastal landings pitch bow-up and slap spray from stern to bow on every vessel',()=>{
+for(const vessel of ['fishing','speedboat','ferry'])for(const trim of [1,3,5]){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.trimStep=${trim};advanceBoatWaves(16);player.y-=4;advanceBoatWaves(16);advanceBoatWaves(100)`);
+assert.ok(Math.abs(g.run(`boatWavePitch('${vessel}')`)-trim*.065)<1e-9);
+g.run('for(let i=0;i<250&&!boatMotion.waveLanding;i++)advanceBoatWaves(16)');
+assert.equal(g.run('boatMotion.waveHeight'),0);
+assert.ok(g.run('boatMotion.waveLanding'));
+assert.equal(g.run('boatMotion.waveLanding.duration'),100+trim*40);
+assert.equal(g.run('boatMotion.waveLanding.next'),1,'stern touches first');
+assert.equal(g.run('boatMotion.spray.filter(p=>p.wave&&!p.bow).length'),5);
+const pitch=g.run(`boatWavePitch('${vessel}')`);
+g.run('advanceBoatWaves(boatMotion.waveLanding.duration/2)');
+assert.ok(g.run(`boatWavePitch('${vessel}')`)<pitch,'bow rotates toward water');
+assert.equal(g.run('boatMotion.waveLanding.next'),4);
+g.run('advanceBoatWaves(400)');
+assert.equal(g.run('boatMotion.waveLanding'),null);
+assert.equal(g.run(`boatWavePitch('${vessel}')`),0);
+assert.equal(g.run('boatMotion.spray.filter(p=>p.wave&&!p.bow).length'),40);
+const positions=g.run(`boatMotion.waveSplashes.map(p=>(p.x-player.x)*Math.cos(boatMotion.heading)+(p.y-player.y)*Math.sin(boatMotion.heading))`);
+assert.equal(positions.length,8);
+assert.equal(positions[0],g.run('BOAT_WAKE_HULLS[activeVessel].edge.at(-1)[0]'));
+assert.equal(positions[7],g.run('BOAT_WAKE_HULLS[activeVessel].edge[0][0]'));
+for(let i=1;i<positions.length;i++)assert.ok(positions[i]>positions[i-1]);
+}
+});
+test('coastal landing pose restores the canvas and clears when leaving or resetting a boat',()=>{
+for(const vessel of ['fishing','speedboat','ferry']){
+const g=boatWaveGame(vessel);
+g.run(`boatMotion.waveHeight=10;boatMotion.wavePitch=.325;boatMotion.waveFlightAge=100;
+let depth=0,minDepth=0;ctx.save=()=>{depth++};ctx.restore=()=>{depth--;minDepth=Math.min(minDepth,depth)};
+${vessel==='fishing'?'fishingBoatArt':vessel==='ferry'?'ferryArt':'speedboatArt'}(player.x,player.y)`);
+assert.equal(g.run('depth'),0,'renderer balances its canvas saves');
+assert.equal(g.run('minDepth'),0,'renderer never restores beyond its own canvas saves');
+g.run('boatMotion.waveHeight=.1;boatMotion.waveVelocity=-100;advanceBoatWaves(16)');
+assert.ok(g.run('boatMotion.waveLanding'));
+g.run('boating=false;advanceBoatWaves(16)');
+assert.equal(g.run('boatMotion.waveLanding'),null);
+assert.equal(g.run(`boatWavePitch('${vessel}')`),0);
+g.run('resetBoatMotion()');assert.equal(g.run(`boatWavePitch('${vessel}')`),0);
+}
 });
 test('crossing a coastal crest throws bow spray, jumps once, and splashes at the landing position',()=>{
 const g=boatWaveGame();

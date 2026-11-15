@@ -2554,6 +2554,7 @@ if(activeVessel==='speedboat')drawBoatWake();
 drawBoatShadow(x,y,heading,'speedboat');drawBoatBowWake(x,y,heading,'speedboat');drawBoatExhaust(x,y,heading,'speedboat');drawBoatTrimSpray(x,y,heading,'speedboat');
 drawBoatWaveSplashes('speedboat');
 if(active&&!burning)y-=boatMotion.waveHeight||0;
+beginBoatWavePose(x,y,heading,'speedboat');
 const roll=activeVessel==='speedboat'&&!burning?(boatMotion.roll||0):0;
 beginBoatHull(x,y,heading,'speedboat',roll);
 polygon([[-28,-12],[4,-13],[24,-7],[33,0],[24,7],[4,13],[-28,12]],boatBuildColor(rebuilding,'#244655'));
@@ -2574,6 +2575,7 @@ if(active&&!fishingActive){
 const riderX=x-Math.cos(heading)*11,riderY=y-Math.sin(heading)*11-2;
 drawSeatedBoatRider(riderX,riderY,heading,roll);
 }else drawBoatSteeringWheel(x-Math.cos(heading)*11,y-Math.sin(heading)*11-2,heading,0,boatBuildPart(rebuilding,'wheel'));
+ctx.restore();
 }
 function launchBoat(){
 if(boatUnavailable('fishing')){toast('The boat is being rebuilt at its home dock. Repairs are free.');return;}
@@ -4023,7 +4025,8 @@ function boatWaveImpulse(strength,heading,velocity,vessel){
 const slope=(beachShoreY(player.x+2)-beachShoreY(player.x-2))/4;
 const direction=Math.sign(velocity),into=(Math.cos(heading)*slope-Math.sin(heading))*direction/Math.hypot(slope,1);
 const size=vessel==='ferry'?.28:vessel==='speedboat'?.72:1;
-return (24+Math.min(180,Math.abs(velocity))*.65)*Math.sqrt(strength)*(.4+.6*Math.max(0,into))*size;
+const trimLift=1+boatTrimLevel()*.12;
+return (24+Math.min(180,Math.abs(velocity))*.65)*Math.sqrt(strength)*(.4+.6*Math.max(0,into))*size*trimLift;
 }
 function boatSprayHullWidth(edge,along){
 const segment=Math.max(1,edge.findIndex(p=>p[0]<=along));
@@ -4032,7 +4035,7 @@ return ay+(by-ay)*(ax-along)/(ax-bx);
 }
 function emitBoatWaveSpray(x,y,heading,impact,landing=false,section=null){
 const edge=BOAT_WAKE_HULLS[activeVessel].edge,bow=edge[0][0],stern=edge.at(-1)[0];
-const perSection=6,count=landing?40:Math.ceil(bow-stern)*perSection;
+const perSection=landing?5:6,count=landing?40:Math.ceil(bow-stern)*perSection;
 boatMotion.spray??=[];
 for(let i=section===null?0:section*perSection;i<(section===null?count:section*perSection+perSection);i++){
 const noise=n=>surfFoamNoise(i*17+n+(boatMotion.waveSerial||0)*53);
@@ -4061,6 +4064,29 @@ boatMotion.spray.push({x:px,y:py,vx,vy,vz,gravity,life:2*vz/gravity,age:0,size:l
 if(section===null||section===0)boatMotion.waveSerial=(boatMotion.waveSerial||0)+1;
 if(landing){boatMotion.waveSplashes??=[];boatMotion.waveSplashes.push({x,y,age:0,impact});}
 }
+function advanceBoatLanding(dt){
+const landing=boatMotion.waveLanding;if(!landing)return;
+landing.elapsed=Math.min(landing.duration,landing.elapsed+dt);
+const edge=BOAT_WAKE_HULLS[activeVessel].edge,stern=edge.at(-1)[0],bow=edge[0][0];
+// Water contact runs aft to forward as the raised bow slaps down.
+while(landing.next<8&&landing.next/7<=landing.elapsed/landing.duration){
+const section=landing.next++,along=stern+(bow-stern)*section/7;
+emitBoatWaveSpray(player.x+Math.cos(boatMotion.heading)*along,player.y+Math.sin(boatMotion.heading)*along,boatMotion.heading,landing.impact*(.65+.35*section/7),true,section);
+}
+if(landing.elapsed>=landing.duration)boatMotion.waveLanding=null;
+}
+function boatWavePitch(vessel){
+if(!boating||activeVessel!==vessel)return 0;
+const landing=boatMotion.waveLanding;
+if(landing)return landing.pitch*(1-landing.elapsed/landing.duration)**2;
+return boatMotion.waveHeight>0?(boatMotion.wavePitch||0)*Math.min(1,(boatMotion.waveFlightAge||0)/100):0;
+}
+function beginBoatWavePose(x,y,heading,vessel){
+ctx.save();
+const tilt=Math.sin(boatWavePitch(vessel))*.85,c=Math.cos(heading),s=Math.sin(heading),stern=BOAT_WAKE_HULLS[vessel].edge.at(-1)[0];
+// Pivot the complete hull, cabin and rider around the stern; shadows stay on water.
+ctx.transform(1,-c*tilt,0,1-s*tilt,0,tilt*(c*x+s*y+stern));
+}
 function advanceBoatWaveSpray(time){
 const sweep=boatMotion.waveSpraySweep;if(!sweep)return;
 if(!boating||activeVessel!==sweep.vessel||fishingActive||boatAnchorBusy()){boatMotion.waveSpraySweep=null;return;}
@@ -4080,21 +4106,26 @@ function advanceBoatWaves(dt){
 if(dt<=0)return;
 const motion=boatMotion,step=dt/1000;
 motion.waveSplashes=(motion.waveSplashes||[]).filter(p=>{p.age+=dt;return p.age<850;});
-if(!boating){motion.waveHeight=0;motion.waveVelocity=0;motion.waveContacts=null;motion.waveSpraySweep=null;return;}
+if(!boating){motion.waveHeight=0;motion.waveVelocity=0;motion.waveContacts=null;motion.waveSpraySweep=null;motion.waveLanding=null;motion.wavePitch=0;return;}
+advanceBoatLanding(dt);
 if((motion.waveHeight||0)>0){
+motion.waveFlightAge=(motion.waveFlightAge||0)+dt;
 const velocity=motion.waveVelocity||0;
 motion.waveHeight+=velocity*step-90*step*step;
 motion.waveVelocity=velocity-180*step;
 if(motion.waveHeight<=0){
 const impact=Math.abs(motion.waveVelocity);motion.waveHeight=0;motion.waveVelocity=0;
-emitBoatWaveSpray(player.x,player.y,motion.heading,impact,true);
+if(motion.wavePitch>0){
+motion.waveLanding={elapsed:0,duration:100+motion.wavePitch/.065*40,next:0,impact,pitch:motion.wavePitch};
+advanceBoatLanding(0);
+}else emitBoatWaveSpray(player.x,player.y,motion.heading,impact,true);
 }
 }
 const time=state.surfRental?surfClock:frame*16.667,previous=motion.waveContacts||[];
 advanceBoatWaveSpray(time);
 const contacts=Array.from({length:3},(_,i)=>boatWaveContact(player.x,player.y,motion.heading,activeVessel,i,time));
 motion.waveContacts=contacts;
-if(fishingActive||boatAnchorBusy()||Math.abs(motion.velocity||0)<12||motion.waveHeight>0)return;
+if(fishingActive||boatAnchorBusy()||Math.abs(motion.velocity||0)<12||motion.waveHeight>0||motion.waveLanding)return;
 for(let i=0;i<contacts.length;i++){
 const hit=contacts[i],before=previous[i];if(!hit)continue;
 // A crest can meet the bow from either side. Ignore the offshore wave wrap.
@@ -4105,6 +4136,7 @@ emitBoatWaveSpray(hit.x,hit.y,motion.heading,impulse,false,0);
 motion.waveSpraySweep={vessel:activeVessel,index:i,next:1,impact:impulse,direction:Math.sign(hit.offset-before.offset)};
 advanceBoatWaveSpray(time);
 motion.waveHeight=.1;motion.waveVelocity=impulse;
+motion.wavePitch=boatTrimLevel()*.065;motion.waveFlightAge=0;
 break;
 }
 }
@@ -4162,6 +4194,8 @@ const project=boatHullProjection(boatMotion.heading,boatMotion.roll||0),height=b
 ctx.beginPath();ctx.rect(WORLD.left-1000,-1000,WORLD.width+2000,WORLD.height+2000);
 outline.forEach(([along,across],i)=>{
 const p=project(along,across);
+const tilt=Math.sin(boatWavePitch(vessel))*.85;
+p[1]-=(Math.cos(boatMotion.heading)*p[0]+Math.sin(boatMotion.heading)*p[1]-edge.at(-1)[0])*tilt;
 const x=boatPosition.x+p[0],y=boatPosition.y-height+p[1];
 if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
 });
@@ -4507,6 +4541,7 @@ drawBoatExhaust(x,y,heading,'ferry');
 drawBoatTrimSpray(x,y,heading,'ferry');
 drawBoatWaveSplashes('ferry');
 if(active&&!burning)y-=boatMotion.waveHeight||0;
+beginBoatWavePose(x,y,heading,'ferry');
 const roll=activeVessel==='ferry'&&!burning?(boatMotion.roll||0):0;
 beginBoatHull(x,y,heading,'ferry',roll);
 polygon([[-37,-13],[10,-16],[29,-8],[39,0],[29,8],[10,16],[-37,13]],boatBuildColor(rebuilding,'#315d66'));
@@ -4532,6 +4567,7 @@ const cabinInFront=Math.sin(heading)>0;
 if(cabinInFront)drawDriver();
 drawFerryCabin(x,y,heading,roll,rebuilding,active?(boatMotion.travelHeading??heading):heading);
 if(!cabinInFront)drawDriver();
+ctx.restore();
 }
 let boatMotion={heading:state.parkedBoat?.heading??Math.PI/2,phase:0,movingFor:0,power:0,velocity:0,turnRate:0,roll:0,rollVelocity:0,steering:0,engineStage:'running',engineAge:1000,throttle:0,trimStep:0,distance:0,wake:[],bowWake:[],spray:[],sprayClock:0,spraySerial:0};
 function resetBoatMotion(){deepWaterHintShown=false;boatAnchor=null;boatMotion={heading:0,phase:0,movingFor:0,power:0,velocity:0,turnRate:0,roll:0,rollVelocity:0,steering:0,engineStage:'running',engineAge:1000,throttle:0,trimStep:0,distance:0,wake:[],bowWake:[],spray:[],sprayClock:0,spraySerial:0};}
@@ -4690,6 +4726,7 @@ drawBoatExhaust(x,y,heading,'fishing');
 drawBoatTrimSpray(x,y,heading,'fishing');
 drawBoatWaveSplashes('fishing');
 if(active&&!burning)y-=boatMotion.waveHeight||0;
+beginBoatWavePose(x,y,heading,'fishing');
 const roll=activeVessel==='fishing'&&!burning?(boatMotion.roll||0):0;
 beginBoatHull(x,y,heading,'fishing',roll);
 // Pointed bow leads; twin outboards sit on the stern brackets.
@@ -4706,6 +4743,7 @@ if(active&&!fishingActive){
 const riderX=x-Math.cos(heading)*3,riderY=y-Math.sin(heading)*3-2;
 drawSeatedBoatRider(riderX,riderY,heading,roll);
 }else drawBoatSteeringWheel(x-Math.cos(heading)*3,y-Math.sin(heading)*3-2,heading,0,boatBuildPart(rebuilding,'wheel'));
+ctx.restore();
 }
 function swimSnorkel(x,y,side=1){
 // Slim J-shaped tube follows the cheek, with a small angled air opening.
