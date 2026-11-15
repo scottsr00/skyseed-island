@@ -12,7 +12,7 @@ The app supplies shared globals, the shack interaction, frame dispatch from `adv
 world rendering calls, and safe-save/reset integration. Both scripts share global bindings;
 see [architecture](architecture.md) before moving initialization or changing script order.
 
-`surfSession.phase` includes paddling, riding, airborne, wipeout, and results. The simulation
+`surfSession.phase` includes paddling, takeoff, popup, riding, airborne, wipeout, and results. The simulation
 uses steps of at most 16 ms inside `advanceSurfing()`. Pausing and dialogs must freeze the
 relevant simulation and trails. `surfWaveSize()`, `surfRideScale()`, `surfRideView()`,
 `surfBarrelState()`, and `surfAirHeading()` connect geometry, artwork, and scoring.
@@ -28,9 +28,9 @@ recedes across damp sand. It draws above the beach surface and beneath beach occ
 The upward drifting spray
 starts beside the mouth's top edge, where the lip meets the curl, with three lines fanning left.
 Crumbling foam follows island coastlines; offshore waves clip to water beneath land. Renting adds
-catchable crests in the local break. Wave height increases with distance from shore: the outer break
-at 280 world units retains the original full-size wave, while every nearer wave is smaller. Catching
-a wave fixes its height for that ride; paddle-out controls show the available size.
+crests in the local break. Coastal wave height increases with distance from shore: the outer break
+at 280 world units retains the original full-size wave, while every nearer wave is smaller.
+Catching a coastal lip fixes that wave size for the takeoff and ride.
 
 ## Riding artwork
 
@@ -54,19 +54,95 @@ dense boiling foam core with porous texture and a wider impact plume; its spent 
 it ages. Crest plumes, falling fingers of whitewater, and dense broken foam at the base follow the
 supplied surfing screenshot as a visual reference. The surfer flexes knees, shifts weight, and
 counterbalances with their arms; stronger turns and higher speed generate larger rail spray and a
-curved wake left along the actual board path. Landings compress the stance and kick up a short burst
+curved wake left along the actual board path. The board and planted feet follow the full travel
+heading through cutbacks, while articulated knees absorb the turn and the shaded torso stays upright.
+Rail pressure compresses the stance, banks the board, and extends the counterbalancing arms;
+`surfBoardPerspective()` projects the deck from the travel heading and rail lean at the
+current face height. Climbing straight up the face and flatter top turns expose more deck;
+a committed bottom turn closes the deck toward an edge-on rail. This changes board width
+without distorting the nose direction or planted feet;
+the rider looks along the direction of travel. The crest and falling lip render before every
+rider pose, keeping foam behind the surfer. The pop-up switches to an opaque standing pose
+after the feet plant, avoiding a transparent silhouette during the transition. Landings compress the stance and kick up a short burst
 of spray.
 
 ## Controls and scoring
 
-E at the shack opens rentals; paddle with WASD/arrows and catch a passing crest with Space/Enter.
-Riding switches to a face-on scrolling wave: the surfer stays near screen center, travelling left
+At the shack, the command list offers **Go surfing** (E or tap) without opening a panel.
+It rents a board for 20 crystals when needed and starts paddling immediately; existing rentals
+are reused without another charge. Insufficient crystals or energy leave the player ashore.
+A **Return surfboard** command is available at the shack while a board is rented.
+Entering a heat starts the overhead beach paddle-out. Use arrows / WASD (or touch directions)
+to reach the shore break, then press Space/Enter or Catch wave within 30 world units of a
+curling lip. The shore-break distance limits (65–280 units) and minimum 400 ms of paddling still
+apply. Catch eligibility follows the moving, repeating curl and surface height used by
+`drawBeachWaves()`; distant whitewater and the unbroken crest cannot start a takeoff.
+A successful beach catch switches to the face-on wave view, with the surfer prone at the crest
+on the shoulder to the left of the curl and the board pointing toward the camera. During paddling, the board and prone
+body are foreshortened flat across the crest, with a round, camera-facing head; paddling progress
+does not slide the surfer down the face. Elapsed takeoff time moves the curling lip closer:
+`takeoff` advances the rider’s depth from 0.50 toward 0.81 over the 9.5-second catch window.
+The pop-up retains `popStartX` and carries the rider only 0.08 back onto the shoulder, so
+late catches drop close to the curl while early catches have more open face. Pause/dialogs
+freeze this approach. Only the successful catch starts the downward pitch,
+blending into the push-up and drop over the first 0.44 seconds of the pop-up. Tap Space/Enter or the touch Paddle
+button repeatedly (roughly three taps a second) to alternate arm strokes and build catch momentum.
+Holding a key does not generate strokes. Players have about 3.5 seconds to make the first
+stroke, including a two-second learning grace period. Power decays between taps; after the first
+stroke, a pause of about 1.5 seconds
+or failing to catch within 9.5 seconds loses the wave and costs a wipeout. A successful catch
+runs a 1.15-second push-up, feet-through, standing transition and a descending turn onto the face.
+`prepareSurfPaddleOut()` starts beach paddling, `catchSurfWave()` catches the coastal lip,
+`prepareSurfTakeoff()` starts the close-up, `paddleSurfStroke()` applies one stroke, and
+`surfTakeoffPose()` / `drawSurfTakeoffRider()` animate the prone and pop-up poses. Both takeoff
+phases count toward the heat clock and freeze with pause/dialogs.
+`recordSurfHullWake()` uses the boat/wakeboarder's shared `recordHullWake()`, `ageBoatWake()`,
+and `drawBoatWake()` during paddling, pop-up, and riding: distance-spaced hull contacts,
+connected spreading whitewater arms, turbulent center foam, and short-lived hull spray.
+It uses 55% of the tow hull's size, further scaled to the caught wave size, and projects the
+samples through the scrolling wave camera. `drawSurfHullWake()` clips the shared wake to the
+wave face; `s.hullWake` is independent of the boat and wakeboarder accumulators. Riding still
+adds turn/landing rail spray. Pauses/dialogs freeze trails, airs stop emission while existing
+foam fades, and each new wave resets the samples. `surfWipeout()` captures the starting screen position, board heading, and whether the fall began
+in the air. `surfWipeoutPose()` / `drawSurfWipeout()` tumble the detached rider down to the trough
+in 0.95 seconds, then submerge the body beneath the trough over 0.28 seconds. A short splash
+and foam rings feed rising ribbons: `drawSurfWipeoutSplash()` uses `surfFaceFlowPoint()` to
+carry the impact foam up and around the face with the ambient streaks. `drawSurfWipeoutBoard()` tosses
+an intact board alongside ordinary falls; air wipeouts split the original deck into two jagged
+halves that spin apart. `surfWipeoutBoardPose()` then carries each floating piece along the
+same local foam flow up the face, aligns it with the water, and rolls it out of sight over
+the crest. `surfWipeoutBoardFlow()` wraps fragments around the local lip and clips them
+behind the opaque wave on the far side; they stay opaque rather than fading above it.
+Intact boards are swept up with the same flow. The animation uses simulation time, freezes for pause/dialogs, and clears
+on the next wave. The broken board is an animation effect within the existing rental.
+After the 3.6-second wipeout (including the rising splash), the surfer returns to overhead beach paddling to find the next lip; three
+wipeouts end the heat. The selected coastal wave size persists throughout takeoff and riding.
+The heat clock starts with takeoff and waits while paddling out.
+
+Riding continues on the face-on scrolling wave: the surfer stays near screen center, travelling left
 while water streams right, with breaking whitewater chasing from the right. Up/W climbs and Down/S
-descends; linked up-and-down carves build speed to escape the lip, while coasting loses speed. Ride
+descends on short presses; linked short up-and-down carves build speed to escape the lip, while coasting loses speed.
+Holding any direction progressively tightens the turn: rail pressure builds after 0.28 seconds and
+reaches full strength after another 0.65 seconds. Up/Down continue around their climbing/descending
+arc instead of stopping at a fixed diagonal; Left/Right rotate in opposite directions with the same
+pressure ramp. Releasing or changing direction resets pressure. An engaged turn retains momentum: negative
+speed changes from drag and climbing are reduced by 80%, with no extra steering penalty.
+Pumping and downhill drive still add speed; coasting and holding against the crest take normal drag. `advanceSurfTurn()` owns this
+riding-only response; airborne spin controls remain separate. From near the top, hold Down or Left;
+from near the bottom, hold Up or Right to fit a full 180-degree arc on a medium wave. The turn
+then carries the rider back toward the breaking lip. Signed travel, board heading, hull wake, and
+cutback scoring follow the actual rotation; a change in rotation direction resets the scored arc.
+At the crest, climbing can carry the board past the top instead of pinning the rider there.
+`surfTailClearOfLip()` compares the projected squash tail against the local crest at its actual
+horizontal position. Turn onto a downward trajectory or jump before the tail leaves the lip;
+continuing uphill (or flattening out after crossing) wipes out over the back. The available margin
+follows board length, heading, and caught wave size, rather than a fixed timer. Air requests are
+resolved before this check, so a timely jump clears the lip. Pauses freeze the crossing.
+`surfBoardRotation()` connects the visible board to that heading. Ride
 half inside the barrel curtain for 4× line points (fully under it earns 2×). Press Space at the
 crest while climbing with speed to launch an air, use left/right for spins, then land with the
-visible board pointing from straight down (6 o’clock) toward the lower left, excluding horizontal (9
-o’clock). Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave
+visible nose pointing anywhere down the face (the open lower half-circle), including back toward
+the curl. Horizontal and upward landings wipe out. Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave
 coverage, linked turns, and clean aerial spins also score points. Heats last 90 seconds or three
 wipeouts; another heat uses the same rental. P pauses, X returns to the beach, and touch buttons
 mirror the controls. Best scores, rental state, and safe beach positions persist. Controls take
@@ -82,6 +158,6 @@ clip to water around islands and Mainland Beach; occupant masking and foam inter
 main renderer. See [rendering](rendering-and-effects.md).
 
 See [testing](testing.md). Focus test names on `surf`, `wave`, `barrel`, `air landing`, `crest`,
-`lip`, or `froth`. Verify rental persistence, catch eligibility, size scaling, carving and speed,
+`lip`, or `froth`. Verify rental persistence, repeated-stroke catches, missed-wave recovery, pop-up transitions, size scaling, carving and speed,
 visible board landing angle, scoring, pause, exit, and safe reload position. Browser inspection
 is required for wave appearance, spray, layering, and keyboard/touch feel.
