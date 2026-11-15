@@ -5422,3 +5422,72 @@ g.run('startWindsurfing();window.listeners.keydown.forEach(({handler})=>handler(
 assert.equal(g.run('windsurfSession'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);
 g.run("startWindsurfing();$('#resetConfirm').showModal()");g.node('#confirmReset').onclick();assert.equal(g.run('windsurfSession'),null);assert.equal(g.run('state.windsurfer'),false);
 });
+
+test('northwest wind keeps every windsurfer upwind of the rig and drives the leeward sail side',()=>{
+const g=game();for(let i=0;i<32;i++){
+g.run(`globalThis.rig=windsurferRig(0,0,${i*Math.PI/16},1000);globalThis.pose=windsurferRiderPose(rig,1000)`);
+assert.ok(g.run('(pose.shoulder[0]-pose.hip[0])*SAILING_WIND.x+(pose.shoulder[1]-pose.hip[1]+11-pose.flex)*SAILING_WIND.y')<0);
+assert.equal(g.run('pose.face'),Math.PI/4);
+// Feet stay on the upwind rail, independently of travel direction.
+assert.ok(g.run('rig.point(0,0,1).map((v,i)=>pose.feet[0][i]-v).reduce((n,v,i)=>n+v*[SAILING_WIND.x,SAILING_WIND.y][i],0)')<=1e-9);
+const cross=g.run('-Math.sin(rig.heading)*SAILING_WIND.x+Math.cos(rig.heading)*SAILING_WIND.y');
+if(Math.abs(cross)>.12)assert.ok(g.run('rig.across')*cross>0);
+}
+});
+test('windsurfer flips release only the back hand, swing the clew, exchange grips and finish continuously',()=>{
+const g=game();g.run('globalThis.m={heading:Math.PI/2,tack:-1,frontHand:0,clock:0};m.heading=0;advanceWindsurferRig(m,0)');
+assert.equal(g.run('m.flip.backHand'),1);
+const positions=[];
+for(const t of [0,.1,.4,.5,.7,.9,.999]){
+g.run(`m.flip.elapsed=SAIL_FLIP_DURATION*${t};globalThis.r=windsurferRig(0,0,m.heading,1000,m);globalThis.p=windsurferRiderPose(r,1000,m)`);
+positions.push(g.run('r.across'));
+if(t>=.1&&t<=.7){assert.equal(g.run('p.hands[0].gripping'),true);assert.equal(g.run('p.hands[1].gripping'),false);}
+}
+assert.ok(positions[0]<0);assert.ok(positions.at(-1)>0);assert.ok(positions.every(Number.isFinite));
+g.run('globalThis.lastHands=p.hands.map(h=>h.point);advanceWindsurferRig(m,SAIL_FLIP_DURATION*.001);globalThis.after=windsurferRiderPose(windsurferRig(0,0,m.heading,1000,m),1000,m)');
+assert.equal(g.run('m.flip'),null);assert.equal(g.run('m.frontHand'),1);assert.equal(g.run('m.tack'),1);
+assert.ok(g.run('after.hands.every((h,i)=>Math.hypot(h.point[0]-lastHands[i][0],h.point[1]-lastHands[i][1])<.1)'));
+});
+test('windsurf turns trigger one sail flip across either wind axis without chatter',()=>{
+const g=game();for(const axis of [Math.PI/4,Math.PI*5/4]){
+g.run(`globalThis.m={heading:${axis+.3},tack:windsurferTack(${axis+.3}),frontHand:0};globalThis.before=m.tack;m.heading=${axis-.3};advanceWindsurferRig(m,20)`);
+assert.notEqual(g.run('m.flip'),null);assert.equal(g.run('m.flip.to'),-g.run('before'));
+g.run('advanceWindsurferRig(m,SAIL_FLIP_DURATION)');assert.equal(g.run('m.tack'),-g.run('before'));
+}
+g.run('globalThis.m={heading:Math.PI/4,tack:1,frontHand:0};for(let i=0;i<100;i++){m.heading=Math.PI/4+Math.sin(i)*.05;advanceWindsurferRig(m,16)}');assert.equal(g.run('m.flip'),undefined);
+});
+test('windsurf speed responds to northwest wind and can steer out of the no-go zone at rest',()=>{
+const g=game();assert.equal(g.run('windsurfDrive(Math.PI*5/4)'),0);assert.equal(g.run('windsurfDrive(Math.PI*3/4)'),1);assert.ok(g.run('windsurfDrive(Math.PI/4)')<1);
+g.run("state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();player.x=420;player.y=800;windsurfSession.heading=Math.PI*5/4;keys.add('w');advanceWindsurfing(1000)");assert.equal(g.run('windsurfSession.velocity'),0);
+const heading=g.run('windsurfSession.heading');g.run("keys.add('d');advanceWindsurfing(100)");assert.ok(g.run('windsurfSession.heading')>heading);
+});
+test('windsurf flip clocks and wind HUD pause in dialogs and clear safely on exit',()=>{
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();windsurfSession.heading=0;advanceWindsurferRig(windsurfSession,100);updateWaterControls()');
+assert.equal(g.node('#sailingWindHud').hidden,false);assert.equal(g.node('#sailingWindStatus').textContent,'Release back hand');
+const before=g.run('JSON.stringify(windsurfSession)');g.node('#challenge').open=true;g.run('advanceWindsurfing(1000);drawPlayerWindsurfer()');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+g.node('#challenge').open=false;g.run('advanceWindsurfing(300);updateWaterControls()');assert.equal(g.node('#sailingWindStatus').textContent,'Let the clew swing');
+g.run('finishWindsurfing()');assert.equal(g.node('#sailingWindHud').hidden,true);
+});
+test('windsurfer uses the shared surfboard renderer for player and repair crews',()=>{
+const g=game();g.run('globalThis.boards=[];const originalShortboard=drawSurfShortboard;drawSurfShortboard=(...args)=>{boards.push(args);originalShortboard(...args)};drawWindsurfer(400,500,0);drawRepairWindsurfer({board:{x:500,y:500},heading:1,alpha:1},1000,1)');
+assert.equal(g.run('boards.length'),2);assert.equal(g.run('boards.every(args=>args[0]===false&&args[1]===.7)'),true);
+});
+
+test('windsurf sail flips take the outside bow arc and keep the boom clear of the torso',()=>{
+const g=game();
+const lerp=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+const distanceToSegment=(p,a,b)=>{const d=b.map((v,i)=>v-a[i]),den=d.reduce((s,v)=>s+v*v,0);const t=Math.max(0,Math.min(1,p.reduce((s,v,i)=>s+(v-a[i])*d[i],0)/den));return Math.hypot(...p.map((v,i)=>v-a[i]-d[i]*t));};
+for(const speed of [0,125])for(const axis of [Math.PI/4,Math.PI*5/4])for(const direction of [-1,1]){
+g.run(`globalThis.m={heading:${axis-direction*.2},tack:windsurferTack(${axis+direction*.2}),frontHand:0,velocity:${speed}};advanceWindsurferRig(m,0)`);
+for(let step=0;step<=100;step++){
+g.run(`m.flip.elapsed=SAIL_FLIP_DURATION*${step/100};globalThis.r=windsurferRig(0,0,m.heading,0,m);globalThis.p=windsurferRiderPose(r,0,m)`);
+if(step===48)assert.ok(g.run('r.along')>6,'clew passes forward of the mast, away from the aft rider');
+const v=JSON.parse(g.run('JSON.stringify({mast:r.point(6,0,18),clew:r.clew,hip:p.hip,shoulder:p.shoulder,flex:p.flex,release:p.release})'));
+// Undo height projection to check the actual boom against the entire torso in 3D.
+const hipHeight=10-v.flex-v.release*2,shoulderHeight=hipHeight+11-v.flex;
+const hip=[v.hip[0],v.hip[1]+hipHeight,hipHeight],shoulder=[v.shoulder[0],v.shoulder[1]+shoulderHeight,shoulderHeight];
+const mast=[v.mast[0],v.mast[1]+18,18],clew=[v.clew[0],v.clew[1]+13,13];
+for(let body=0;body<=25;body++)assert.ok(distanceToSegment(lerp(hip,shoulder,body/25),mast,clew)>3.5,`boom crosses torso: speed ${speed}, axis ${axis}, direction ${direction}, step ${step}`);
+}
+}
+});

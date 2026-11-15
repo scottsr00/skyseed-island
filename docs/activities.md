@@ -59,9 +59,26 @@ the session. Swimming marks the water occupancy, while the dispatcher bypasses s
 movement and sea mounts. Swept board hull checks block islands, piers, bridges, other boats,
 and deep ocean. Saves record the safe dock position; activity resets clear the session.
 
-`windsurferRig()` projects a bow-mounted upright mast and an aft sail clew at every heading;
-`drawWindsurfer()` shares this artwork with departing boat repair crews. The sail flexes
-with time, and the player braces and leans while turning. `recordWindsurferWake()` feeds
+The wind always blows from northwest to southeast. A sailing-only compass HUD shows the
+source and direction, plus the current sail-handling stage. `windsurfDrive()` makes a beam
+reach fastest, reduces downwind speed, and removes thrust inside a 40-degree head-to-wind
+zone. Coasting bleeds speed in this zone; low-speed steering remains available to turn out.
+Rig handling briefly reduces drive. `advanceWindsurfing()` uses steps of at most 20 ms.
+
+`windsurferRig()` keeps the mast forward and the clew aft. `drawWindsurfer()` directly reuses
+`drawSurfShortboard()` from surfing, including the rails, tail, deck colors and graphics.
+`windsurferRiderPose()` keeps feet on the upwind rail, with the torso leaning northwest and
+the face looking southeast regardless of board heading. Bent knees, articulated elbows,
+gripping/open hands and hair sway animate independently of the board's rotation.
+
+Crossing either wind axis starts an 1100 ms sail flip through `advanceWindsurferRig()`:
+release the back hand, guide the clew around the outside of the bow with the front hand, then regrip and
+exchange hand roles. `windsurferSailPose()` interpolates the swing and grip exchange without
+snapping. The boom takes the long arc around the bow, away from the rider standing behind the
+forward mast, rather than sweeping through their torso on the shorter sternward arc.
+Tack hysteresis prevents repeated flips while hovering near a wind axis. The flip
+clock and hand roles are session-only, pause in dialogs, and clear with the sailing session.
+Departing repair crews share the board, wind-oriented rig and rider artwork. `recordWindsurferWake()` feeds
 `recordHullWake()` at 0.42 scale, retaining the shared spreading bow foam and spray without
 motor wash. Player and crew wakes have separate simulation-owned samples, age while stopped,
 and pause in dialogs. Drawing does not advance their clocks.

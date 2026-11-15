@@ -1206,9 +1206,13 @@ const progress=flip?Math.min(1,flip.elapsed/SAIL_FLIP_DURATION):0;
 const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 const swing=flip?smooth((progress-.16)/.64):0;
 const side=flip?flip.from+(flip.to-flip.from)*swing:tack;
-const angle=side*.78,flutter=Math.sin(clock*.009)*(.3+(flip?1.2:0));
+// The rider stands behind the forward mast. Take the long arc around the bow,
+// never the short sternward arc that would sweep the boom through their torso.
+const turn=flip?(flip.to-flip.from)*.78-Math.sign(flip.to-flip.from)*Math.PI*2:0;
+const angle=flip?flip.from*.78+turn*swing:tack*.78;
+const flutter=Math.sin(clock*.009)*(.3+(flip?1.2:0));
 return {tack,progress,side,angle,flutter,frontHand:m?.frontHand??0,
-backHand:flip?.backHand??1,release:flip?smooth(progress/.16)*(1-smooth((progress-.8)/.2)):0,
+backHand:flip?.backHand??1,handSwap:flip?smooth((progress-.8)/.2):0,release:flip?smooth(progress/.16)*(1-smooth((progress-.8)/.2)):0,
 phase:!flip?'sailing':progress<.16?'release':progress<.8?'swing':'regrip'};
 }
 function updateSailingWindUI(){
@@ -1275,7 +1279,8 @@ const speed=Math.min(1,(m?.velocity??70)/125),release=sail.release;
 const flex=Math.sin(clock*.006)*.65*speed,handling=release*2;
 // Upper body stays geographically upwind, facing SE, even while the board turns beneath it.
 const footAcross=-(wind.x*-Math.sin(heading)+wind.y*Math.cos(heading))*2.8;
-const hip=p(-5,footAcross,10-flex-handling);
+// Keep the torso aft of the mast even when leaning hard into the wind.
+const hip=p(-11,footAcross,10-flex-handling);
 hip[0]-=wind.x*(2+speed*2);hip[1]-=wind.y*(2+speed*2);
 const shoulder=[hip[0]-wind.x*(4+speed*2),hip[1]-wind.y*(4+speed*2)-11+flex];
 const head=[shoulder[0]+wind.x*.8,shoulder[1]-6.5];
@@ -1283,7 +1288,7 @@ const feet=[p(0,footAcross,1),p(-12,footAcross,1)];
 const lerp=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
 const grips=[rig.grip(.18),rig.grip(.53)],hands=[];
 for(let hand=0;hand<2;hand++){
-const isFront=hand===sail.frontHand,grip=grips[isFront?0:1];
+const isFront=hand===sail.frontHand,grip=lerp(grips[isFront?0:1],grips[isFront?1:0],sail.handSwap);
 // Back hand opens and drops toward the rider while the front hand guides the mast-side boom.
 const free=[shoulder[0]+(hand?3:-3)-wind.x*3,shoulder[1]+11];
 hands.push({hand,gripping:isFront||release<.02,point:lerp(grip,free,isFront?0:release),front:isFront});
@@ -3870,7 +3875,7 @@ ctx.restore();
 function windsurferRig(x,y,heading,clock=0,m=null){
 const c=Math.cos(heading),s=Math.sin(heading),sail=windsurferSailPose(heading,clock,m);
 const point=(along,across,height)=>[x+c*along-s*across,y+s*along+c*across-height];
-// The clew swings through the stern, then fills on the new leeward side.
+// The clew takes the outside arc away from the upwind rider, then fills on the new side.
 const along=6-29*Math.cos(sail.angle),across=29*Math.sin(sail.angle);
 const grip=t=>point(6+(along-6)*t,across*t,18-5*t);
 return {point,heading,sail,grip,mast:point(6,0,1),tip:point(6,sail.flutter,44),clew:point(along,across,13),tack:point(6,0,7),along,across};
