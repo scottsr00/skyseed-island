@@ -1537,26 +1537,38 @@ g.run('startVolleyball(0)');g.node('#profileName').value='Beach teammate';g.run(
 });
 
 function surfGame(){const g=game({beachPass:true});g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y+15;state.crystals=20;rentSurfboard();startSurfing();function setSurfTestRide(){Object.assign(surfSession,{phase:"riding",x:.43,y:.48,speed:.4,angle:Math.PI-.12})}');return g;}
-function surfTakeoffGame(){const g=surfGame();g.run('surfClock=1000;surfSession.paddleTime=500;player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock);catchSurfWave()');assert.equal(g.run('surfSession.phase'),'takeoff');return g;}
+function surfTakeoffGame(){const g=surfGame();g.run('surfClock=1000;surfSession.paddleTime=500;surfSession.paddleHeading=Math.PI/2;player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock);catchSurfWave()');assert.equal(g.run('surfSession.phase'),'takeoff');return g;}
 test('surf beach paddle-out retains momentum and requires a nearby curling lip before takeoff',()=>{
 const g=surfGame();assert.equal(g.run('catchSurfWave()'),false);assert.match(g.node('#surfAction').textContent,/Catch wave/);
 const start=g.run('player.y');g.run('keys.add("up");advanceSurfing(1000);draw()');assert.ok(g.run('player.y')<start-65);assert.ok(g.run('surfSession.vy')<0);
 assert.equal(g.run('surfSession.phase'),'paddling');assert.equal(g.run('surfSession.remaining'),90000);
 g.run('player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock);handleSurfKey(" ",{repeat:false,preventDefault(){}})');
+assert.equal(g.run('surfSession.phase'),'paddling');assert.match(g.run('surfSession.message'),/toward the beach/);
+g.run('keys.clear();keys.add("down");advanceSurfing(220);player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock);handleSurfKey(" ",{repeat:false,preventDefault(){}})');
 assert.equal(g.run('surfSession.phase'),'takeoff');assert.equal(g.run('surfSession.paddleStrokes'),0);assert.equal(g.run('keys.size'),0);assert.match(g.node('#surfAction').textContent,/Paddle/);
 g.run('handleSurfKey(" ",{repeat:true,preventDefault(){}})');assert.equal(g.run('surfSession.paddleStrokes'),0);
 g.run('handleSurfKey(" ",{repeat:false,preventDefault(){}})');assert.equal(g.run('surfSession.paddleStrokes'),1);
 });
 test('surf beach catch follows moving curling lips, proximity, and shore-break limits',()=>{
 for(const [time,index,section,dx,dy,expected] of [[1000,1,0,0,0,true],[1000,1,-1,20,10,true],[4000,0,0,0,0,true],[7000,2,0,0,0,true],[1000,1,0,30,0,false],[1000,1,0,25,25,false],[1000,1,0,90,0,false]]){
-const g=surfGame();g.run(`surfClock=${time};surfSession.paddleTime=500;const lip=beachWaveProfile(player.x,${index},surfClock,true).front+${section}*600;player.x=lip+${dx};player.y=beachWaveSurfaceY(lip,${index},surfClock)+${dy}`);
+const g=surfGame();g.run(`surfClock=${time};surfSession.paddleTime=500;surfSession.paddleHeading=Math.PI/2;const lip=beachWaveProfile(player.x,${index},surfClock,true).front+${section}*600;player.x=lip+${dx};player.y=beachWaveSurfaceY(lip,${index},surfClock)+${dy}`);
 assert.equal(g.run('catchSurfWave()'),expected);assert.equal(g.run('surfSession.phase'),expected?'takeoff':'paddling');
 }
 for(const [distance,paddleTime] of [[12,1000],[300,1000],[170,0]]){const g=surfGame();g.run(`player.y=beachShoreY(player.x)-${distance};surfSession.paddleTime=${paddleTime}`);assert.equal(g.run('catchSurfWave()'),false);}
 });
+test('surf beach catches require the board to face shoreward for keyboard and touch',()=>{
+for(const [heading,expected] of [[Math.PI/2,true],[Math.PI/4,true],[Math.PI*3/4,true],[Math.PI*2.5,true],[0,false],[Math.PI,false],[-Math.PI/2,false],[Math.PI/4-.01,false],[Math.PI*3/4+.01,false]]){
+const g=surfGame();g.run(`surfClock=1000;surfSession.paddleTime=500;surfSession.paddleHeading=${heading};player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock)`);
+assert.equal(g.run('catchSurfWave()'),expected,String(heading));if(!expected)assert.match(g.run('surfSession.message'),/toward the beach/);
+}
+const touch=surfGame();touch.run(`surfClock=1000;surfSession.paddleTime=500;surfSession.paddleHeading=0;player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock)`);
+touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});assert.equal(touch.run('surfSession.phase'),'paddling');
+touch.run('surfSession.paddleHeading=Math.PI/2');touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:2});assert.equal(touch.run('surfSession.phase'),'takeoff');
+});
+
 test('surf beach catches preserve selected wave size through takeoff, pop-up, and riding',()=>{
 for(const distance of [65,110,170,230,280]){
-const g=surfGame();g.run(`surfClock=(335-${distance})/.026;player.x=beachWaveProfile(player.x,0,surfClock,true).front;player.y=beachShoreY(player.x)-${distance};surfSession.paddleTime=500`);
+const g=surfGame();g.run(`surfClock=(335-${distance})/.026;player.x=beachWaveProfile(player.x,0,surfClock,true).front;player.y=beachShoreY(player.x)-${distance};surfSession.paddleTime=500;surfSession.paddleHeading=Math.PI/2`);
 assert.equal(g.run('catchSurfWave()'),true);const size=g.run('surfSession.waveSize');assert.equal(size,g.run(`surfWaveSize(${distance})`));
 g.run('for(let i=0;i<24&&surfSession.phase==="takeoff";i++){paddleSurfStroke();advanceSurfing(280)};advanceSurfing(1200);draw()');assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.waveSize'),size);
 }
@@ -1617,6 +1629,19 @@ assert.ok(g.run('surfTakeoffPose().pitch>earlyPitch'));
 assert.ok(g.run('surfSession.y>earlyY'));
 g.run('advanceSurfing(900)');assert.equal(g.run('surfSession.phase'),'riding');
 });
+test('surf larger waves need more paddle strokes and time to drop in at the same cadence',()=>{
+let previousStrokes=0,previousTime=0;
+for(const size of [.32,.48,.7,1]){
+const g=surfTakeoffGame();g.run(`prepareSurfTakeoff(${size});for(let i=0;i<30&&surfSession.phase==='takeoff';i++){paddleSurfStroke();advanceSurfing(280)}`);
+assert.equal(g.run('surfSession.phase'),'popup',String(size));
+const strokes=g.run('surfSession.paddleStrokes'),time=g.run('surfSession.paddleTime');
+assert.ok(strokes>previousStrokes,`wave ${size} requires more strokes`);assert.ok(time>previousTime,`wave ${size} requires more time`);
+assert.ok(time<9500);previousStrokes=strokes;previousTime=time;
+}
+const large=surfTakeoffGame();large.run(`prepareSurfTakeoff(1);advanceSurfing(3000);for(let i=0;i<30&&surfSession.phase==='takeoff';i++){paddleSurfStroke();advanceSurfing(280)}`);
+assert.equal(large.run('surfSession.phase'),'popup','large wave is catchable after the learning grace');
+});
+
 test('surf takeoff allows two extra seconds before the first paddle stroke',()=>{
 const g=surfTakeoffGame();g.run('advanceSurfing(3500);draw()');assert.equal(g.run('surfSession.phase'),'takeoff');
 g.run('advanceSurfing(60)');assert.equal(g.run('surfSession.phase'),'wipeout');
@@ -2857,6 +2882,19 @@ const snapshot=touch.run('JSON.stringify([surfSession.airHeight,surfSession.airS
 touch.run(`surfSession.paused=true;keys.add('right');advanceSurfing(1000)`);assert.equal(touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])'),snapshot);
 });
 
+test('surf aerials keep the curling lip moving forward and never reverse ocean scroll',()=>{
+for(const speed of [.3,.65,.85])for(const spin of ['left','right']){
+const g=surfGame();g.run(`setSurfTestRide();surfSession.phase='airborne';surfSession.y=.012;surfSession.airHeight=3;surfSession.airV=0;surfSession.speed=${speed};surfSession.angle=Math.PI+.5;keys.add('${spin}')`);
+let edge=g.run('surfRideView().breakX'),crown=g.run('surfLipCrown(surfRideView())'),scroll=g.run('surfSession.scroll');
+for(let i=0;i<12;i++){
+g.run('advanceSurfing(40)');assert.equal(g.run('surfSession.phase'),'airborne');
+const nextEdge=g.run('surfRideView().breakX'),nextCrown=g.run('surfLipCrown(surfRideView())'),nextScroll=g.run('surfSession.scroll');
+assert.ok(nextEdge<edge,'curl keeps peeling left');assert.ok(nextCrown<crown,'visible crown cannot retreat');assert.ok(nextScroll>scroll,'ocean keeps flowing right');edge=nextEdge;crown=nextCrown;scroll=nextScroll;
+}
+const snapshot=g.run('JSON.stringify([surfSession.x,surfSession.scroll,surfSession.airSpin])');g.run('surfSession.paused=true;advanceSurfing(300)');assert.equal(g.run('JSON.stringify([surfSession.x,surfSession.scroll,surfSession.airSpin])'),snapshot);
+}
+});
+
 test('air landings accept every downward nose angle, exclude horizontal and upward, and boost speed',()=>{
 for(const degrees of [.01,30,45,89.9,90,90.01,110,135,170,179.9])for(const turns of [-2,0,2]){
 const g=surfGame();g.run(`surfSession.phase='airborne';surfSession.y=.012;surfSession.x=.43;surfSession.speed=.5;surfSession.angle=0;surfSession.airSpin=${degrees}*Math.PI/180-Math.PI+${turns}*Math.PI*2;surfSession.airHeight=.001;surfSession.airV=-1;advanceSurfing(16)`);
@@ -2908,11 +2946,26 @@ const lower=surfGame();lower.run(`setSurfTestRide();keys.add(' ');keys.add('down
 const touch=surfGame();touch.run(`setSurfTestRide();surfSession.y=.025;surfSession.angle=Math.PI+.4;keys.add('down')`);touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});touch.run('advanceSurfing(160)');assert.ok(touch.run('surfSession.snap'));touch.node('#surfAction').onpointerup();assert.equal(touch.run(`keys.has(' ')`),false);
 touch.run('prepareSurfTakeoff()');assert.equal(touch.run('surfSession.snap'),null);assert.equal(touch.run('surfSession.spaceHold'),0);
 });
-test('surf snap rendering lifts the tail around a fixed nose and leans the rider back',()=>{
+test('surf snap rendering keeps the deck rigid and flat while pivoting about its nose and leaning back',()=>{
 const g=surfGame();g.run(`setSurfTestRide();surfSession.angle=2.6;surfSession.snap={age:0,startAngle:2.6,delta:-.3};var shirtPoints=[],boardMatrix;const snapPolygon=polygon;polygon=(points,color,...rest)=>{if(color===characterColors().shirt)shirtPoints=points;return snapPolygon(points,color,...rest)};ctx.transform=(...matrix)=>{boardMatrix=matrix};drawSurfRider(224,140,surfBoardRotation());var flatShoulder=(shirtPoints[2][0]+shirtPoints[3][0])/2;surfSession.snap.age=310;drawSurfRider(224,140,surfBoardRotation());var backShoulder=(shirtPoints[2][0]+shirtPoints[3][0])/2;var snapRotation=surfBoardRotation()`);
-assert.ok(g.run('backShoulder<flatShoulder-6'));
+assert.ok(g.run('backShoulder-surfBoardFrame(snapRotation).x*.85<flatShoulder-6'));
 assert.ok(g.run('Math.abs(boardMatrix[1]*21+boardMatrix[5]+Math.sin(snapRotation)*21)<1e-8'),'nose remains engaged');
-assert.ok(g.run('boardMatrix[1]*(-18)+boardMatrix[5]<Math.sin(snapRotation)*18-18'),'tail released upward');
+assert.ok(g.run('boardMatrix[1]*(-18)+boardMatrix[5]<Math.sin(snapRotation)*18-8'),'tail released upward');
+assert.ok(g.run('Math.abs(boardMatrix[0]*boardMatrix[2]+boardMatrix[1]*boardMatrix[3])<1e-9'),'deck axes remain perpendicular');
+assert.ok(g.run('Math.abs(Math.hypot(boardMatrix[0],boardMatrix[1])-1)<1e-9&&Math.abs(Math.hypot(boardMatrix[2],boardMatrix[3])-1)<1e-9'),'board keeps its shape');
+assert.ok(g.run('surfBoardPerspective().deck>.99'),'flat deck remains visible');
+});
+
+test('surf a well-timed crest snap slides the tail left of the fixed nose without skewing the board',()=>{
+const g=surfGame();g.run(`setSurfTestRide();surfSession.y=.02;surfSession.angle=Math.PI+.6;surfSession.speed=.7;keys.add('left');handleSurfKey(' ',{repeat:false,preventDefault(){}});advanceSurfing(160)`);
+assert.ok(g.run('surfSession.snap.quality')>.95);
+g.run(`advanceSurfing(310);var slideRotation=surfBoardRotation(),slideBoard=surfBoardFrame(slideRotation);var plantedNoseX=-(slideBoard.cos*21+slideBoard.x),releasedTailX=-(slideBoard.cos*(-18)+slideBoard.x)`);
+assert.ok(g.run('releasedTailX<plantedNoseX-5'),'tail crosses partly left of nose');
+assert.ok(g.run('Math.abs(slideBoard.cos*21+slideBoard.x-Math.cos(slideRotation)*21)<1e-8'),'nose stays planted');
+assert.ok(g.run('Math.abs(slideBoard.cos*slideBoard.cos+slideBoard.sin*slideBoard.sin-1)<1e-8'),'rigid deck');
+g.run(`var fullSlide=surfSnapPose().tailSlide;surfSession.snap.quality=.45;var earlySlide=surfSnapPose().tailSlide;surfSession.snap.quality=1;surfSession.snap.age=620;var reconnected=surfBoardFrame(slideRotation)`);
+assert.ok(g.run('earlySlide<fullSlide*.2'));assert.equal(g.run('surfSnapPose().tailSlide'),0);
+assert.ok(g.run('Math.abs(reconnected.cos-Math.cos(slideRotation))<1e-8'),'tail returns to riding line');
 });
 
 test('surf top turns and airs throw lip spray, with later and sharper turns making bigger fans',()=>{

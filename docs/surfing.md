@@ -83,7 +83,11 @@ are reused without another charge. Insufficient crystals or energy leave the pla
 A **Return surfboard** command is available at the shack while a board is rented.
 Entering a heat starts the overhead beach paddle-out. Use arrows / WASD (or touch directions)
 to reach the shore break, then press Space/Enter or Catch wave within 30 world units of a
-curling lip. The shore-break distance limits (65–280 units) and minimum 400 ms of paddling still
+curling lip with the board pointing back toward the beach (Down / S). The actual
+`paddleHeading` must be within 45 degrees of shoreward, including diagonal approaches;
+pointing offshore or sideways rejects the catch with a turn-toward-beach prompt. This
+uses the visible board heading as momentum turns, and applies to keyboard and touch alike.
+The shore-break distance limits (65–280 units) and minimum 400 ms of paddling still
 apply. Catch eligibility follows the moving, repeating curl and surface height used by
 `drawBeachWaves()`; distant whitewater and the unbroken crest cannot start a takeoff.
 A successful beach catch switches to the face-on wave view, with the surfer prone at the crest
@@ -96,7 +100,10 @@ late catches drop close to the curl while early catches have more open face. Pau
 freeze this approach. Only the successful catch starts the downward pitch,
 blending into the push-up and drop over the first 0.44 seconds of the pop-up. Tap Space/Enter or the touch Paddle
 button repeatedly (roughly three taps a second) to alternate arm strokes and build catch momentum.
-Holding a key does not generate strokes. Players have about 3.5 seconds to make the first
+Holding a key does not generate strokes. `surfTakeoffDemand()` scales catch effort with the
+selected wave size: small waves fill momentum faster, while the largest waves need about
+2.3 times the work and a higher minimum stroke count (6–12 across the size range).
+At the same tapping cadence, bigger waves take more strokes and longer to drop in. Players have about 3.5 seconds to make the first
 stroke, including a two-second learning grace period. Power decays between taps; after the first
 stroke, a pause of about 1.5 seconds
 or failing to catch within 9.5 seconds loses the wave and costs a wipeout. A successful catch
@@ -157,9 +164,12 @@ Hold Space (or the touch action) for at least 160 ms while the nose crosses the 
 turns back down to trigger a snap. `surfNoseOverLip()` checks the visible nose against the crest;
 a brief 220 ms reversal window allows the hold to register without requiring keyboard repeats.
 `startSurfSnap()` runs a 0.62-second nose-engaged pivot back down the face, releases the tail,
-throws a stronger lip burst, and awards 90 points on completion. `surfSnapPose()` lifts the board
-around its fixed nose and shifts the rider’s hips and shoulders back over the tail, with extended
-arms for counterbalance; the weight returns forward as the tail reconnects. The maneuver keeps
+throws a stronger lip burst, and awards 90 points on completion. `surfSnapPose()` /
+`surfBoardFrame()` rigidly pivot the board around its fixed nose, exposing the flat deck
+without shearing or stretching its outline. The rider shifts their hips and shoulders back
+over the tail, with extended arms for counterbalance. Snap quality is set by crest proximity
+and entry speed: the best late snaps yaw the released tail partially left of the planted nose
+at peak release, then realign smoothly for the descent. This remains a rigid board rotation; the weight returns forward as the tail reconnects. The maneuver keeps
 its speed, freezes for pause/dialogs, and finishes even after Space is released. One hold triggers
 one snap. Away from the reversal, fresh Space presses retain normal air controls; paddling still
 requires separate taps. The action label advertises holding to snap. Ride
@@ -169,7 +179,10 @@ the curl while within 55 wave-view units behind the falling lip’s opening edge
 that distance wipes out from being caught by the break. `surfTubeOpening()` shares the
 curtain edge with the occupant clip at every caught wave size. The HUD shows **IN THE TUBE**
 while hidden; a faster high line can bring the rider back out. Press Space at the
-crest while climbing with speed to launch an air, use left/right for spins, then land with the
+crest while climbing with speed to launch an air. During flight, the curl continues peeling
+forward toward the rider; speed can reduce its approach but cannot send it backward.
+Ocean scroll stays forward during aerial spins; signed reversal still applies to riding cutbacks.
+Use left/right for spins, then land with the
 visible nose pointing anywhere down the face (the open lower half-circle), including back toward
 the curl. Horizontal and upward landings wipe out. Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave
 coverage, linked turns, and clean aerial spins also score points. Heats last 90 seconds or three

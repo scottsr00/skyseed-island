@@ -26,6 +26,10 @@ prepareSurfPaddleOut();updateSurfUI();save();canvas.focus({preventScroll:true});
 }
 function surfWaveSize(distance){return .32+.68*Math.max(0,Math.min(1,distance/280));}
 function surfRideScale(s=surfSession){return s?.waveSize??1;}
+function surfTakeoffDemand(s=surfSession){
+const size=Math.max(0,Math.min(1,(surfRideScale(s)-.32)/.68));
+return {effort:.65+size*.85,strokes:Math.round(6+size*6)};
+}
 function surfWaveDistance(index,time=surfClock){return 335-((time*.026+index*108)%324);}
 function surfWaveY(x,index,time=surfClock){return beachShoreY(x)-surfWaveDistance(index,time)+Math.sin(x*.018+time*.0014)*3;}
 function prepareSurfPaddleOut(retry=false){
@@ -34,7 +38,7 @@ Object.assign(s,{phase:'paddling',x:.43,y:.48,angle:Math.PI-.12,speed:.4,vx:0,vy
 paddleTime:retry?500:0,paddleEffort:0,paddlePhase:0,paddleHeading:-Math.PI/2,waveSize:1,
 scroll:0,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,lipSpray:[],lipSprayClock:0,crestApproach:1,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airV:0,airSpin:0,airTurns:0,
 pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,spaceHold:0,snapCandidate:0,snap:null,snapUsed:false,bands:[],
-message:'Paddle out with arrows / WASD. Press Space near a curling lip to catch the wave.'});
+message:'Paddle out with arrows / WASD. Turn toward the beach near a curling lip, then press Space to catch the wave.'});
 player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-(retry?105:12);keys.clear();
 }
 function catchSurfWave(){
@@ -46,6 +50,7 @@ const front=beachWaveProfile(player.x,i,surfClock,true).front;
 const lipX=front+Math.round((player.x-front)/600)*600;
 return Math.hypot(player.x-lipX,player.y-beachWaveSurfaceY(lipX,i,surfClock))<30;
 })){s.message='Paddle close to the curling lip, then press Space to catch the wave.';updateSurfUI();return false;}
+if(Math.sin(s.paddleHeading??-Math.PI/2)<Math.SQRT1_2-1e-9){s.message='Turn the board back toward the beach (Down / S), then press Space to catch the wave.';updateSurfUI();return false;}
 prepareSurfTakeoff(surfWaveSize(distance));updateSurfUI();return true;
 }
 // Catching a coastal lip starts the close-up takeoff on that same wave size.
@@ -107,12 +112,13 @@ if(s.phase==='takeoff'){
 s.remaining=Math.max(0,s.remaining-ms);if(!s.remaining){finishSurfHeat();break;}
 s.paddleTime+=ms;s.paddleAge+=ms;s.strokeAge+=ms;
 s.paddlePower=Math.max(0,s.paddlePower-seconds*.29);
-s.paddleProgress=Math.min(1,s.paddleProgress+seconds*Math.max(0,s.paddlePower-.22)*.66);
+const demand=surfTakeoffDemand(s);
+s.paddleProgress=Math.min(1,s.paddleProgress+seconds*Math.max(0,s.paddlePower-.22)*.66/demand.effort);
 s.speed=.16+s.paddlePower*.34;s.scroll+=seconds*s.speed*45;
 s.y=.018+Math.sin(s.paddleTime*.004)*.002;
 s.x=.50+Math.min(1,s.paddleTime/9500)*.31;
 advanceSurfTakeoffWake(s,ms);
-if(s.paddleProgress>=1&&s.paddleStrokes>=6){
+if(s.paddleProgress>=1&&s.paddleStrokes>=demand.strokes){
 s.phase='popup';s.popTime=0;s.popStartY=s.y;s.popStartX=s.x;s.message='Wave caught! Push up, bring your feet through, and drop in.';keys.clear();
 }else if(s.paddleAge>(s.paddleStrokes?1550:3550)||s.paddleTime>9500){surfWipeout('The wave slipped away! Keep tapping Space to paddle with the next lip.');}
 continue;
@@ -148,8 +154,9 @@ const rate=Math.atan2(Math.sin(s.angle-previousAngle),Math.cos(s.angle-previousA
 if(keys.has(' ')&&surfTurningDown(s.angle,rate)&&surfNoseOverLip(s))s.snapCandidate=220;
 if(!s.snap&&!s.snapUsed&&s.spaceHold>=160&&s.snapCandidate>0&&s.y<.12)startSurfSnap(s,rate||-Math.cos(s.angle));
 }
-// Signed travel lets a cutback return toward the breaking lip, including its wake.
-s.scroll=(s.scroll||0)-Math.cos(s.angle)*s.speed*seconds*170;
+// Cutbacks can reverse surface travel; aerial spins never reverse the ocean camera.
+const travel=s.phase==='airborne'?Math.max(.08,-Math.cos(s.angle)*s.speed):-Math.cos(s.angle)*s.speed;
+s.scroll=(s.scroll||0)+travel*seconds*170;
 if(s.phase==='airborne'){
 s.airSpin+=rotation;
 if(vertical&&!steer){
@@ -158,7 +165,8 @@ const delta=Math.atan2(Math.sin(target-heading),Math.cos(target-heading));
 s.airSpin+=delta*(1-Math.exp(-seconds*5.5));
 }
 s.airTurns=Math.max(s.airTurns||0,Math.abs(s.airSpin));s.airHeight+=s.airV*seconds;s.airV-=2.6*seconds;
-s.x=Math.max(.12,s.x+(.23-s.speed*.55)*seconds);
+// The curl keeps peeling forward while the rider is detached from the wave.
+s.x=Math.max(.12,s.x+Math.max(.06,.23-s.speed*.2)*seconds);
 if(surfBarrelState(s).overrun){surfWipeout('The lip overran your air! Pump for more speed before taking off.');continue;}
 if(s.airHeight<=0&&s.airV<0){
 // Judge the nose direction actually drawn on screen, not the hidden riding angle.
@@ -225,13 +233,24 @@ const heading=Math.atan2(Math.sin(s.angle),Math.cos(s.angle));
 const target=Math.cos(s.angle)<0?Math.PI*.72:Math.PI*.28;
 let delta=Math.atan2(Math.sin(target-heading),Math.cos(target-heading));
 if(delta*rate<0)delta+=Math.sign(rate)*Math.PI*2;
-s.snap={age:0,startAngle:s.angle,delta};s.snapUsed=true;s.snapCandidate=0;s.airRequest=0;
+const quality=Math.max(0,Math.min(1,(.08-Math.min(s.y,s.crestApproach??1))/.10))*Math.min(1,s.speed/.65);
+s.snap={age:0,startAngle:s.angle,delta,quality};s.snapUsed=true;s.snapCandidate=0;s.airRequest=0;
 emitSurfLipSpray(s,2+s.speed,'snap');
 s.message='SNAP! Lean back, release the tail, and drive the nose down.';
 }
 function surfSnapPose(s=surfSession){
-const t=s?.snap?Math.min(1,s.snap.age/620):0,weight=s?.snap?Math.sin(Math.PI*t):0;
-return {t,weight,tailLift:weight*19,leanBack:weight*9};
+const t=s?.snap?Math.min(1,s.snap.age/620):0,weight=s?.snap&&t<1?Math.sin(Math.PI*t):0;
+const release=Math.max(0,Math.min(1,((s?.snap?.quality||0)-.4)/.6));
+return {t,weight,tailLift:weight*19,leanBack:weight*9,tailSlide:release*weight};
+}
+function surfBoardFrame(rotation,s=surfSession){
+const snap=surfSnapPose(s),pitch=Math.asin(snap.tailLift/39),base=-rotation+pitch;
+// A precise late snap releases the tail just left of the planted nose at its peak.
+const target=Math.acos(-.18),delta=Math.atan2(Math.sin(target-base),Math.cos(target-base));
+const angle=base+delta*snap.tailSlide;
+const cos=Math.cos(angle),sin=Math.sin(angle);
+// Rigidly pivot around the nose: no shear or stretch of the deck outline.
+return {cos,sin,x:21*(Math.cos(rotation)-cos),y:21*(-Math.sin(rotation)-sin)};
 }
 function surfTailClearOfLip(s=surfSession){
 const {riderX}=surfRideView(s),crest=surfRideCrest(riderX);
@@ -796,7 +815,8 @@ function surfBoardPerspective(s=surfSession){
 const heading=s?.angle??Math.PI,alongFace=Math.abs(Math.sin(heading));
 const lowerFace=Math.max(0,Math.min(1,((s?.y??.5)-.2)/.65));
 const bank=Math.min(1,Math.abs(s?.carveLean||0))*(.28+lowerFace*1.12);
-const deck=s?.phase==='airborne' ? .65 : (.68+alongFace*.3)*Math.cos(bank);
+const baseDeck=s?.phase==='airborne' ? .65 : (.68+alongFace*.3)*Math.cos(bank);
+const deck=baseDeck+(1-baseDeck)*surfSnapPose(s).weight;
 return {deck:Math.max(.16,deck),bank};
 }
 function surfRiderPose(s=surfSession){
@@ -1200,16 +1220,16 @@ function drawSurfRider(x,y,rotation,paddling=false,withoutBoard=false){
 const colors=characterColors(),s=surfSession;
 ctx.save();ctx.translate(x,y);if(paddling)ctx.rotate(rotation);else ctx.scale(-1,1);
 if(paddling)clipBeachWaveOccupant(x,y);
-if(!paddling&&!withoutBoard){const perspective=surfBoardPerspective(s),snap=surfSnapPose(s);ctx.save();ctx.transform(Math.cos(rotation),-Math.sin(rotation)+snap.tailLift/39,Math.sin(rotation),Math.cos(rotation),0,-21*snap.tailLift/39);drawSurfShortboard(false,perspective.deck);ctx.restore();}
+if(!paddling&&!withoutBoard){const perspective=surfBoardPerspective(s),board=surfBoardFrame(rotation,s);ctx.save();ctx.transform(board.cos,board.sin,-board.sin,board.cos,board.x,board.y);drawSurfShortboard(false,perspective.deck);ctx.restore();}
 else if(paddling)drawSurfShortboard(true);
 if(paddling){
 drawSwimmingCharacter(0,-.5,{phase:s?.paddlePhase||0,effort:s?.paddleEffort||0,time:surfClock,heading:0},true);
 }else{
-const pose=surfRiderPose(s),snap=surfSnapPose(s),crouch=pose.crouch,back=Math.cos(s?.angle??Math.PI)*snap.leanBack;
-const hipX=pose.lean*.6+back*.55,hipY=-12+crouch*.55-snap.tailLift*.35;
+const pose=surfRiderPose(s),snap=surfSnapPose(s),board=surfBoardFrame(rotation,s),crouch=pose.crouch,back=Math.cos(s?.angle??Math.PI)*snap.leanBack;
+const hipX=pose.lean*.6+back*.55+board.x*.85,hipY=-12+crouch*.55-snap.tailLift*.35+board.y*.2;
 const shoulderX=hipX+pose.lean*.75+(s?.phase==='airborne'?0:1)+back*.8,shoulderY=hipY-8;
 // Knees absorb the rail change while the chest stays upright above rotating feet.
-const feet=[-7,7].map(v=>({x:v*Math.cos(rotation)*(s?.phase==='wipeout'?1.4:1),y:-v*Math.sin(rotation)-1+(v-21)*snap.tailLift/39+(s?.phase==='wipeout'?Math.sin((s.wipeoutTime||0)*.012+v)*4:0)}));
+const feet=[-7,7].map(v=>({x:v*board.cos*(s?.phase==='wipeout'?1.4:1)+board.x,y:v*board.sin+board.y-1+(s?.phase==='wipeout'?Math.sin((s.wipeoutTime||0)*.012+v)*4:0)}));
 const limb=(points,color,width)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(...points[0]);for(const p of points.slice(1))ctx.lineTo(...p);ctx.stroke();};
 for(let i=0;i<2;i++){
 const foot=feet[i],kneeX=(foot.x+hipX)*.5+(i?3:-3)+pose.lean*.35,kneeY=(foot.y+hipY)*.5-crouch*.12;
