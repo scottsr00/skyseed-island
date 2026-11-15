@@ -2868,6 +2868,27 @@ assert.ok(fast.run('surfSession.wake.some(mark=>mark.strength>.4)'));
 assert.ok(fast.run('surfSession.wake.at(-1).y!==surfSession.wake[0].y'));
 });
 
+test('surf holding Space during a crest reversal snaps the tail loose while the nose drives down',()=>{
+for(const [angle,key] of [[Math.PI+.4,'down'],[Math.PI*2-.4,'right']]){
+const g=surfGame();g.run(`setSurfTestRide();surfSession.waveSize=.7;surfSession.x=.2;surfSession.y=.025;surfSession.speed=.65;surfSession.angle=${angle};keys.add('${key}');handleSurfKey(' ',{repeat:false,preventDefault(){}});advanceSurfing(160)`);
+assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.snap'));assert.equal(g.run('surfSession.airRequest'),0);assert.ok(g.run(`surfSession.lipSpray.some(mark=>mark.kind==='snap')`));
+g.run('advanceSurfing(300)');assert.ok(g.run('surfSnapPose().tailLift')>18);assert.ok(g.run('surfSnapPose().leanBack')>8);
+const snapshot=g.run('JSON.stringify([surfSession.snap,surfSession.y,surfSession.lipSpray])');g.run('surfSession.paused=true;advanceSurfing(500);drawSurfGame()');assert.equal(g.run('JSON.stringify([surfSession.snap,surfSession.y,surfSession.lipSpray])'),snapshot);
+g.run('surfSession.paused=false');g.node('#challenge').showModal();g.run('advanceSurfing(500)');assert.equal(g.run('JSON.stringify([surfSession.snap,surfSession.y,surfSession.lipSpray])'),snapshot);g.node('#challenge').close();
+g.run('keys.clear();advanceSurfing(320)');assert.equal(g.run('surfSession.snap'),null);assert.ok(g.run('Math.sin(surfSession.angle)>.6'));assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>=90);
+}
+const tap=surfGame();tap.run(`setSurfTestRide();surfSession.y=.025;surfSession.angle=Math.PI+.4;keys.add('down');handleSurfKey(' ',{repeat:false,preventDefault(){}});advanceSurfing(64);keys.delete(' ');advanceSurfing(160)`);assert.equal(tap.run('surfSession.snap'),null);
+const lower=surfGame();lower.run(`setSurfTestRide();keys.add(' ');keys.add('down');advanceSurfing(400)`);assert.equal(lower.run('surfSession.snap'),null);
+const touch=surfGame();touch.run(`setSurfTestRide();surfSession.y=.025;surfSession.angle=Math.PI+.4;keys.add('down')`);touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});touch.run('advanceSurfing(160)');assert.ok(touch.run('surfSession.snap'));touch.node('#surfAction').onpointerup();assert.equal(touch.run(`keys.has(' ')`),false);
+touch.run('prepareSurfTakeoff()');assert.equal(touch.run('surfSession.snap'),null);assert.equal(touch.run('surfSession.spaceHold'),0);
+});
+test('surf snap rendering lifts the tail around a fixed nose and leans the rider back',()=>{
+const g=surfGame();g.run(`setSurfTestRide();surfSession.angle=2.6;surfSession.snap={age:0,startAngle:2.6,delta:-.3};var shirtPoints=[],boardMatrix;const snapPolygon=polygon;polygon=(points,color,...rest)=>{if(color===characterColors().shirt)shirtPoints=points;return snapPolygon(points,color,...rest)};ctx.transform=(...matrix)=>{boardMatrix=matrix};drawSurfRider(224,140,surfBoardRotation());var flatShoulder=(shirtPoints[2][0]+shirtPoints[3][0])/2;surfSession.snap.age=310;drawSurfRider(224,140,surfBoardRotation());var backShoulder=(shirtPoints[2][0]+shirtPoints[3][0])/2;var snapRotation=surfBoardRotation()`);
+assert.ok(g.run('backShoulder<flatShoulder-6'));
+assert.ok(g.run('Math.abs(boardMatrix[1]*21+boardMatrix[5]+Math.sin(snapRotation)*21)<1e-8'),'nose remains engaged');
+assert.ok(g.run('boardMatrix[1]*(-18)+boardMatrix[5]<Math.sin(snapRotation)*18-18'),'tail released upward');
+});
+
 test('surf top turns and airs throw lip spray, with later and sharper turns making bigger fans',()=>{
 const early=surfGame(),late=surfGame(),low=surfGame();
 for(const [g,y] of [[early,.14],[late,.025],[low,.5]])g.run(`setSurfTestRide();surfSession.y=${y};surfSession.speed=.65;surfSession.angle=Math.PI+.3;keys.add('down');advanceSurfing(220)`);
@@ -2882,6 +2903,18 @@ air.run(`emitSurfLipSpray(surfSession,1,'air');prepareSurfTakeoff()`);assert.equ
 const gentle=surfGame(),sharp=surfGame();
 for(const [g,rate] of [[gentle,1],[sharp,4]])g.run(`setSurfTestRide();surfSession.y=.05;surfSession.speed=.65;surfSession.angle=Math.PI;advanceSurfRidingArt(surfSession,16,Math.PI-${rate}*.016)`);
 assert.ok(sharp.run('surfSession.lipSpray[0].power')>gentle.run('surfSession.lipSpray[0].power')*2);
+});
+
+test('surf board pressure displaces the visible lip locally and rebounds without changing riding geometry',()=>{
+const g=surfGame();g.run(`setSurfTestRide();surfSession.y=.025;surfSession.speed=.7;surfSession.angle=Math.PI+.4;emitSurfLipSpray(surfSession,1.5,'carve');var lipContact=surfSession.lipSpray[0].x+surfSession.scroll,pressureWave=surfRideView(),physicalCrest=surfFaceCrest(lipContact,pressureWave);var weakDent;surfSession.lipSpray[0].power=.4;weakDent=surfBoardLipDisplacement(lipContact,pressureWave);surfSession.lipSpray[0].power=1.5`);
+assert.ok(g.run('surfBoardLipDisplacement(lipContact,pressureWave)>weakDent*2'));
+assert.ok(g.run('surfRenderedCrest(lipContact,pressureWave)>physicalCrest+5'));
+assert.ok(g.run('surfBoardLipDisplacement(lipContact+(8+1.5*7)*1.2,pressureWave)<0'));
+assert.equal(g.run('surfBoardLipDisplacement(lipContact+100,pressureWave)'),0);
+assert.equal(g.run('surfFaceCrest(lipContact,pressureWave)'),g.run('physicalCrest'));
+g.run(`var sprayDrops=0,spraySheets=0;const pressureDrop=surfWaterDrop,pressureFill=ctx.fill;surfWaterDrop=(...args)=>{sprayDrops++;pressureDrop(...args)};ctx.fill=(...args)=>{spraySheets++;pressureFill(...args)};surfSession.lipSpray[0].age=200;drawSurfLipSpray()`);
+assert.ok(g.run('sprayDrops')>60);assert.ok(g.run('spraySheets')>=3);
+g.run(`surfSession.lipSpray[0].age=650`);assert.equal(g.run('surfRenderedCrest(lipContact,pressureWave)'),g.run('physicalCrest'));
 });
 
 test('surf wipeouts tumble to the trough, separating the rider from an intact or snapped board',()=>{
@@ -4711,4 +4744,72 @@ for(const lean of [-1,0,1]){wakeboardRide.riderLean=lean;const beforeDraw=JSON.s
 assert.equal(g.run('riderDrawDepth'),0);
 g.run('finishWakeboarding();advanceSwimming(200);drawWakeboardCrash()');
 assert.equal(g.run('riderDrawDepth'),0);
+});
+
+test('jet ski costs 150 once, persists across ages and resets, and isolates profiles',()=>{
+const g=game();g.run('state.crystals=149;buyJetski()');assert.equal(g.run('state.jetski'),false);
+g.run('state.crystals=250;buyJetski();buyJetski()');assert.equal(g.run('state.crystals'),100);assert.equal(g.run('state.jetski'),true);
+let reloaded=game(null,g.snapshot());assert.equal(reloaded.run('state.jetski'),true);
+g.run("switchAge('9-10')");assert.equal(g.run('state.jetski'),true);
+g.run("$('#resetConfirm').showModal();$('#confirmReset').onclick()");assert.equal(g.run('state.jetski'),true);
+g.node('#profileName').value='Jet Rider';g.run('createProfile()');assert.equal(g.run('state.jetski'),false);
+});
+test('jet ski launches at its separate island dock, renders, exits and reboards',()=>{
+const g=game();g.run('state.crystals=150;buyJetski();player.x=JETSKI_DOCK.x;player.y=JETSKI_DOCK.y-18');
+assert.equal(g.run('inside(player.x,player.y,mainPoly)'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('nearby()'),105);
+g.run('launchJetski()');assert.equal(g.run('activeVessel'),'jetski');assert.equal(g.run('boating'),true);assert.equal(g.run('boatPoseClear(player.x,player.y,boatMotion.heading)'),true);
+g.run('draw();advanceSwimming(600);exitBoat()');assert.equal(g.run('boating'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('boardOwnBoat()');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),'jetski');
+g.run('returnBoat()');assert.equal(g.run('player.x'),g.run('JETSKI_DOCK.x'));
+});
+test('jet ski is fastest with tighter turning, biggest beach wave impulse and no trim',()=>{
+const g=game();
+for(const vessel of ['ferry','fishing','speedboat','tow'])for(let trim=0;trim<=5;trim++)assert.ok(g.run('boatTopSpeed(0,"jetski")')>g.run(`boatTopSpeed(${trim},'${vessel}')`));
+g.run("state.jetski=true;activeVessel='jetski';boating=true;player.x=1300;player.y=1400;boatPosition={x:1300,y:1400};resetBoatMotion();boatMotion.engineStage='running';boatMotion.velocity=200;driveBoat(500,1,1);cycleBoatTrim();updateWaterControls();updateFerryPassUI();draw()");
+assert.ok(g.run('boatMotion.turnRate')>3.4);assert.equal(g.run('boatMotion.trimStep'),0);assert.equal(g.node('#mapBoatTrim').hidden,true);assert.equal(g.node('#boatTrimInstrument').hidden,true);
+for(const vessel of ['ferry','fishing','speedboat'])assert.ok(g.run('boatWaveImpulse(1,-Math.PI/2,150,"jetski")')>g.run(`boatWaveImpulse(1,-Math.PI/2,150,'${vessel}')*1.6`));
+assert.ok(g.run('boatMotion.wake.length')>0);assert.ok(g.run('boatMotion.wake.every(w=>w.scale===.6)'));
+});
+test('jet ski keeps its vessel and fuel through outer island parking and reload',()=>{
+const g=game();g.run("state.crystals=150;buyJetski();player.x=JETSKI_DOCK.x;player.y=JETSKI_DOCK.y;launchJetski();advanceSwimming(600);player.x=1300;player.y=800;boatPosition={x:1300,y:800};driveBoat(1000,1,0);state.boatIsland='palm-cove';save()");
+const fuel=g.run('currentProfile().fuel.jetski');assert.ok(fuel<100);const r=game(null,g.snapshot());assert.equal(r.run('activeVessel'),'jetski');assert.equal(r.run('currentProfile().fuel.jetski'),fuel);r.run('draw()');
+});
+test('jet ski repairs at its own dock without changing ownership or fuel, and full reset removes it',()=>{
+const g=game();g.run("state.crystals=150;buyJetski();currentProfile().fuel.jetski=37;const target=boatRepairHome('jetski').berth;petDragonPosition={x:target.x-60,y:target.y-8};petDragonFire={elapsed:200,duration:850};checkBoatDragonFireHits();petDragonFire=null;nextPetDragonFire=1e9;advancePetDragonFire(BOAT_EXPLOSION_DURATION)");
+assert.equal(g.run("boatRepairs.has('jetski')"),true);
+g.run("advancePetDragonFire(BOAT_REPAIR_TIMING.arrival);draw();advancePetDragonFire(BOAT_REPAIR_TIMING.jetski);draw()");assert.equal(g.run("boatUnavailable('jetski')"),false);assert.equal(g.run('state.jetski'),true);assert.equal(g.run('currentProfile().fuel.jetski'),37);
+g.run("requestProfileAction('reset');confirmProfileAction()");assert.equal(g.run('state.jetski'),false);assert.equal(g.run('currentProfile().fuel.jetski'),100);const r=game(null,g.snapshot());assert.equal(r.run('state.jetski'),false);
+});
+
+test('jet ski emits a constant center rooster tail without trim and a larger propulsion wake',()=>{
+const g=game();g.run("state.jetski=true;activeVessel='jetski';boating=true;player.x=1300;player.y=1300;resetBoatMotion();boatMotion.engineStage='running';advanceBoatSpray(24)");
+assert.ok(g.run('boatMotion.spray.filter(p=>p.jet).length')>=10,'idle engine has a continuous tail');
+assert.equal(g.run('boatMotion.trimStep'),0);
+g.run('boatMotion.throttle=1;boatMotion.velocity=200;advanceBoatSpray(24)');
+assert.ok(g.run('boatMotion.spray.filter(p=>p.jet).every(p=>p.x===player.x-18&&p.y===player.y)'), 'one central stern nozzle');
+g.run("recordHullWake(boatMotion,{x:1250,y:1300},player,0,'jetski');const before=JSON.stringify(boatMotion);jetskiArt(player.x,player.y);drawBoatTrimSpray(player.x,player.y,0,'jetski',true)");
+assert.equal(g.run('JSON.stringify(boatMotion)'),g.run('before'),'rendering never emits or ages jet water');
+assert.ok(g.run('boatMotion.wake.length>0&&boatMotion.wake.every(w=>w.jet&&w.scale===.6)'));
+});
+test('jet ski briefly expels elevated water after takeoff, drains in air, and resumes on landing',()=>{
+const g=game();g.run("state.jetski=true;activeVessel='jetski';boating=true;player.x=1300;player.y=1300;resetBoatMotion();boatMotion.engineStage='running';boatMotion.velocity=200;boatMotion.throttle=1;advanceBoatSpray(24);boatMotion.spray=[];boatMotion.waveHeight=30;advanceBoatSpray(24)");
+assert.ok(g.run('boatMotion.spray.some(p=>p.jet&&p.z===32)'), 'airborne droplets start at the raised nozzle');
+assert.ok(g.run('boatMotion.spray.every(p=>Math.abs(p.z+p.vz*p.life-p.gravity*p.life*p.life/2)<.00001)'), 'life ends at the water surface');
+g.run('for(let i=0;i<30;i++)advanceBoatSpray(16)');assert.equal(g.run('boatMotion.jetWaterRemaining'),0);
+const count=g.run('boatMotion.spraySerial');g.run('advanceBoatSpray(32)');assert.equal(g.run('boatMotion.spraySerial'),count);
+g.run('boatMotion.waveHeight=0;advanceBoatSpray(24)');assert.ok(g.run('boatMotion.spraySerial')>count);
+g.run("boatMotion.engineStage='off';advanceBoatSpray(24)");const stopped=g.run('boatMotion.spraySerial');g.run('advanceBoatSpray(24)');assert.equal(g.run('boatMotion.spraySerial'),stopped);
+g.run('resetBoatMotion()');assert.equal(g.run('boatMotion.spray.length'),0);assert.equal(g.run('boatMotion.jetWaterRemaining||0'),0);
+});
+
+test('jet ski riders grip handlebars, straddle the hood, and never draw a steering wheel',()=>{
+for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+const g=game();g.run(`state.jetski=true;activeVessel='jetski';boating=true;player.x=1300;player.y=1300;boatPosition={...player};resetBoatMotion();boatMotion.heading=${heading};boatMotion.steering=.4;
+drawBoatSteeringWheel=()=>{throw Error('Jet skis use handlebars')};const shoes=[];const limb=characterLimb;characterLimb=(points,color,width)=>{if(color==='#293e43')shoes.push(points);limb(points,color,width)};
+const before=JSON.stringify(boatMotion);jetskiArt(player.x,player.y);`);
+assert.equal(g.run('JSON.stringify(boatMotion)'),g.run('before'));
+assert.equal(g.run('shoes.length'),2);
+if(heading===Math.PI/2)assert.equal(g.run('shoes.every(points=>points.every(p=>Math.abs(p[0]-player.x)>7))'),true,'both feet extend outside the solid front hood');
+g.run('boating=false;jetskiArt(player.x,player.y)');
+}
 });

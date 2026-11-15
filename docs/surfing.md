@@ -66,7 +66,10 @@ rider pose, keeping foam behind the surfer. The pop-up switches to an opaque sta
 after the feet plant, avoiding a transparent silhouette during the transition. `emitSurfLipSpray()` adds a crest-anchored fan of spray on takeoff and carving within the
 top 17% of the face. Spray grows with speed, turn rate, and the closest approach to the lip
 during that climb, so later, sharper top turns throw a larger fan. `drawSurfLipSpray()` draws
-the drifting droplets above the lip and behind the rider. It ages with simulation time,
+a denser fan of drifting droplets, mist, and brief translucent water sheets above the lip
+and behind the rider. `surfBoardLipDisplacement()` / `surfRenderedCrest()` scoop a local notch
+and raise displaced shoulders in the visible crest and its foam fringe; the lip rebounds
+over 0.65 seconds. This temporary surface detail leaves the underlying riding geometry intact. It ages with simulation time,
 freezes on pause/dialogs, and resets on the next wave. Landings compress the stance and kick up a short burst
 of spray.
 
@@ -144,7 +147,17 @@ horizontal position. Turn onto a downward trajectory or jump before the tail lea
 continuing uphill (or flattening out after crossing) wipes out over the back. The available margin
 follows board length, heading, and caught wave size, rather than a fixed timer. Air requests are
 resolved before this check, so a timely jump clears the lip. Pauses freeze the crossing.
-`surfBoardRotation()` connects the visible board to that heading. Ride
+`surfBoardRotation()` connects the visible board to that heading.
+Hold Space (or the touch action) for at least 160 ms while the nose crosses the lip and the rider
+turns back down to trigger a snap. `surfNoseOverLip()` checks the visible nose against the crest;
+a brief 220 ms reversal window allows the hold to register without requiring keyboard repeats.
+`startSurfSnap()` runs a 0.62-second nose-engaged pivot back down the face, releases the tail,
+throws a stronger lip burst, and awards 90 points on completion. `surfSnapPose()` lifts the board
+around its fixed nose and shifts the rider’s hips and shoulders back over the tail, with extended
+arms for counterbalance; the weight returns forward as the tail reconnects. The maneuver keeps
+its speed, freezes for pause/dialogs, and finishes even after Space is released. One hold triggers
+one snap. Away from the reversal, fresh Space presses retain normal air controls; paddling still
+requires separate taps. The action label advertises holding to snap. Ride
 half inside the barrel curtain for 4× line points (fully under it earns 2×). Press Space at the
 crest while climbing with speed to launch an air, use left/right for spins, then land with the
 visible nose pointing anywhere down the face (the open lower half-circle), including back toward

@@ -85,6 +85,35 @@ speed. Its top speed advantage applies at every matching trim setting (175 versu
 trim; 206.5 versus 165.2 at trim 4). Fishing, anchoring at the beach, outer-island docking, saved
 parking, reboarding, and dragon-fire explosions work with the speedboat.
 
+## Jet ski
+
+Buy a jet ski for 150 crystals in Fishing & travel or at the signed jet ski dock on the
+southeast shore of Crystal Cavern island, separate from the main island. Buying spends
+crystals once; ownership belongs to the explorer across ages, adventure resets, and reloads.
+Full profile reset removes it. `buyJetski()`, `launchJetski()`, and `jetskiArt()` own the flow.
+E or tapping the dock buys it first, then launches on a subsequent interaction nearby.
+
+The gold-and-coral personal watercraft has a raised solid front hood, steering handlebars,
+and a straddling rider with feet visible outside the hood when facing the camera.
+The hands follow the turning grips; hood/rider draw order follows the heading. It has
+a compact collision/wake hull, one jet wash,
+and uses `recordHullWake()` with the shared effect scaler at 0.6. Jet propulsion adds a
+wider, longer center wash and a constant center rooster tail while the engine runs, with
+throttle increasing the spray. `advanceJetskiJet()` feeds the shared world-space spray
+renderer: after takeoff the raised nozzle expels its remaining water for up to 450 ms,
+fading as it drains, then refills on landing. Droplets retain their launch elevation and
+fall to the water independently. Stopping, fishing, anchoring, fuel exhaustion and boat
+motion resets stop emission; already emitted droplets finish their arcs. Its fixed top speed is
+250 world pixels/second, above every other vessel at every trim setting, with 1.8× fishing
+boat acceleration, 3.5 radian/second steering and quicker turn response. Beach wave launch
+impulse is twice the neutral fishing boat impulse, exceeding even fully trimmed boats.
+It has no trim setting, trim action, trim instrument, or Space trim effect.
+
+Docking, offshore anchors, beach passes, fishing, outer-island parking/reload and reboarding
+use the shared boat flows. Its separate persistent fuel tank follows the owned-boat fuel
+and reserve rules. Deep ocean access remains exclusive to the speedboat. Dragon fire and
+free repairs use its home dock with 15 seconds of construction.
+
 ## Automatic boat repairs
 
 Dragon fire can destroy the sponsored fishing boat, speedboat, ferry, and watersports tow boat.

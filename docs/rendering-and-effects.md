@@ -95,6 +95,19 @@ to head-only treading, and existing wave clipping, underwater layers, arm stroke
 
 ## Boat motors and spray
 
+`drawJetskiHandlebars()` and `jetskiHandleGrip()` share grip positions with the seated
+rider’s hands. The jet ski rider straddles the seat with feet outside `drawJetskiHood()`;
+the solid raised hood draws in front when facing the camera and behind when facing away.
+Other vessels retain the wheel and seated leg pose.
+
+Jet skis use a larger center wash in `drawBoatWake()` and an engine-fed center rooster
+tail from `advanceJetskiJet()`, without motor trim. The jet draws through the shared
+`drawBoatTrimSpray()` passes. Spray particles may carry an initial `z` elevation;
+rendering and swept scenery reactions use it consistently. Airborne jet water drains
+for 450 ms and droplets fall from the raised nozzle to the water. All jet clocks and
+particles belong to `boatMotion`, advance only in simulation, and clear with its reset.
+
+
 The ferry and fishing boat display twin outboards with trim-adjusted lower units. Spray uses
 individual gravity-driven droplets carried by the boat’s motion, with varied launch speeds, fine
 mist, and small landing splashes.
