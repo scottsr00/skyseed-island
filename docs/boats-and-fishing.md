@@ -147,7 +147,12 @@ adventure/full-profile resets clear explosions and crews through `resetPetDragon
 ## Driving and trim
 
 Boat hull collision checks cover land, docks, built bridges, and other boats, including the tow
-boat. Turns and long moves stop before contact; reverse lets a boat move away. Boarding positions
+boat. Airborne fishing boats, speedboats, ferries, and jet skis can pass over islands.
+`advanceBoatWaves()` checks the whole hull at touchdown: any island overlap immediately
+triggers the shared fire explosion and free home-dock repairs through `destroyBoat()`.
+The rider is thrown into nearby clear water. Water landings keep their usual splash.
+Docks, bridges, other vessels, world edges, and deep-ocean access still block airborne travel.
+Turns and long moves stop before contact; reverse lets a boat move away. Boarding positions
 provide hull clearance beside docks.
 
 Boat driving: Up/W applies forward thrust, Down/S brakes before reversing, and Left/A or Right/D

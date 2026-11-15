@@ -5311,3 +5311,47 @@ assert.equal(g.run('surfSession.remaining'),0);assert.equal(g.run('surfSession.p
 assert.equal(g.run('state.surfBest'),125);assert.equal(g.run('keys.size'),0);assert.equal(g.run('onMainlandBeach()'),true);
 g.run('advanceSurfing(1000)');assert.equal(g.run('surfSession.remaining'),0);
 });
+
+test('jumping boats and jet skis cross islands while grounded hulls stop at shore',()=>{
+for(const vessel of ['fishing','speedboat','ferry','jetski']){
+const g=game();g.run(`state.catches={shark:5};state.speedboat=true;state.jetski=true;state.ferryRemaining=FERRY_RIDE_DURATION;activeVessel='${vessel}';boating=true;resetBoatMotion();
+const jumpIsland=boatIslands[1];player.x=jumpIsland.x-180;player.y=jumpIsland.y-30;boatPosition={x:player.x,y:player.y};moveBoat(360,0,0)`);
+assert.ok(g.run('player.x')<g.run('jumpIsland.x-80'),`${vessel}: grounded hull stops`);
+g.run('player.x=jumpIsland.x-180;boatMotion.waveHeight=70;boatMotion.waveVelocity=0;moveBoat(180,0,0)');
+assert.equal(g.run('player.x'),g.run('jumpIsland.x'),`${vessel}: airborne hull enters island`);
+assert.equal(g.run('boatPoseClear(player.x,player.y,0)'),false,'berth checks still reject land');
+g.run('driveBoat(40,1,1)');assert.ok(g.run('boatMotion.heading')>0,'airborne steering works over land');
+g.run('moveBoat(jumpIsland.x+180-player.x,jumpIsland.y-30-player.y,0);boatMotion.waveHeight=.1;boatMotion.waveVelocity=-40;advanceBoatWaves(16)');
+assert.equal(g.run('boating'),true,`${vessel}: clears island and lands safely`);
+assert.equal(g.run('boatExplosions.size'),0);
+assert.ok(g.run('boatMotion.waveSplashes.length')>0);
+}
+});
+
+test('island touchdowns explode boats and jet skis immediately and start free home repairs',()=>{
+for(const vessel of ['fishing','speedboat','ferry','jetski'])for(const edge of [false,true]){
+const g=game();g.run(`state.catches={shark:5};state.speedboat=true;state.jetski=true;state.ferryRemaining=FERRY_RIDE_DURATION;activeVessel='${vessel}';boating=true;resetBoatMotion();
+player.x=boatIslands[1].x${edge?'-120':''};player.y=boatIslands[1].y;boatPosition={x:player.x,y:player.y};const impactPoint={...boatPosition};
+boatMotion.waveHeight=.1;boatMotion.waveVelocity=-40;boatMotion.wavePitch=.2;advanceBoatWaves(16)`);
+assert.equal(g.run('boating'),false,`${vessel}: hull ${edge?'edge':'center'} on land explodes`);
+assert.equal(g.run(`boatIsExploding('${vessel}')`),true);
+assert.equal(g.run(`boatExplosions.get('${vessel}').x`),g.run('impactPoint.x'));
+assert.equal(g.run(`boatExplosions.get('${vessel}').elapsed`),g.run('BOAT_IGNITION_DURATION'));
+assert.equal(g.run('swimming'),true);assert.equal(g.run('sharkWater(player.x,player.y)'),true);
+assert.equal(g.run('swimmingTimberAt(player.x,player.y)'),false);
+assert.equal(g.run('boatMotion.waveLanding'),undefined);
+g.run('draw();petDragonFire=null;nextPetDragonFire=1e9;advancePetDragonFire(BOAT_EXPLOSION_DURATION-BOAT_IGNITION_DURATION)');
+assert.equal(g.run(`boatRepairs.has('${vessel}')`),true);
+g.run(`advancePetDragonFire(BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING['${vessel}'])`);
+assert.equal(g.run(`boatUnavailable('${vessel}')`),false);
+assert.equal(g.run(`vesselPose('${vessel}')[0]`),g.run(`boatRepairHome('${vessel}').berth.x`));
+}
+});
+
+test('airborne boat movement still respects timber, other hulls, ocean access and world edges',()=>{
+const g=game();g.run('state.catches={shark:5};state.speedboat=true;state.jetski=true;activeVessel="jetski";boating=true;boatMotion.waveHeight=50');
+assert.equal(g.run('boatPoseClear(dock.x,dock.y,0,"jetski",true)'),false);
+assert.equal(g.run('boatPoseClear(...vesselPose("ferry"),"jetski",true)'),false);
+assert.equal(g.run('boatPoseClear(WORLD.left+20,900,0,"jetski",true)'),false);
+assert.equal(g.run('boatPoseClear(WORLD.right,900,0,"speedboat",true)'),false);
+});

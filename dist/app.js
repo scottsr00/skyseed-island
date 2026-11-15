@@ -2748,11 +2748,11 @@ const tow=wakeboardRide||wakeboardBoatTrip;
 if(vessel!=='tow'&&!boatIsExploding('tow'))boats.push(boatHull(tow?.boat.x??WATERSPORTS_DOCK.x+40,tow?.boat.y??WATERSPORTS_DOCK.y+18,tow?.heading??wakeboardDockHeading,'tow'));
 return boats;
 }
-function boatPoseClear(x,y,heading,vessel=activeVessel){
+function boatPoseClear(x,y,heading,vessel=activeVessel,airborne=false){
 const hull=boatHull(x,y,heading,vessel);
 if(vessel!=='speedboat'&&hull.some(([x,y])=>deepWater(x,y)))return false;
 if(hull.some(([x,y])=>x<WORLD.left+10||y<10||x>WORLD.right-10||y>WORLD.height-10))return false;
-if(islandPolys.some(poly=>boatPolygonsOverlap(hull,poly)))return false;
+if(!airborne&&islandPolys.some(poly=>boatPolygonsOverlap(hull,poly)))return false;
 const timber=[...activePiers(),...crossings,...(state.upgrades.includes('bridge')?[woodlandBridge]:[])];
 if(timber.some(b=>boatPolygonsOverlap(hull,[[b.x-2,b.y-2],[b.x+b.w+2,b.y-2],[b.x+b.w+2,b.y+b.h+2],[b.x-2,b.y+b.h+2]])))return false;
 return !boatObstacles(vessel).some(other=>boatPolygonsOverlap(hull,other));
@@ -2783,7 +2783,7 @@ const difference=Math.atan2(Math.sin(target-boatMotion.heading),Math.cos(target-
 const turns=Math.max(1,Math.ceil(Math.abs(difference)/.04)),initial=boatMotion.heading;
 for(let i=1;i<=turns;i++){
 const heading=initial+difference*i/turns;
-if(!boatPoseClear(player.x,player.y,heading)){
+if(!boatPoseClear(player.x,player.y,heading,activeVessel,boatMotion.waveHeight>0)){
 // Back away from an obstacle without swinging the stern through it.
 if(Math.abs(difference)>Math.PI*.95){target=initial;boatMotion.heading=initial;break;}
 boatMotion.movingFor=0;return;
@@ -2793,7 +2793,7 @@ boatMotion.heading=heading;
 const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/2));
 for(let i=0;i<steps;i++){
 const x=from.x+dx*(i+1)/steps,y=from.y+dy*(i+1)/steps;
-if(!boatPoseClear(x,y,target))break;
+if(!boatPoseClear(x,y,target,activeVessel,boatMotion.waveHeight>0))break;
 player.x=x;player.y=y;
 }
 recordBoatMovement(from,target);boatPosition={x:player.x,y:player.y};advanceSwimming(0);
@@ -2843,7 +2843,7 @@ const targetTurn=steer*(jetski?3.5:speedboat?1.9:1.15)*Math.max(-1,Math.min(1,ve
 boatMotion.turnRate=(boatMotion.turnRate||0)+(targetTurn-(boatMotion.turnRate||0))*(1-Math.exp(-step/(jetski?.055:speedboat?.09:.18)));
 const heading=boatMotion.heading+boatMotion.turnRate*step;
 // Check each increment of the turn, even while the boat is almost stationary.
-if(boatPoseClear(player.x,player.y,heading))boatMotion.heading=heading;
+if(boatPoseClear(player.x,player.y,heading,activeVessel,boatMotion.waveHeight>0))boatMotion.heading=heading;
 else boatMotion.turnRate=0;
 const from={x:player.x,y:player.y},distance=velocity*step;
 moveBoat(Math.cos(boatMotion.heading)*distance,Math.sin(boatMotion.heading)*distance,boatMotion.heading);
@@ -3812,7 +3812,14 @@ const boats=[{...ferry,heading:activeVessel==='ferry'?boatMotion.heading:ferryHe
 {x:tow?.boat.x??WATERSPORTS_DOCK.x+40,y:tow?.boat.y??WATERSPORTS_DOCK.y+18,heading:tow?.heading??wakeboardDockHeading,vessel:'tow'}];
 for(const boat of boats){
 if(boatExplosions.has(boat.vessel)||boatRepairs.has(boat.vessel)||!dragonFireTouchesBoat(boat))continue;
-boatExplosions.set(boat.vessel,createBoatBlast(boat));
+destroyBoat(boat);
+}
+}
+function destroyBoat(boat,landed=false){
+if(boatUnavailable(boat.vessel))return;
+const blast=createBoatBlast(boat);
+if(landed)blast.elapsed=BOAT_IGNITION_DURATION;
+boatExplosions.set(boat.vessel,blast);
 if(boat.vessel===activeVessel&&boating){
 stopFishing();boating=false;swimming=true;diveAnimation=null;resetBoatMotion();keys.clear();
 }
@@ -3820,9 +3827,19 @@ if(boat.vessel==='tow'){
 if(wakeboardRide){stopFishing();wakeboardRide=null;swimming=true;keys.clear();save();updateWaterControls();}
 wakeboardBoatTrip=null;wakeboardDockWake=null;watersportsRiderWake={wake:[],bowWake:[]};
 }
-restoreRebuiltBoat(boat.vessel);save();updateWaterControls();
-toast('The boat is catching fire! A free repair crew will rebuild it at its home dock.');
+restoreRebuiltBoat(boat.vessel);
+if(landed){
+// Throw the rider into nearby clear water, including beside restricted islands.
+let safe=null;
+for(let radius=8;radius<=512&&!safe;radius+=8)for(let i=0;i<64;i++){
+const angle=i*Math.PI/32,x=boat.x+Math.cos(angle)*radius,y=boat.y+Math.sin(angle)*radius;
+if(sharkWater(x,y)&&!swimmingTimberAt(x,y)){safe={x,y};break;}
 }
+if(safe){player.x=safe.x;player.y=safe.y;}
+else{const home=boatRepairHome(boat.vessel).dock;player.x=home.x;player.y=home.y-18;swimming=false;}
+}
+save();updateWaterControls();
+toast(landed?'You landed on an island! Your boat exploded. A free repair crew will rebuild it at its home dock.':'The boat is catching fire! A free repair crew will rebuild it at its home dock.');
 }
 function drawBoatDebris(p,time){
 const pose=boatDebrisPose(p,time),{x,y,z,airborne,settled}=pose;
@@ -4183,6 +4200,9 @@ motion.waveHeight+=velocity*step-90*step*step;
 motion.waveVelocity=velocity-180*step;
 if(motion.waveHeight<=0){
 const impact=Math.abs(motion.waveVelocity);motion.waveHeight=0;motion.waveVelocity=0;
+if(islandPolys.some(poly=>boatPolygonsOverlap(boatHull(player.x,player.y,motion.heading),poly))){
+destroyBoat({x:player.x,y:player.y,heading:motion.heading,vessel:activeVessel},true);return;
+}
 if(motion.wavePitch>0){
 motion.waveLanding={elapsed:0,duration:100+motion.wavePitch/.065*40,next:0,impact,pitch:motion.wavePitch};
 advanceBoatLanding(0);
