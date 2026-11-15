@@ -317,3 +317,7 @@ shares curved tips, edge highlights, graphics, and bindings with the release ani
 
 Watersports riders use a low hip and compact knee bend; the tow grip follows the chest
 at a short bent-arm reach, keeping limb proportions compact through turns and body bob.
+
+Action buttons share the Catch Wave control's gently rounded rectangular shape.
+`--action-button-radius` in `style.css` sets the shared 6px corner radius; the final
+button rule keeps it consistent across activity controls, dialogs, and map panels.

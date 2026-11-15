@@ -125,7 +125,31 @@ in 0.95 seconds, then submerge the body beneath the trough over 0.28 seconds. A 
 and foam rings feed a moving patch of overlapping foam lobes, pores, and white bubbles.
 `drawSurfWipeoutSplash()` carries this patch up the face; `surfFaceFlowTangent()` locates
 the ambient streak at its current position so its short flecks follow the nearby water angles.
-The splash leaves no long trail behind it. `drawSurfWipeoutBoard()` tosses
+The splash leaves no long trail behind it. After a brief submersion, `surfWipeoutHeadPose()` /
+`drawSurfWipeoutHead()` bring the head back through the waterline between 1.4 and 1.7 seconds.
+The head bobs in the same current as the foam, rides up the face, then wraps over the crest
+using `surfWipeoutBoardFlow()`. The neck/body stay submerged, a small foam ring marks the
+surface, and the opaque wave clips the head as it passes onto the back before the next wave.
+`surfWipeout()` records whether the fall began inside the tube. For those falls,
+`drawSurfWipeoutOccupant()` renders a muted silhouette through the foreground water
+and a clear portion within the opening. The rising head follows this same curtain
+mask until it reaches the top, then pitches forward into the hollow toward the camera,
+growing slightly and showing the full head without the curtain/waterline mask.
+`surfWipeoutCurlPoint()` follows the same sheared roof oval as
+`surfBarrelFrothFlowPoint()`, translated to meet the head's ascent. It rolls continuously
+toward the camera and right without pausing at the apex, then accelerates down the
+right-slanting `surfBreakEdge()` curtain, staying to the right of the ascent path. Tube
+wipeouts allow about 1 second for the gradual rollover and 1.76 seconds for the descent,
+a little quicker than the roughly 2.1-second ascent. The fall starts with forward motion
+and accelerates, avoiding another stop at the end of the rollover.
+`surfWipeoutDuration()` keeps the animation and recovery timer in sync. It
+stays in the curl through the end of the wipeout instead of wrapping over the back.
+On the descent, `surfWipeoutArmPose()` / `drawSurfWipeoutArms()` alternate bent-arm
+waves around the visible head. Shoulders and dipped forearms show muted through the
+water, while raised hands draw clearly above a clipped waterline with small foam rings.
+The ascending board uses the same foreground-curtain mask as the rider, so its deck
+is partially obscured inside the tube. Open-face wipeouts retain their over-the-back path. This uses wipeout simulation time,
+so pause/dialogs freeze the resurfacing animation. `drawSurfWipeoutBoard()` tosses
 an intact board alongside ordinary falls; air wipeouts split the original deck into two jagged
 halves that spin apart. `surfWipeoutBoardPose()` then carries each floating piece along the
 same local foam flow up the face, aligns it with the water, and rolls it out of sight over
@@ -133,7 +157,7 @@ the crest. `surfWipeoutBoardFlow()` wraps fragments around the local lip and cli
 behind the opaque wave on the far side; they stay opaque rather than fading above it.
 Intact boards are swept up with the same flow. The animation uses simulation time, freezes for pause/dialogs, and clears
 on the next wave. The broken board is an animation effect within the existing rental.
-After the 3.6-second wipeout (including the rising splash), the surfer returns to overhead beach paddling to find the next lip; three
+After the wipeout (3.6 seconds on the open face, 5.8 seconds inside the tube), the surfer returns to overhead beach paddling to find the next lip; three
 wipeouts end the heat. The selected coastal wave size persists throughout takeoff and riding.
 The heat clock starts with takeoff and waits while paddling out.
 
@@ -141,6 +165,11 @@ Riding continues on the face-on scrolling wave: the surfer stays near screen cen
 while water streams right, with breaking whitewater chasing from the right. Up/W climbs and Down/S
 descends on short presses; linked short up-and-down carves build speed to escape the lip.
 Higher lines carry speed and gain ground on the curl; low lines lose speed and fall behind.
+`SURF_CURL_SPEED` sets the riding chase pace to 0.34 normalized face units per second
+(about 13% faster than the previous 0.30). The same increase applies during airs.
+At mid-face, a flat leftward line needs a speed just over 0.52
+(about 62% on the speed HUD) to hold its gap before drag; pumping and higher lines
+help maintain the speed needed to escape.
 Face height contributes both to speed changes and travel relative to the moving opening,
 so descending to the trough no longer gives an automatic speed advantage.
 Holding any direction progressively tightens the turn: rail pressure builds after 0.28 seconds and
@@ -160,13 +189,30 @@ continuing uphill (or flattening out after crossing) wipes out over the back. Th
 follows board length, heading, and caught wave size, rather than a fixed timer. Air requests are
 resolved before this check, so a timely jump clears the lip. Pauses freeze the crossing.
 `surfBoardRotation()` connects the visible board to that heading.
+`advanceSurfRidingArt()` smooths `armTurn` over 65 ms, ahead of the 150 ms rail lean.
+`surfRiderPose()` rotates the shoulder/arm heading up to 0.8 radians ahead of the board
+in the signed turn direction. `surfRiderArms()` projects articulated shoulders, elbows,
+and hands onto the face-on view: the front arm leads the nose and the rear arm reaches
+back for balance. The far arm draws behind the torso, with joint shading, palms, fingers,
+and a head turn toward the anticipated line. Release and reversal blend smoothly;
+pauses/dialogs freeze the simulation, and each new wave resets the arm response.
+The torso also banks along the inside normal of the current board heading and signed
+`carveLean`, rather than shifting the same screen direction for every turn. In a bottom
+turn, leaning toward the face foreshortens the upright component of the torso by up to 65%,
+flattens the arm projection, and projects the hips, shoulders, and head up the wave,
+away from the camera. The far shoulders narrow, the back of the head replaces the
+visible face, and a back/shoulder seam replaces the chest highlight. Foreshortening
+alone must not lower the shoulders toward the camera. Feet remain
+planted on the board. Side-on turns shift the hips and shoulders laterally; release and
+reversal follow the existing smoothed rail lean. Snap laybacks retain their own weight
+shift, and aerial, prone, and wipeout poses keep their own balance positions.
 Hold Space (or the touch action) for at least 160 ms while the nose crosses the lip and the rider
 turns back down to trigger a snap. `surfNoseOverLip()` checks the visible nose against the crest;
 a brief 220 ms reversal window allows the hold to register without requiring keyboard repeats.
 `startSurfSnap()` runs a 0.62-second nose-engaged pivot back down the face, releases the tail,
 throws a stronger lip burst, and awards points on completion based on snap quality: 150 for
-Heck, 300 for Slash, and 500 for Layback Snap. `surfSnapTrick()` labels
-small snaps **Heck**, medium snaps **Slash**, and the best snaps **Layback Snap**. `surfSnapPose()` /
+Hack, 300 for Slash, and 500 for Layback Snap. `surfSnapTrick()` labels
+small snaps **Hack**, medium snaps **Slash**, and the best snaps **Layback Snap**. `surfSnapPose()` /
 `surfBoardFrame()` rigidly pivot the board around its fixed nose, exposing the flat deck
 without shearing or stretching its outline. The rider shifts their hips and shoulders back
 over the tail, with extended arms for counterbalance. Snap quality is set by crest proximity
@@ -175,16 +221,31 @@ at peak release, then realign smoothly for the descent. This remains a rigid boa
 its speed, freezes for pause/dialogs, and finishes even after Space is released. One hold triggers
 one snap. Away from the reversal, fresh Space presses retain normal air controls; paddling still
 requires separate taps. The action label advertises holding to snap. Ride
-inside the barrel curtain for **Tube Ride!** (half coverage retains 4× line points, fully
-under it earns 2×). Each entry adds one completed Tube Ride! to the heat history.
+inside the barrel curtain for **Tube Ride!**: riding points start at **10×** on curtain
+contact and rise with depth to **50×**, reaching the maximum 10 wave-view units before the
+55-unit overrun limit. `surfBarrelState().lineMultiplier` uses distance behind the curtain
+edge, so fully hidden rides continue gaining value after coverage reaches 100%. Outside
+the tube the multiplier is 1×; airs and snap bonuses retain their separate proximity scoring.
+The HUD and riding message show the current multiplier. Each entry adds one completed
+Tube Ride! to the heat history.
 `surfBarrelState()` separates coverage from survival: a rider can remain fully hidden inside
 the curl while within 55 wave-view units behind the falling lip’s opening edge. Only exceeding
 that distance wipes out from being caught by the break. `surfTubeOpening()` shares the
-curtain edge with the occupant clip at every caught wave size. The HUD shows **IN THE TUBE**
+curtain edge with the occupant clip at every caught wave size. The HUD shows **Tube Ride!**, the current multiplier, and **HIGH LINE**
 while hidden; a faster high line can bring the rider back out. Press Space at the
-crest while climbing with speed to launch an air. During flight, the curl continues peeling
+crest while climbing with speed to launch an air. `surfAirLaunchVelocity()` retains the
+normal launch curve through 90% HUD speed, then adds a continuous extra lift ramp
+through 100%. Peak height rises to roughly twice the 90% peak at full speed, with
+intermediate speeds producing intermediate heights and airtime. Lift is captured at
+launch; gravity and spin controls remain unchanged. `surfAirCameraOffset()` follows
+high airs upward, keeping at least 42 screen units above the board center for the rider;
+the wave and horizon move together, including the beginning of an aerial wipeout. During flight, the curl continues peeling
 forward toward the rider; speed can reduce its approach but cannot send it backward.
 Ocean scroll stays forward during aerial spins; signed reversal still applies to riding cutbacks.
+During an air, `drawSurfRider()` rotates the entire stance (hips, legs, torso, head, and
+arms) around the board center by the same `airSpin` used for the board. Feet are drawn
+in that shared frame without applying the spin twice. This keeps the rider attached
+through upright, sideways, and inverted rotations; landing returns to the riding pose.
 Use left/right for spins, then land with the
 visible nose pointing anywhere down the face (the open lower half-circle), including back toward
 the curl. Horizontal and upward landings wipe out. `surfAerialTrick()` names completed rotations **Single / Double / Triple / Quad Alleyoop**
@@ -199,8 +260,14 @@ wave, and 1,200 on the largest). Failed takeoffs earn no wave bonus. Each new wa
 bonus to the current heat total. Ordinary riding earns only `2 + speed × 4` points per second
 (about 2–5), retaining the barrel multipliers above, with no bonus for simply crossing face
 bands. Linked carves earn 50 points and completed cutbacks earn `round(200 + speed × 300)`.
-Trick complexity supplies the larger rewards instead of time spent coasting. Heats last 90 seconds or three
-wipeouts; another heat uses the same rental. P pauses, X returns to the beach, and touch buttons
+Trick complexity supplies the larger rewards instead of time spent coasting.
+All airs and snaps also multiply their base reward by curling-lip proximity, using
+`surfTrickLipMultiplier()`: 1× at least 180 wave-view units from the curling crown,
+increasing smoothly to 2× at the crown. Distance is absolute, so going behind the curl
+does not increase the reward further. The multiplier is captured at air takeoff or snap
+initiation, then the final points are rounded and banked only on a successful completion.
+It is independent of snap quality, rotation count, and caught wave size. Heats last 90 seconds or three
+wipeouts; another heat uses the same rental. While paddling, the centered action buttons offer Catch wave and Jump off (X); jumping off leaves the explorer swimming at the same position, and pause is unavailable. During wave riding, P pauses and X returns to the beach. Touch buttons
 mirror the controls. Best scores, rental state, and safe beach positions persist. Controls take
 inspiration from the [California Games Lynx
 manual](https://atariage.com/manual_html_page.php?SoftwareID=2413); original procedural wave artwork
@@ -227,3 +294,10 @@ See [testing](testing.md). Focus test names on `surf`, `wave`, `barrel`, `air la
 `lip`, or `froth`. Verify rental persistence, repeated-stroke catches, missed-wave recovery, pop-up transitions, size scaling, carving and speed,
 visible board landing angle, scoring, pause, exit, and safe reload position. Browser inspection
 is required for wave appearance, spray, layering, and keyboard/touch feel.
+
+During paddle-out duck dives, `clipBeachWaveOccupant()` extends the nose-to-tail
+resurfacing reveal to three times its normal distance, so the surfer returns gradually
+after the whitewater passes. Only the breaking crest and its dense foam trigger this
+transition; smaller unbroken sections and thin trailing foam leave paddlers fully visible.
+Entry and ordinary swimming keep their existing timing.
+The reveal follows wave geometry and simulation time, so rendering does not advance it.
