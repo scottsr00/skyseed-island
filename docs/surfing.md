@@ -61,8 +61,10 @@ Rail pressure compresses the stance, banks the board, and extends the counterbal
 current face height. Climbing straight up the face and flatter top turns expose more deck;
 a committed bottom turn closes the deck toward an edge-on rail. This changes board width
 without distorting the nose direction or planted feet;
-the rider looks along the direction of travel. The crest and falling lip render before every
-rider pose, keeping foam behind the surfer. The pop-up switches to an opaque standing pose
+the rider looks along the direction of travel. The crest and falling lip render before crest
+poses. While riding inside the curl, `drawSurfTubeOccupant()` clips the rider and wake behind
+the falling curtain, including complete visual occlusion; the curtain never paints through
+the parts of the rider still outside it. The pop-up switches to an opaque standing pose
 after the feet plant, avoiding a transparent silhouette during the transition. `emitSurfLipSpray()` adds a crest-anchored fan of spray on takeoff and carving within the
 top 17% of the face. Spray grows with speed, turn rate, and the closest approach to the lip
 during that climb, so later, sharper top turns throw a larger fan. `drawSurfLipSpray()` draws
@@ -130,13 +132,16 @@ The heat clock starts with takeoff and waits while paddling out.
 
 Riding continues on the face-on scrolling wave: the surfer stays near screen center, travelling left
 while water streams right, with breaking whitewater chasing from the right. Up/W climbs and Down/S
-descends on short presses; linked short up-and-down carves build speed to escape the lip, while coasting loses speed.
+descends on short presses; linked short up-and-down carves build speed to escape the lip.
+Higher lines carry speed and gain ground on the curl; low lines lose speed and fall behind.
+Face height contributes both to speed changes and travel relative to the moving opening,
+so descending to the trough no longer gives an automatic speed advantage.
 Holding any direction progressively tightens the turn: rail pressure builds after 0.28 seconds and
 reaches full strength after another 0.65 seconds. Up/Down continue around their climbing/descending
 arc instead of stopping at a fixed diagonal; Left/Right rotate in opposite directions with the same
 pressure ramp. Releasing or changing direction resets pressure. An engaged turn retains momentum: negative
 speed changes from drag and climbing are reduced by 80%, with no extra steering penalty.
-Pumping and downhill drive still add speed; coasting and holding against the crest take normal drag. `advanceSurfTurn()` owns this
+Pumping still adds speed; coasting takes full drag adjusted for line height. `advanceSurfTurn()` owns this
 riding-only response; airborne spin controls remain separate. From near the top, hold Down or Left;
 from near the bottom, hold Up or Right to fit a full 180-degree arc on a medium wave. The turn
 then carries the rider back toward the breaking lip. Signed travel, board heading, hull wake, and
@@ -158,7 +163,12 @@ arms for counterbalance; the weight returns forward as the tail reconnects. The 
 its speed, freezes for pause/dialogs, and finishes even after Space is released. One hold triggers
 one snap. Away from the reversal, fresh Space presses retain normal air controls; paddling still
 requires separate taps. The action label advertises holding to snap. Ride
-half inside the barrel curtain for 4× line points (fully under it earns 2×). Press Space at the
+half inside the barrel curtain for 4× line points (fully under it earns 2×).
+`surfBarrelState()` separates coverage from survival: a rider can remain fully hidden inside
+the curl while within 55 wave-view units behind the falling lip’s opening edge. Only exceeding
+that distance wipes out from being caught by the break. `surfTubeOpening()` shares the
+curtain edge with the occupant clip at every caught wave size. The HUD shows **IN THE TUBE**
+while hidden; a faster high line can bring the rider back out. Press Space at the
 crest while climbing with speed to launch an air, use left/right for spins, then land with the
 visible nose pointing anywhere down the face (the open lower half-circle), including back toward
 the curl. Horizontal and upward landings wipe out. Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave

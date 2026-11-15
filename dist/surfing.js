@@ -178,8 +178,10 @@ const moved=s.y-oldY,direction=Math.abs(moved)>.00001?Math.sign(moved):0;
 const pumping=vertical!==0&&direction===vertical&&Math.abs(moved)>0;
 // Engaged rails carry momentum through the arc; only coasting takes full drag.
 const carving=direction!==0&&Math.abs(s.angle-previousAngle)>.00001;
-const drag=Math.min(0,heading*.10-.065)*(carving?.2:1);
-const drive=Math.max(0,heading*.10-.065)+(pumping?.17:0);
+const lineDrive=(.5-Math.max(0,Math.min(1,s.y)))*.16;
+const balance=-.045+lineDrive;
+const drag=Math.min(0,balance)*(carving?.2:1);
+const drive=Math.max(0,balance)+(pumping?.17:0);
 s.speed=Math.max(.12,Math.min(.85,s.speed+(drag+drive)*seconds));
 if(direction){
 if(direction!==s.pumpDirection){
@@ -188,7 +190,7 @@ s.pumpDirection=direction;s.pumpDistance=0;
 }
 s.pumpDistance=(s.pumpDistance||0)+Math.abs(moved);
 }
-s.x=Math.max(.12,s.x+(.30+Math.cos(s.angle)*s.speed*.65)*seconds);
+s.x=Math.max(.12,s.x+(.30+(s.y-.5)*.24+Math.cos(s.angle)*s.speed*.65)*seconds);
 advanceSurfRidingArt(s,ms,previousAngle);
 const turned=Math.atan2(Math.sin(s.angle-previousAngle),Math.cos(s.angle-previousAngle));
 if(turned*s.turn<0)s.turn=0;
@@ -196,9 +198,10 @@ s.turn+=turned;s.turnCooldown=Math.max(0,s.turnCooldown-ms);
 if(Math.abs(s.turn)>=Math.PI&&s.speed>.25&&s.turnCooldown===0){const bonus=Math.round(75+s.speed*200);s.score+=bonus;s.turn=0;s.turnCooldown=800;s.message=`CUTBACK · +${bonus}`;}
 const barrel=surfBarrelState(s),base=10+s.speed*22;
 s.score+=seconds*base*(barrel.half?4:barrel.coverage>0?2:1);
-if(barrel.half)s.message='HALF IN / HALF OUT · 4× LINE POINTS · keep carving!';
+if(barrel.hidden)s.message='IN THE TUBE · Keep a high line to race back to the opening!';
+else if(barrel.half)s.message='HALF IN / HALF OUT · 4× LINE POINTS · keep carving!';
 const band=Math.floor(Math.max(0,s.y)*4);if(!s.bands.includes(band)){s.bands.push(band);s.score+=25;}
-if(barrel.overrun){surfWipeout('The breaking wave caught you! Link up / down carves to build speed.');continue;}
+if(barrel.overrun){surfWipeout('The breaking wave caught you! Stay near the tube opening and take a higher line.');continue;}
 if(s.y>1.03){surfWipeout('Too low on the wave! Carve back up before reaching the trough.');continue;}
 if((s.airRequest||0)>0&&!s.snap){
 const turningDown=surfTurningDown(s.angle,Math.atan2(Math.sin(s.angle-previousAngle),Math.cos(s.angle-previousAngle))/seconds);
@@ -276,7 +279,7 @@ $('#surfOverlay').hidden=!s;
 $('#mapSurfShack').hidden=!nearSurfShack();$('#mapSurfShack .suggestion-label').textContent=surfCommandLabel();
 $('#returnSurfboard').hidden=!nearSurfShack()||!state.surfRental;
 if(!s)return;
-$('#surfScore').textContent=`${Math.floor(s.score)} pts`;$('#surfSpeed').textContent=`SPEED ${Math.round(s.speed/.85*100)}%`;$('#surfLine').textContent=phase==='paddling'?`WAVE ${Math.round(surfWaveSize(beachShoreY(player.x)-player.y)*100)}% · PADDLE OUT FOR BIGGER`:phase==='takeoff'?`CATCH ${Math.round((s.paddleProgress||0)*100)}% · PADDLE ${Math.round((s.paddlePower||0)*100)}%`:surfBarrelState(s).half?'HALF IN · 4×':`WAVE ${Math.round(surfRideScale(s)*100)}% · LINK YOUR CARVES`;$('#surfTime').textContent=`${Math.ceil(s.remaining/1000)}s`;$('#surfLives').textContent=`${Math.max(0,3-s.wipeouts)} wipeouts left`;
+$('#surfScore').textContent=`${Math.floor(s.score)} pts`;$('#surfSpeed').textContent=`SPEED ${Math.round(s.speed/.85*100)}%`;$('#surfLine').textContent=phase==='paddling'?`WAVE ${Math.round(surfWaveSize(beachShoreY(player.x)-player.y)*100)}% · PADDLE OUT FOR BIGGER`:phase==='takeoff'?`CATCH ${Math.round((s.paddleProgress||0)*100)}% · PADDLE ${Math.round((s.paddlePower||0)*100)}%`:surfBarrelState(s).hidden?'IN THE TUBE · HIGH LINE':surfBarrelState(s).half?'HALF IN · 4×':`WAVE ${Math.round(surfRideScale(s)*100)}% · LINK YOUR CARVES`;$('#surfTime').textContent=`${Math.ceil(s.remaining/1000)}s`;$('#surfLives').textContent=`${Math.max(0,3-s.wipeouts)} wipeouts left`;
 $('#surfMessage').textContent=s.paused?'Paused — press P or Resume to continue.':s.message;
 $('#surfPhase').textContent=s.paused?'PAUSED':phase==='paddling'?'PADDLE OUT':phase==='takeoff'?'PADDLE TO CATCH':phase==='popup'?'POP UP':phase==='airborne'?'CATCHING AIR':phase==='results'?'HEAT COMPLETE':phase==='wipeout'?'WIPEOUT':'RIDE THE WAVE';
 $('#surfAction').textContent=phase==='paddling'?'Catch wave · Space':phase==='takeoff'?'Paddle · tap Space':'Air at crest / hold to snap · Space';$('#surfAction').disabled=['results','wipeout','popup'].includes(phase)||s.paused;
@@ -653,7 +656,21 @@ function surfBarrelState(s=surfSession){
 const wave=surfRideView(s),crest=surfFaceCrest(wave.riderX,wave),y=crest+Math.max(0,Math.min(1,s.y))*(279-crest);
 const edge=surfBreakEdge(y,wave),mouth=edge-32;
 const coverage=s.y>.12&&s.y<.85?Math.max(0,Math.min(1,(wave.riderX+15-mouth)/30)):0;
-return {coverage,half:coverage>=.25&&coverage<=.75,overrun:wave.riderX+3>=edge,edge,mouth};
+const distance=wave.riderX-edge,limit=55;
+return {coverage,half:coverage>=.25&&coverage<=.75,hidden:s.y>.12&&s.y<.9&&distance>=15,overrun:distance>limit,distance,limit,edge,mouth};
+}
+function surfTubeOpening(screenY,wave){
+const y=279-(279-screenY)/surfRideScale();
+return surfBreakEdge(y,wave)-9;
+}
+function drawSurfTubeOccupant(draw){
+const s=surfSession;
+if(s.phase!=='riding'||s.y<=.12||s.y>=.9){draw();return;}
+const wave=surfRideView();
+// The falling curtain hides occupants; its opacity never controls survival.
+ctx.save();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(surfTubeOpening(0,wave),0);
+for(let y=4;y<=280;y+=4)ctx.lineTo(surfTubeOpening(y,wave),y);
+ctx.lineTo(0,280);ctx.closePath();ctx.clip();draw();ctx.restore();
 }
 function advanceSurfWake(s,ms){
 s.wake=(s.wake||[]).filter(mark=>(mark.age+=ms)<1300);
@@ -1341,15 +1358,15 @@ for(let i=0;i<15;i++){const x=((i*47+(s.scroll||0)*.25)%520+520)%520;rect(x,77+i
 // The camera follows the surfer; the ocean flows right and the break chases from the right.
 const wave=drawSurfWaveFace();
 const x=wave.riderX,crest=surfRideCrest(x),face=279-crest,y=crest+s.y*face-s.airHeight*85*surfRideScale(s);
-if(!['takeoff','popup','wipeout','results'].includes(s.phase))drawSurfBoardWake();
+if(!['takeoff','popup','wipeout','results'].includes(s.phase))drawSurfTubeOccupant(()=>drawSurfBoardWake());
 drawSurfWaveLip(wave);
 drawSurfLipSpray();
-// All rider poses are foreground occupants, above the crest and falling lip.
+// Crest poses remain in front; tube occupants pass behind the falling curtain.
 if(s.phase==='wipeout'){
 drawSurfWipeout();
 }else if(s.phase!=='results'){
 const tilt=surfBoardRotation(s);
-if(s.phase!=='takeoff'&&s.phase!=='popup')drawSurfRider(x,y,tilt);
+if(s.phase!=='takeoff'&&s.phase!=='popup')drawSurfTubeOccupant(()=>drawSurfRider(x,y,tilt));
 }
 // A board on top of the crest stays in front of its foam fringe.
 if(s.phase==='takeoff'||s.phase==='popup'){drawSurfBoardWake();drawSurfTakeoffRider(x,y);}
