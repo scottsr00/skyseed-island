@@ -1684,16 +1684,38 @@ g.run('surfSession.paused=false');g.node('#challenge').showModal();const count=g
 g.run('for(let i=0;i<24&&surfSession.phase==="takeoff";i++){paddleSurfStroke();advanceSurfing(280)}');assert.equal(g.run('surfSession.phase'),'popup');
 g.run('surfSession.paused=true');const pop=g.run('surfSession.popTime');g.run('advanceSurfing(1000);draw()');assert.equal(g.run('surfSession.popTime'),pop);
 });
+test('surf wave bonuses scale with size, bank once after pop-up, and accumulate across waves',()=>{
+for(const [size,bonus] of [[.48,500],[.7,800],[1,1200]]){
+const g=surfGame();
+g.run(`prepareSurfTakeoff(${size});for(let i=0;i<30&&surfSession.phase==='takeoff';i++){paddleSurfStroke();advanceSurfing(280)}`);
+assert.equal(g.run('surfSession.phase'),'popup');assert.equal(g.run('surfSession.score'),0);
+g.run('advanceSurfing(1150-surfSession.popTime)');
+assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.score'),bonus);
+assert.equal(g.node('#surfScore').textContent,bonus.toLocaleString('en-US'));
+g.run('surfSession.angle=Math.PI;surfSession.x=.3;advanceSurfing(100)');
+assert.ok(g.run('surfSession.score')<bonus+1,'bonus is not repeated while riding');
+g.run(`prepareSurfPaddleOut(true);prepareSurfTakeoff(${size});for(let i=0;i<30&&surfSession.phase==='takeoff';i++){paddleSurfStroke();advanceSurfing(280)};advanceSurfing(1150-surfSession.popTime)`);
+assert.ok(g.run('surfSession.score')>=bonus*2);assert.ok(g.run('surfSession.score')<bonus*2+1);
+}
+const failed=surfTakeoffGame();failed.run('advanceSurfing(3600)');
+assert.equal(failed.run('surfSession.phase'),'wipeout');assert.equal(failed.run('surfSession.score'),0);
+});
+test('surf ordinary riding earns only a few points per second without face-band bonuses',()=>{
+const g=surfGame();g.run('setSurfTestRide();surfSession.x=.3;surfSession.y=.4;surfSession.angle=Math.PI;surfSession.speed=.65;advanceSurfing(1000)');
+assert.equal(g.run('surfSession.phase'),'riding');
+assert.ok(g.run('surfSession.score')>2);assert.ok(g.run('surfSession.score')<6);
+assert.equal(g.run('surfSession.tricks.length'),0);
+});
 test('linked up and down carves build speed and half-barrel rides earn the highest line points',()=>{
 const pumped=surfGame(),coast=surfGame();
-for(const g of [pumped,coast])g.run(`setSurfTestRide();surfSession.angle=Math.PI;surfSession.y=.45;surfSession.bands=[0,1,2,3]`);
+for(const g of [pumped,coast])g.run(`setSurfTestRide();surfSession.angle=Math.PI;surfSession.y=.45`);
 for(const key of ['down','up','down','up'])pumped.run(`keys.clear();keys.add('${key}');advanceSurfing(750)`);
 coast.run('advanceSurfing(3000)');
 assert.equal(pumped.run('surfSession.phase'),'riding');
 assert.ok(pumped.run('surfSession.speed')>coast.run('surfSession.speed')+.2);
 assert.ok(pumped.run('surfSession.score')>coast.run('surfSession.score')+35);
 const half=surfGame(),inside=surfGame(),open=surfGame();
-for(const [g,x] of [[half,.80],[inside,.835],[open,.35]])g.run(`setSurfTestRide();surfSession.x=${x};surfSession.y=.4;surfSession.speed=.55;surfSession.angle=Math.PI;surfSession.bands=[0,1,2,3]`);
+for(const [g,x] of [[half,.80],[inside,.835],[open,.35]])g.run(`setSurfTestRide();surfSession.x=${x};surfSession.y=.4;surfSession.speed=.55;surfSession.angle=Math.PI`);
 assert.equal(half.run('surfBarrelState().half'),true);assert.ok(inside.run('surfBarrelState().coverage')>.75);
 for(const g of [half,inside,open])g.run('advanceSurfing(100)');
 assert.ok(half.run('surfSession.score')>inside.run('surfSession.score'));
@@ -1713,10 +1735,10 @@ g.run('keys.clear();surfSession.phase="airborne";surfSession.airHeight=.001;surf
 assert.equal(g.run('surfSession.phase'),'wipeout');assert.equal(g.run('surfSession.wipeouts'),1);
 });
 test('three surf wipeouts or 90 seconds finish a heat, save a best score, and retain the rental',()=>{
-const g=surfGame();for(let i=0;i<3;i++){
+const g=surfGame();g.run('surfSession.score=500');for(let i=0;i<3;i++){
 g.run('setSurfTestRide();surfSession.y=1.02;surfSession.speed=.7;surfSession.angle=Math.PI/2;advanceSurfing(100);draw()');assert.equal(g.run('surfSession.phase'),'wipeout');assert.equal(g.run('surfSession.wipeouts'),i+1);g.run('advanceSurfing(SURF_WIPEOUT_TIME)');
 }
-assert.equal(g.run('surfSession.phase'),'results');assert.equal(g.run('state.surfRental'),true);assert.equal(g.run('state.crystals'),0);assert.ok(g.run('state.surfBest')>0);g.run('draw()');
+assert.equal(g.run('surfSession.phase'),'results');assert.equal(g.run('state.surfRental'),true);assert.equal(g.run('state.crystals'),0);assert.equal(g.run('state.surfBest'),g.run('Math.floor(surfSession.score)'));assert.ok(g.run('state.surfBest')>=500);g.run('draw()');
 g.run('stopSurfing();startSurfing();setSurfTestRide();surfSession.remaining=10;advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),'results');assert.equal(g.run('surfSession.remaining'),0);
 });
 test('surf pausing and problem dialogs freeze the heat clock and wave motion',()=>{
@@ -2885,14 +2907,14 @@ touch.run(`surfSession.paused=true;keys.add('right');advanceSurfing(1000)`);asse
 });
 
 test('surf completed aerials name single through quad forward alleyoops and backward backflips',()=>{
-for(const [count,label] of [[1,'Single'],[2,'Double'],[3,'Triple'],[4,'Quad']])for(const [direction,name] of [[-1,'Alleyoop'],[1,'Backflip']]){
+for(const [count,label,bonus] of [[1,'Single',900],[2,'Double',1800],[3,'Triple',3000],[4,'Quad',4500]])for(const [direction,name] of [[-1,'Alleyoop'],[1,'Backflip']]){
 const g=surfGame();g.run(`setSurfTestRide();surfSession.phase='airborne';surfSession.airHeight=.001;surfSession.airV=-1;surfSession.airTurns=${count}*Math.PI*2;surfSession.airSpinPeak=${direction}*${count}*Math.PI*2;surfSession.airSpin=-Math.PI/2;advanceSurfing(16)`);
-assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.lastTrick.name'),`${label} ${name}`);assert.equal(g.node('#surfTrick').textContent,`${label} ${name}`);assert.equal(g.node('#surfTrickBonus').textContent,`+${100+count*400} POINTS`);
+assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.lastTrick.name'),`${label} ${name}`);assert.equal(g.node('#surfTrick').textContent,`${label} ${name}`);assert.equal(g.node('#surfTrickBonus').textContent,`+${bonus} POINTS`);
 }
 });
 test('surf HUD records named snap tiers, tube entries, points, and heat without duplicating tube tricks each frame',()=>{
-for(const [quality,name] of [[.2,'Heck'],[.6,'Slash'],[1,'Layback Snap']]){
-const g=surfGame();g.run(`setSurfTestRide();surfSession.snap={age:604,quality:${quality},startAngle:2.6,delta:0};advanceSurfing(16)`);assert.equal(g.run('surfSession.lastTrick.name'),name);assert.equal(g.node('#surfTrick').textContent,name);
+for(const [quality,name,bonus] of [[.2,'Heck',150],[.6,'Slash',300],[1,'Layback Snap',500]]){
+const g=surfGame();g.run(`setSurfTestRide();surfSession.snap={age:604,quality:${quality},startAngle:2.6,delta:0};advanceSurfing(16)`);assert.equal(g.run('surfSession.lastTrick.name'),name);assert.equal(g.node('#surfTrick').textContent,name);assert.equal(g.run('surfSession.lastTrick.bonus'),bonus);assert.equal(g.node('#surfTrickBonus').textContent,`+${bonus} POINTS`);
 }
 const g=surfGame();g.run(`setSurfTestRide();surfSession.x=.80;surfSession.y=.4;surfSession.speed=.55;surfSession.angle=Math.PI;advanceSurfing(64)`);
 assert.equal(g.run(`surfSession.tricks.filter(trick=>trick.name==='Tube Ride!').length`),1);assert.equal(g.node('#surfTrick').textContent,'Tube Ride!');

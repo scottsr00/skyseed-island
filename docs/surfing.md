@@ -164,7 +164,8 @@ Hold Space (or the touch action) for at least 160 ms while the nose crosses the 
 turns back down to trigger a snap. `surfNoseOverLip()` checks the visible nose against the crest;
 a brief 220 ms reversal window allows the hold to register without requiring keyboard repeats.
 `startSurfSnap()` runs a 0.62-second nose-engaged pivot back down the face, releases the tail,
-throws a stronger lip burst, and awards 90 points on completion. `surfSnapTrick()` labels
+throws a stronger lip burst, and awards points on completion based on snap quality: 150 for
+Heck, 300 for Slash, and 500 for Layback Snap. `surfSnapTrick()` labels
 small snaps **Heck**, medium snaps **Slash**, and the best snaps **Layback Snap**. `surfSnapPose()` /
 `surfBoardFrame()` rigidly pivot the board around its fixed nose, exposing the flat deck
 without shearing or stretching its outline. The rider shifts their hips and shoulders back
@@ -189,8 +190,16 @@ visible nose pointing anywhere down the face (the open lower half-circle), inclu
 the curl. Horizontal and upward landings wipe out. `surfAerialTrick()` names completed rotations **Single / Double / Triple / Quad Alleyoop**
 for a forward (left, negative) spin and **Single / Double / Triple / Quad Backflip** for a
 backward (right, positive) spin. The peak signed rotation determines the label even when
-the rider adjusts the landing. Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave
-coverage, linked turns, and clean aerial spins also score points. Heats last 90 seconds or three
+the rider adjusts the landing. Successful airs award a speed boost and 300 points for a basic air, with progressively larger
+bonuses for completed rotations: 900 for a single, 1,800 for a double, 3,000 for a triple,
+and 4,500 for a quad. Failed landings earn no aerial bonus; Down helps align the board.
+Each successful pop-up banks a wave-size bonus through `surfWaveBonus()`: 300–1,200 points
+across the full wave-size range, rounded to 50 points (about 500 near shore, 800 on a medium
+wave, and 1,200 on the largest). Failed takeoffs earn no wave bonus. Each new wave adds its
+bonus to the current heat total. Ordinary riding earns only `2 + speed × 4` points per second
+(about 2–5), retaining the barrel multipliers above, with no bonus for simply crossing face
+bands. Linked carves earn 50 points and completed cutbacks earn `round(200 + speed × 300)`.
+Trick complexity supplies the larger rewards instead of time spent coasting. Heats last 90 seconds or three
 wipeouts; another heat uses the same rental. P pauses, X returns to the beach, and touch buttons
 mirror the controls. Best scores, rental state, and safe beach positions persist. Controls take
 inspiration from the [California Games Lynx

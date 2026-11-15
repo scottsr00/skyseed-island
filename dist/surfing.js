@@ -37,7 +37,7 @@ const s=surfSession;if(!s)return;
 Object.assign(s,{phase:'paddling',x:.43,y:.48,angle:Math.PI-.12,speed:.4,vx:0,vy:0,
 paddleTime:retry?500:0,paddleEffort:0,paddlePhase:0,paddleHeading:-Math.PI/2,waveSize:1,
 scroll:0,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,lipSpray:[],lipSprayClock:0,crestApproach:1,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airV:0,airSpin:0,airTurns:0,airSpinPeak:0,tubeTrickActive:false,
-pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,spaceHold:0,snapCandidate:0,snap:null,snapUsed:false,bands:[],
+pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,spaceHold:0,snapCandidate:0,snap:null,snapUsed:false,
 message:'Paddle out with arrows / WASD. Turn toward the beach near a curling lip, then press Space to catch the wave.'});
 player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-(retry?105:12);keys.clear();
 }
@@ -59,7 +59,7 @@ const s=surfSession;if(!s)return;
 Object.assign(s,{phase:'takeoff',x:.50,y:.025,angle:Math.PI/2,speed:.18,waveSize,scroll:0,
 paddleTime:0,paddlePower:.24,paddleProgress:0,paddleAge:0,strokeAge:1000,strokeSide:1,paddleStrokes:0,
 popTime:0,popStartX:.50,wake:[],hullWake:{wake:[],bowWake:[]},wakePoint:null,wakeClock:0,lipSpray:[],lipSprayClock:0,crestApproach:1,carveLean:0,carveStrength:0,landingSpray:0,airHeight:0,airSpin:0,airV:0,airTurns:0,
-pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,spaceHold:0,snapCandidate:0,snap:null,snapUsed:false,bands:[],
+pumpDirection:0,pumpDistance:0,airRequest:0,turn:0,turnCooldown:0,turnInput:0,turnHold:0,wipeoutStart:null,spaceHold:0,snapCandidate:0,snap:null,snapUsed:false,
 message:'Tap Space repeatedly to paddle toward you and catch the wave!'});
 keys.clear();
 }
@@ -129,7 +129,7 @@ s.popTime+=ms;const t=Math.min(1,s.popTime/1150),ease=t*t*(3-2*t);
 s.y=s.popStartY+ease*.34;s.x=(s.popStartX??.50)-ease*.08;s.angle=Math.PI/2+ease*(Math.PI-.48-Math.PI/2);
 s.speed=.5+ease*.14;s.scroll+=seconds*s.speed*100;
 advanceSurfTakeoffWake(s,ms);
-if(t===1){s.phase='riding';s.landingSpray=280;s.message='You’re up! Link carves for speed. Hold a direction to tighten into a cutback.';}
+if(t===1){const bonus=surfWaveBonus(s);s.score+=bonus;s.phase='riding';s.landingSpray=280;s.message=`Wave caught! +${bonus} for wave size. Link carves for speed and land harder tricks for bigger points.`;}
 continue;
 }
 advanceSurfWake(s,ms);
@@ -148,7 +148,7 @@ const rotation=steer*6.5*seconds;
 if(s.phase==='riding'){
 if(s.snap){
 s.snap.age+=ms;const t=Math.min(1,s.snap.age/620),ease=t*t*(3-2*t);s.angle=s.snap.startAngle+s.snap.delta*ease;
-if(t===1){const trick=surfSnapTrick(s.snap.quality);s.snap=null;s.landingSpray=300;s.speed=Math.min(.85,s.speed+.06);s.score+=90;recordSurfTrick(s,trick,90);s.message=`${trick} · +90 · NOSE ENGAGED`;}
+if(t===1){const trick=surfSnapTrick(s.snap.quality),bonus=surfSnapBonus(s.snap.quality);s.snap=null;s.landingSpray=300;s.speed=Math.min(.85,s.speed+.06);s.score+=bonus;recordSurfTrick(s,trick,bonus);s.message=`${trick} · +${bonus} · NOSE ENGAGED`;}
 }else advanceSurfTurn(s,seconds,steer,vertical,sharp);
 const rate=Math.atan2(Math.sin(s.angle-previousAngle),Math.cos(s.angle-previousAngle))/seconds;
 if(keys.has(' ')&&surfTurningDown(s.angle,rate)&&surfNoseOverLip(s))s.snapCandidate=220;
@@ -172,7 +172,7 @@ if(s.airHeight<=0&&s.airV<0){
 // Judge the nose direction actually drawn on screen, not the hidden riding angle.
 const landing=surfAirHeading(s);
 if(Math.sin(landing)<=1e-7){surfWipeout('Wipeout! Land with the nose pointing down the face, toward either side.');continue;}
-const spins=Math.floor(((s.airTurns||0)+.05)/(Math.PI*2)),bonus=100+spins*400;
+const spins=Math.floor(((s.airTurns||0)+.05)/(Math.PI*2)),bonus=300+spins*600+spins*(spins-1)*150;
 s.score+=bonus;s.phase='riding';s.landingSpray=400;s.y=.08;s.airHeight=0;s.angle=landing;s.speed=Math.min(.85,s.speed+.12+Math.sin(landing)*.04);s.pumpDirection=0;s.pumpDistance=0;s.turnInput=0;s.turnHold=0;
 const trick=surfAerialTrick(spins,s.airSpinPeak||s.airSpin);recordSurfTrick(s,trick,bonus);s.message=`${trick} · +${bonus} · SPEED BOOST`;
 }
@@ -193,7 +193,7 @@ const drive=Math.max(0,balance)+(pumping?.17:0);
 s.speed=Math.max(.12,Math.min(.85,s.speed+(drag+drive)*seconds));
 if(direction){
 if(direction!==s.pumpDirection){
-if(s.pumpDirection&&s.pumpDistance>=.12&&pumping){s.speed=Math.min(.85,s.speed+.075);s.score+=35;recordSurfTrick(s,'Linked Carve',35);s.message='LINKED CARVE · SPEED BOOST +35';}
+if(s.pumpDirection&&s.pumpDistance>=.12&&pumping){s.speed=Math.min(.85,s.speed+.075);s.score+=50;recordSurfTrick(s,'Linked Carve',50);s.message='LINKED CARVE · SPEED BOOST +50';}
 s.pumpDirection=direction;s.pumpDistance=0;
 }
 s.pumpDistance=(s.pumpDistance||0)+Math.abs(moved);
@@ -203,14 +203,13 @@ advanceSurfRidingArt(s,ms,previousAngle);
 const turned=Math.atan2(Math.sin(s.angle-previousAngle),Math.cos(s.angle-previousAngle));
 if(turned*s.turn<0)s.turn=0;
 s.turn+=turned;s.turnCooldown=Math.max(0,s.turnCooldown-ms);
-if(Math.abs(s.turn)>=Math.PI&&s.speed>.25&&s.turnCooldown===0){const bonus=Math.round(75+s.speed*200);s.score+=bonus;recordSurfTrick(s,'Cutback',bonus);s.turn=0;s.turnCooldown=800;s.message=`CUTBACK · +${bonus}`;}
-const barrel=surfBarrelState(s),base=10+s.speed*22;
+if(Math.abs(s.turn)>=Math.PI&&s.speed>.25&&s.turnCooldown===0){const bonus=Math.round(200+s.speed*300);s.score+=bonus;recordSurfTrick(s,'Cutback',bonus);s.turn=0;s.turnCooldown=800;s.message=`CUTBACK · +${bonus}`;}
+const barrel=surfBarrelState(s),base=2+s.speed*4;
 s.score+=seconds*base*(barrel.half?4:barrel.coverage>0?2:1);
 if(barrel.coverage>=.25&&!s.tubeTrickActive){recordSurfTrick(s,'Tube Ride!');s.tubeTrickActive=true;}
 if(barrel.coverage<.1)s.tubeTrickActive=false;
 if(barrel.hidden)s.message='Tube Ride! · Keep a high line to race back to the opening!';
 else if(barrel.half)s.message='Tube Ride! · 4× LINE POINTS · keep carving!';
-const band=Math.floor(Math.max(0,s.y)*4);if(!s.bands.includes(band)){s.bands.push(band);s.score+=25;}
 if(barrel.overrun){surfWipeout('The breaking wave caught you! Stay near the tube opening and take a higher line.');continue;}
 if(s.y>1.03){surfWipeout('Too low on the wave! Carve back up before reaching the trough.');continue;}
 if((s.airRequest||0)>0&&!s.snap){
@@ -286,6 +285,9 @@ const s=surfSession;if(!s||s.paused||s.phase!=='riding')return;
 s.airRequest=250;
 s.message=s.speed<.48?'Pump linked turns for more speed before an air.':'Press Space at the crest while carving up to launch an air.';
 }
+// Bank the wave bonus once the pop-up succeeds; failed takeoffs earn nothing.
+function surfWaveBonus(s=surfSession){return Math.round((300+900*Math.max(0,Math.min(1,(surfRideScale(s)-.32)/.68)))/50)*50;}
+function surfSnapBonus(quality){return quality>=.8?500:quality>=.4?300:150;}
 function surfSnapTrick(quality){return quality>=.8?'Layback Snap':quality>=.4?'Slash':'Heck';}
 function surfAerialTrick(spins,direction){
 if(!spins)return 'Air';
