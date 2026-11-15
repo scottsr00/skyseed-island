@@ -1062,8 +1062,10 @@ g.node('#profileName').value='Dry explorer';g.run('createProfile()');assert.equa
 test('enabled power shows the meter and correct discovery or flash answers restore it',()=>{
 const g=game();assert.equal(g.run('POWER_ENABLED'),true);assert.equal(g.node('#powerMeter').hidden,false);
 g.run('state.power=0;openQuestion(0)');g.node('#answer').value='-999';g.run('checkAnswer()');assert.equal(g.run('state.power'),0);
-g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),25);assert.equal(g.run('state.crystals'),5);g.run('checkAnswer()');assert.equal(g.run('state.power'),25);
-g.node('#challenge').close();g.run('startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');assert.equal(g.run('state.power'),50);
+g.node('#answer').value=g.run('String(questions[0].answer)');g.run('checkAnswer()');assert.equal(g.run('state.power'),50);assert.equal(g.run('state.crystals'),5);g.run('checkAnswer()');assert.equal(g.run('state.power'),50);
+assert.match(g.node('#challengeBody').innerHTML,/\+50 energy/);
+assert.match(g.node('#powerHelp').textContent,/\+50 energy/);
+g.node('#challenge').close();g.run('state.power=75;startFlash()');g.node('#flashAnswer').value=g.run('String(flashRun.question.answer)');g.run('submitFlash()');assert.equal(g.run('state.power'),100);
 });
 test('power drains in water, returns exhausted swimmers to land, and allows free boat launches',()=>{
 const g=game({power:0,solved:[],upgrades:[]});assert.equal(g.run('hasSwimPower()'),false);
@@ -1706,7 +1708,7 @@ assert.equal(g.run('surfSession.phase'),'riding');
 const g=surfGame();g.run(`setSurfTestRide();surfSession.y=.025;surfSession.angle=Math.PI+.6;surfSession.speed=.7;requestSurfAir();advanceSurfing(16)`);
 assert.equal(g.run('surfSession.phase'),'airborne');
 g.run(`keys.add('right');keys.add('down');advanceSurfing(1000*Math.PI*2/6.5);keys.delete('right');advanceSurfing(600);draw()`);
-assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>=500);assert.match(g.run('surfSession.message'),/360/);
+assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>=500);assert.match(g.run('surfSession.message'),/Single Backflip/);
 g.run('keys.clear();surfSession.phase="airborne";surfSession.airHeight=.001;surfSession.airV=-1;surfSession.airSpin=Math.PI;surfSession.angle=Math.PI-.5;advanceSurfing(16)');
 assert.equal(g.run('surfSession.phase'),'wipeout');assert.equal(g.run('surfSession.wipeouts'),1);
 });
@@ -2811,7 +2813,7 @@ g.run('surfSession.paused=true;advanceSurfing(1000)');assert.equal(g.run('surfSe
 test('surf tube riding stays alive while hidden near the opening and fails only too far behind it',()=>{
 for(const size of [.48,.7,1]){
 const g=surfGame();g.run(`setSurfTestRide();surfSession.waveSize=${size};surfSession.x=.98;surfSession.y=.4;surfSession.angle=Math.PI;surfSession.speed=.7;updateSurfUI()`);
-assert.equal(g.run('surfBarrelState().hidden'),true);assert.equal(g.run('surfBarrelState().overrun'),false);assert.match(g.node('#surfLine').textContent,/IN THE TUBE/);
+assert.equal(g.run('surfBarrelState().hidden'),true);assert.equal(g.run('surfBarrelState().overrun'),false);assert.match(g.node('#surfLine').textContent,/Tube Ride!/);
 g.run('advanceSurfing(100);drawSurfGame()');assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>0);
 g.run('advanceSurfing(1000)');assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfBarrelState().hidden'),false,'high pace brings rider out of curtain');
 g.run('surfSession.x=1.1;advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),'wipeout');
@@ -2880,6 +2882,23 @@ assert.match(touch.node('#surfAction').textContent,/Air at crest/);
 touch.node('#surfAction').onpointerdown({preventDefault(){},pointerId:1});touch.run('advanceSurfing(16)');assert.equal(touch.run('surfSession.phase'),'airborne');
 const snapshot=touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])');
 touch.run(`surfSession.paused=true;keys.add('right');advanceSurfing(1000)`);assert.equal(touch.run('JSON.stringify([surfSession.airHeight,surfSession.airSpin,surfSession.scroll,surfSession.remaining])'),snapshot);
+});
+
+test('surf completed aerials name single through quad forward alleyoops and backward backflips',()=>{
+for(const [count,label] of [[1,'Single'],[2,'Double'],[3,'Triple'],[4,'Quad']])for(const [direction,name] of [[-1,'Alleyoop'],[1,'Backflip']]){
+const g=surfGame();g.run(`setSurfTestRide();surfSession.phase='airborne';surfSession.airHeight=.001;surfSession.airV=-1;surfSession.airTurns=${count}*Math.PI*2;surfSession.airSpinPeak=${direction}*${count}*Math.PI*2;surfSession.airSpin=-Math.PI/2;advanceSurfing(16)`);
+assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfSession.lastTrick.name'),`${label} ${name}`);assert.equal(g.node('#surfTrick').textContent,`${label} ${name}`);assert.equal(g.node('#surfTrickBonus').textContent,`+${100+count*400} POINTS`);
+}
+});
+test('surf HUD records named snap tiers, tube entries, points, and heat without duplicating tube tricks each frame',()=>{
+for(const [quality,name] of [[.2,'Heck'],[.6,'Slash'],[1,'Layback Snap']]){
+const g=surfGame();g.run(`setSurfTestRide();surfSession.snap={age:604,quality:${quality},startAngle:2.6,delta:0};advanceSurfing(16)`);assert.equal(g.run('surfSession.lastTrick.name'),name);assert.equal(g.node('#surfTrick').textContent,name);
+}
+const g=surfGame();g.run(`setSurfTestRide();surfSession.x=.80;surfSession.y=.4;surfSession.speed=.55;surfSession.angle=Math.PI;advanceSurfing(64)`);
+assert.equal(g.run(`surfSession.tricks.filter(trick=>trick.name==='Tube Ride!').length`),1);assert.equal(g.node('#surfTrick').textContent,'Tube Ride!');
+g.run(`surfSession.score=12345;surfSession.remaining=65000;recordSurfTrick(surfSession,'Single Alleyoop',500);recordSurfTrick(surfSession,'Slash',90);updateSurfUI()`);
+assert.equal(g.node('#surfScore').textContent,'12,345');assert.equal(g.node('#surfTime').textContent,'1:05');assert.equal(g.node('#surfTrick').textContent,'Slash');assert.match(g.node('#surfTrickHistory').textContent,/Single Alleyoop.*Tube Ride!/);
+g.run('prepareSurfPaddleOut();updateSurfUI()');assert.equal(g.node('#surfTrick').textContent,'Slash','tricks remain through the heat');
 });
 
 test('surf aerials keep the curling lip moving forward and never reverse ocean scroll',()=>{
@@ -4305,10 +4324,10 @@ assert.equal(g.run(`canWalk(BEACH_DISCOVERIES[${index}].x,BEACH_DISCOVERIES[${in
 const x=g.run('player.x'),y=g.run('player.y'),power=g.run('state.power');
 g.node('#answer').value='incorrect';g.run('checkAnswer()');assert.equal(g.run('state.power'),power);
 g.node('#answer').value=g.run("Array.isArray(questions[active].answer)?questions[active].answer.join(','):String(questions[active].answer)");g.run('checkAnswer();checkAnswer()');
-assert.equal(g.run('state.power'),Math.min(100,power+25));
+assert.equal(g.run('state.power'),Math.min(100,power+50));
 const crystals=g.run('state.crystals');g.run('openQuestion(active,activeBeachDiscovery)');
 g.node('#answer').value=g.run("Array.isArray(questions[active].answer)?questions[active].answer.join(','):String(questions[active].answer)");g.run('checkAnswer()');
-assert.equal(g.run('state.crystals'),crystals);assert.equal(g.run('state.power'),Math.min(100,power+50));
+assert.equal(g.run('state.crystals'),crystals);assert.equal(g.run('state.power'),Math.min(100,power+100));
 g.node('#nextQuestion').onclick();assert.equal(g.run('activeBeachDiscovery'),index);
 assert.equal(g.run(`BEACH_DISCOVERIES[${index}].ids.includes(active)`),true);
 g.node('#challenge').close();assert.equal(g.run('player.x'),x);assert.equal(g.run('player.y'),y);

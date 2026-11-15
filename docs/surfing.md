@@ -164,7 +164,8 @@ Hold Space (or the touch action) for at least 160 ms while the nose crosses the 
 turns back down to trigger a snap. `surfNoseOverLip()` checks the visible nose against the crest;
 a brief 220 ms reversal window allows the hold to register without requiring keyboard repeats.
 `startSurfSnap()` runs a 0.62-second nose-engaged pivot back down the face, releases the tail,
-throws a stronger lip burst, and awards 90 points on completion. `surfSnapPose()` /
+throws a stronger lip burst, and awards 90 points on completion. `surfSnapTrick()` labels
+small snaps **Heck**, medium snaps **Slash**, and the best snaps **Layback Snap**. `surfSnapPose()` /
 `surfBoardFrame()` rigidly pivot the board around its fixed nose, exposing the flat deck
 without shearing or stretching its outline. The rider shifts their hips and shoulders back
 over the tail, with extended arms for counterbalance. Snap quality is set by crest proximity
@@ -173,7 +174,8 @@ at peak release, then realign smoothly for the descent. This remains a rigid boa
 its speed, freezes for pause/dialogs, and finishes even after Space is released. One hold triggers
 one snap. Away from the reversal, fresh Space presses retain normal air controls; paddling still
 requires separate taps. The action label advertises holding to snap. Ride
-half inside the barrel curtain for 4× line points (fully under it earns 2×).
+inside the barrel curtain for **Tube Ride!** (half coverage retains 4× line points, fully
+under it earns 2×). Each entry adds one completed Tube Ride! to the heat history.
 `surfBarrelState()` separates coverage from survival: a rider can remain fully hidden inside
 the curl while within 55 wave-view units behind the falling lip’s opening edge. Only exceeding
 that distance wipes out from being caught by the break. `surfTubeOpening()` shares the
@@ -184,7 +186,10 @@ forward toward the rider; speed can reduce its approach but cannot send it backw
 Ocean scroll stays forward during aerial spins; signed reversal still applies to riding cutbacks.
 Use left/right for spins, then land with the
 visible nose pointing anywhere down the face (the open lower half-circle), including back toward
-the curl. Horizontal and upward landings wipe out. Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave
+the curl. Horizontal and upward landings wipe out. `surfAerialTrick()` names completed rotations **Single / Double / Triple / Quad Alleyoop**
+for a forward (left, negative) spin and **Single / Double / Triple / Quad Backflip** for a
+backward (right, positive) spin. The peak signed rotation determines the label even when
+the rider adjusts the landing. Successful airs award points and a speed boost; Down helps align the board. Cutbacks, wave
 coverage, linked turns, and clean aerial spins also score points. Heats last 90 seconds or three
 wipeouts; another heat uses the same rental. P pauses, X returns to the beach, and touch buttons
 mirror the controls. Best scores, rental state, and safe beach positions persist. Controls take
@@ -192,6 +197,16 @@ inspiration from the [California Games Lynx
 manual](https://atariage.com/manual_html_page.php?SoftwareID=2413); original procedural wave artwork
 takes visual inspiration from [Surf
 Sandbox](https://store.steampowered.com/app/4480760/Surf_Sandbox/).
+
+## Surf HUD
+
+Large speed sits at top left, completed tricks at top center, and large points at top right
+with the heat timer directly below. The directional pad and action button are enlarged and
+separated at the lower corners, with compact variants for narrow and short screens.
+`recordSurfTrick()` keeps up to 12 completed tricks for the current heat; the center shows the
+latest name and bonus plus the previous three. It survives wave retries and resets for a new
+heat. Instructions stay in a separate lower message so they do not replace completed tricks.
+The action button retains its existing keyboard/touch behavior and hold-to-snap support.
 
 ## Change boundaries and verification
 

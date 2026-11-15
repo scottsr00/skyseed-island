@@ -70,7 +70,7 @@ Walking, standing on land, and all boat travel are free and remain available at 
 Modal dialogs, paused surfing, and surf results do not drain energy. Admin mode stays unlimited.
 At zero energy, beach games and surfing exit safely, tow sports return to their safe dock,
 creature riders and swimmers return to land, and fishing stops while preserving boat travel.
-A correct discovery, repeat-practice, or flash answer restores 25 energy, capped at 100.
+A correct discovery, repeat-practice, or flash answer restores 50 energy, capped at 100.
 Energy stays with the explorer across age changes, resets, and reloads.
 Mainland Beach has a Maritime Museum, Snack Shack, and Aquarium with discovery/practice
 questions for recharging ashore; see [learning and rewards](learning-and-rewards.md).

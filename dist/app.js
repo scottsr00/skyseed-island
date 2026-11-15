@@ -7,7 +7,7 @@ const JETSKI_DOCK={x:805,y:510},JETSKI_MOORING={x:827,y:537},JETSKI_COST=150;
 const SPEEDBOAT_DOCK={x:318,y:256},SPEEDBOAT_MOORING={x:345,y:271},SPEEDBOAT_UNLOCK_CRYSTALS=100;
 // Island shores span x=48…3008. Equal ocean margins center them in the expanded map.
 const WORLD={left:-1672,right:4728,width:6400,height:1800,viewWidth:480,viewHeight:300};
-const POWER_ENABLED=true,POWER_MAX=100,POWER_PER_ANSWER=25,ENERGY_BASE_SECONDS=180;
+const POWER_ENABLED=true,POWER_MAX=100,POWER_PER_ANSWER=50,ENERGY_BASE_SECONDS=180;
 // Register new activities here, in currentEnergyActivity(), and in finishExhaustedActivity().
 // Full-meter durations: light 4 minutes, moderate 3, strenuous 2.
 const ENERGY_ACTIVITY_EFFORT=Object.freeze({frisbee:.75,fishing:1,riding:1,swimming:1.5,volleyball:1.5,surfing:1.5,watersports:1.5});
@@ -206,9 +206,9 @@ const value=Math.max(0,Math.min(POWER_MAX,state.power)),shown=Math.ceil(value);
 $('#powerValue').textContent=`${shown} / ${POWER_MAX}`;
 $('#powerBar').style.width=`${value}%`;
 $('#powerGauge').setAttribute('aria-valuenow',String(shown));
-$('#powerGauge').setAttribute('aria-valuetext',value>0?`${shown} energy. Correct answers restore 25 energy.`:'No energy. Solve a problem before playing again.');
+$('#powerGauge').setAttribute('aria-valuetext',value>0?`${shown} energy. Correct answers restore 50 energy.`:'No energy. Solve a problem before playing again.');
 $('#powerMeter').setAttribute('data-level',value===0?'empty':value<=25?'low':'ready');
-$('#powerHelp').textContent=value===0?'Solve a problem to play again':'Correct answer: +25 energy';
+$('#powerHelp').textContent=value===0?'Solve a problem to play again':'Correct answer: +50 energy';
 }
 function restorePower(){if(!POWER_ENABLED)return;state.power=Math.min(POWER_MAX,state.power+POWER_PER_ANSWER);currentProfile().power=state.power;updatePowerMeter();}
 function nearestPoweredShore(){
@@ -752,7 +752,7 @@ ${rewarded?`<div class="crystal-reward" role="status" aria-label="5 crystals col
 ${unlocked?`<div class="squishy-unlock" role="status">${squishyArt(unlocked)}<div class="eyebrow">NEW SQUISHY · ${earnedSquishies()*50} CRYSTALS EARNED</div><h3>${unlocked.name}</h3>${unlocked.detail?`<p>${unlocked.detail}</p>`:""}<p>Tucked safely into your secret stash!</p></div>`:""}
 ${state.solved.length===8&&first?'<div class="completion">Your egg hatched! Sprout will now follow you around the island.</div>':''}
 ${state.solved.length===questions.length?`<div class="completion">All ${questions.length} discoveries made! Your journal is full of new ideas. Revisit any challenge to earn 5 more crystals!</div>`:''}
-<p class="practice-note">+25 energy · ready for more exploring!</p>
+<p class="practice-note">+50 energy · ready for more exploring!</p>
 <div class="discovery-actions"><button class="primary" id="nextQuestion" aria-keyshortcuts="Enter"><span>Next discovery</span><kbd>Enter</kbd></button><button id="backIsland" aria-keyshortcuts="Escape"><span>Keep exploring</span><kbd>Esc</kbd></button></div>
 </div>`;
 if(rewarded)animateCrystalReward(state.crystals);
@@ -6051,7 +6051,7 @@ rect(x-22,y-20,10,7,'#e4b369');ellipse(x+16,y-18,4,5,'#e6ab85');rect(x+14,y-25,4
 for(const dx of [-34,16]){rect(x+dx,y-27,18,18,'#4d858e');rect(x+dx+2,y-25,14,5,'#92cbd0');ellipse(x+dx+9,y-17,4,2,'#efcb7e');polygon([[x+dx+5,y-17],[x+dx+2,y-20],[x+dx+2,y-14]],'#efcb7e');}
 }
 ctx.textAlign='center';ctx.font='bold 7px monospace';ctx.fillStyle='#365d53';ctx.fillText(b.name.toUpperCase(),x,y-59);
-ctx.font='6px monospace';ctx.fillText('DISCOVERIES · +25 ENERGY',x,y+13);
+ctx.font='6px monospace';ctx.fillText('DISCOVERIES · +50 ENERGY',x,y+13);
 if(nearbyBeachDiscovery()===index){rect(x-48,y+19,96,12,'#fff3cf');ctx.font='bold 7px monospace';ctx.fillText('E · VISIT',x,y+28);}
 }
 }
