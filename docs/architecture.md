@@ -7,6 +7,7 @@
 | `dist/index.html` | Static page, canvas, HUD, panels, dialogs, touch controls; script order |
 | `dist/style.css` | Layout, responsive UI, controls, CSS collection artwork |
 | `dist/app.js` | Shared state, persistence, curriculum, world, most activities, input, Canvas rendering |
+| `dist/rocket.js` | Space Museum questions, rocket launch, cockpit exploration, recovery and rendering |
 | `dist/surfing.js` | Surf rental/session, coastal waves, surfing physics and rendering |
 | `tests/game.test.cjs` | Node test suite and VM/DOM substitute |
 | `package.json` | Server, syntax check, test commands |
@@ -18,7 +19,7 @@ installation, or generated build output. The ZIP is a separate snapshot; the run
 
 ## Initialization and shared state
 
-`index.html` loads `surfing.js` before `app.js`, as classic scripts. Their top-level bindings
+`index.html` loads `rocket.js`, then `surfing.js`, before `app.js`, as classic scripts. Their top-level bindings
 share a global lexical environment. Surf functions reference app bindings such as `state`,
 `player`, `keys`, `ctx`, and activity flags; these dependencies are resolved when functions run.
 This is a file separation, not an isolated module boundary.

@@ -19,8 +19,8 @@ origin retains access to saves; a different origin has separate storage. Failed 
 | Legacy explorer age saves | `skyseed-v1` for 11–12; `skyseed-v1-${age}` for other ages |
 | Other explorer age saves | `skyseed-profile-${id}-${age}` |
 | Legacy age preference | `skyseed-age`; selected age is also kept in each profile |
-| Explorer across ages/adventure resets | Name, character, selected age, beach pass, speedboat unlock, jet ski ownership, energy, lifetime fish, fishing/speedboat/jet ski fuel tanks, reserve gas |
-| Per explorer and age | Solved IDs, crystals, earned reward total, upgrades, collection inventory/tickets, bait/lure, sponsorship progress, watersports gear (including the 50-crystal windsurfer), surf rental/best score, island visits and saved travel state |
+| Explorer across ages/adventure resets | Name, character, selected age, beach pass, speedboat unlock, jet ski ownership, energy, lifetime fish, fishing/speedboat/jet ski fuel tanks, reserve gas, permanent rocket ticket and earned launch fuel |
+| Per explorer and age | Solved IDs, crystals, earned reward total, upgrades, collection inventory/tickets, bait/lure, sponsorship progress, watersports gear (including the 50-crystal windsurfer), surf rental/best score, island visits, space museum exhibit cursor, and saved travel state |
 | Session only | Active mini-game simulation, creature rides, effects, admin unlimited-energy mode |
 
 Some profile-wide values are mirrored into `state` for runtime use. Field location alone does
@@ -99,3 +99,10 @@ not increase `earnedCrystals` or discovery progress, but can qualify for the spe
 See [testing](testing.md). Focused test names include `profile`, `legacy`, `migrate`, `reload`,
 `age`, `reset`, `gas`, and `admin`. For new fields, verify another player and another age, reload,
 current-adventure reset, and full profile reset according to the ownership table.
+
+Rocket access (`currentProfile().rocketPass`) and launch fuel (`rocketFuel`, 0–999) belong to the
+explorer, persist across ages/adventure resets, and clear on full profile reset/deletion. Missing
+fields initialize to no ticket and zero fuel. The per-age `spaceQuestionIndex` cycles 20 museum
+exhibits. Ignition consumes one fuel immediately and saves; abandoning a launch does not refund
+it. Flight, capsule, recovery swimming permission, and repair crews are transient. Saves during
+flight/recovery point to safe Moonstone launchpad ground with the island ID retained.

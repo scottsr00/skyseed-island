@@ -25,7 +25,7 @@ assert.match(g.node('#challengeBody').innerHTML,/Practice complete!/);
 assert.doesNotMatch(g.node('#challengeBody').innerHTML,/reward-gain/);
 g.node('#backIsland').onclick();assert.equal(g.node('#challenge').open,false);
 });
-function game(saved,stored,renderTools=false){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:(target,key)=>target[key]??(()=>{})});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#profileActionConfirm','#timesTables'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{listeners:{},addEventListener(type,handler,options){(this.listeners[type]??=[]).push({handler,capture:!!options?.capture});}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/surfing.js','utf8'),c);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);if(!renderTools)vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
+function game(saved,stored,renderTools=false){const nodes=new Map(),storage=new Map(stored?Object.entries(stored):saved?[["skyseed-v1",JSON.stringify(saved)]]:[]);const element=()=>({value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},getContext(){return new Proxy({},{get:(target,key)=>target[key]??(()=>{})});}});const node=s=>{if(!nodes.has(s))nodes.set(s,element());return nodes.get(s);};const c=vm.createContext({document:{querySelector:s=>s==='dialog[open]'?([...nodes.entries()].find(([key,n])=>['#challenge','#journal','#welcome','#ferry','#stash','#sponsorship','#flash','#resetConfirm','#profileActionConfirm','#timesTables','#spaceMuseum'].includes(key)&&n.open)?.[1]||null):node(s),querySelectorAll:()=>[],addEventListener(){}},window:{listeners:{},addEventListener(type,handler,options){(this.listeners[type]??=[]).push({handler,capture:!!options?.capture});}},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},requestAnimationFrame(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true});vm.runInContext(fs.readFileSync('dist/rocket.js','utf8'),c);vm.runInContext(fs.readFileSync('dist/surfing.js','utf8'),c);vm.runInContext(fs.readFileSync('dist/app.js','utf8'),c);if(!renderTools)vm.runInContext('renderTool=()=>{}',c);return {run:s=>vm.runInContext(s,c),node,snapshot:()=>Object.fromEntries(storage)};}
 test('all 200 challenges award once; upgrades cost 60; companion hatches',()=>{const g=game();for(let i=0;i<200;i++){g.run(`openQuestion(${i})`);g.node('#answer').value=g.run(`Array.isArray(questions[${i}].answer)?questions[${i}].answer.join(','):String(questions[${i}].answer)`);g.run('checkAnswer()');}assert.equal(g.run('state.solved.length'),200);assert.equal(g.run('state.crystals'),1000);assert.equal(g.node('#petTitle').textContent,'Meet Sprout!');g.run('openQuestion(0)');g.node('#answer').value='252';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),1005);g.run("buy('cottage');buy('garden');buy('bridge')");assert.equal(g.run('state.crystals'),945);assert.equal(g.run('state.upgrades.length'),3);g.run("buy('bridge')");assert.equal(g.run('state.crystals'),945);});
 test('wrong answers, equivalent fractions, percentages, ordered pairs',()=>{const g=game();g.run('openQuestion(4)');g.node('#answer').value='3/4';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),0);g.node('#answer').value='14/16';g.run('checkAnswer()');assert.equal(g.run('state.crystals'),5);assert.equal(g.run("parseNumber('62%')"),.62);assert.equal(g.run("parseNumber('−4')"),-4);assert.ok(Number.isNaN(g.run("parseNumber('1/0')")));g.run('openQuestion(17)');g.node('#answer').value='30,54';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),1);g.node('#answer').value='54,30';g.run('checkAnswer()');assert.equal(g.run('state.solved.length'),2);});
 test('a 25-crystal ferry ticket starts one timed ride and allows reboarding while time remains',()=>{
@@ -5426,10 +5426,10 @@ g.run("startWindsurfing();$('#resetConfirm').showModal()");g.node('#confirmReset
 test('northwest wind keeps every windsurfer upwind of the rig and drives the leeward sail side',()=>{
 const g=game();for(let i=0;i<32;i++){
 g.run(`globalThis.rig=windsurferRig(0,0,${i*Math.PI/16},1000);globalThis.pose=windsurferRiderPose(rig,1000)`);
-assert.ok(g.run('(pose.shoulder[0]-pose.hip[0])*SAILING_WIND.x+(pose.shoulder[1]-pose.hip[1]+11-pose.flex)*SAILING_WIND.y')<0);
-assert.equal(g.run('pose.face'),Math.PI/4);
+assert.ok(g.run('(pose.shoulder3[0]-pose.hip3[0])*SAILING_WIND.x+(pose.shoulder3[1]-pose.hip3[1])*SAILING_WIND.y')<0);
+assert.equal(g.run('pose.face'),i*Math.PI/16);
 // Feet stay on the upwind rail, independently of travel direction.
-assert.ok(g.run('rig.point(0,0,1).map((v,i)=>pose.feet[0][i]-v).reduce((n,v,i)=>n+v*[SAILING_WIND.x,SAILING_WIND.y][i],0)')<=1e-9);
+assert.equal(g.run('pose.feet3.every(f=>(-Math.sin(rig.heading)*f[0]+Math.cos(rig.heading)*f[1])*(-Math.sin(rig.heading)*SAILING_WIND.x+Math.cos(rig.heading)*SAILING_WIND.y)<=1e-9)'),true);
 const cross=g.run('-Math.sin(rig.heading)*SAILING_WIND.x+Math.cos(rig.heading)*SAILING_WIND.y');
 if(Math.abs(cross)>.12)assert.ok(g.run('rig.across')*cross>0);
 }
@@ -5482,12 +5482,225 @@ g.run(`globalThis.m={heading:${axis-direction*.2},tack:windsurferTack(${axis+dir
 for(let step=0;step<=100;step++){
 g.run(`m.flip.elapsed=SAIL_FLIP_DURATION*${step/100};globalThis.r=windsurferRig(0,0,m.heading,0,m);globalThis.p=windsurferRiderPose(r,0,m)`);
 if(step===48)assert.ok(g.run('r.along')>6,'clew passes forward of the mast, away from the aft rider');
-const v=JSON.parse(g.run('JSON.stringify({mast:r.point(6,0,18),clew:r.clew,hip:p.hip,shoulder:p.shoulder,flex:p.flex,release:p.release})'));
-// Undo height projection to check the actual boom against the entire torso in 3D.
-const hipHeight=10-v.flex-v.release*2,shoulderHeight=hipHeight+11-v.flex;
-const hip=[v.hip[0],v.hip[1]+hipHeight,hipHeight],shoulder=[v.shoulder[0],v.shoulder[1]+shoulderHeight,shoulderHeight];
-const mast=[v.mast[0],v.mast[1]+18,18],clew=[v.clew[0],v.clew[1]+13,13];
+const v=JSON.parse(g.run('JSON.stringify({mast:r.boomStart3,clew:r.clew3,hip:p.hip3,shoulder:p.shoulder3})'));
+const {hip,shoulder,mast,clew}=v;
 for(let body=0;body<=25;body++)assert.ok(distanceToSegment(lerp(hip,shoulder,body/25),mast,clew)>3.5,`boom crosses torso: speed ${speed}, axis ${axis}, direction ${direction}, step ${step}`);
 }
 }
+});
+
+test('windsurf skeleton keeps human arm lengths, planted feet and a compact balanced torso throughout flips',()=>{
+const g=game();
+g.run(`globalThis.bodySamples=[];
+for(let i=0;i<32;i++)for(const speed of [0,70,175,245])for(const phase of [-1,0,.1,.35,.5,.7,.9,1]){
+const h=i*Math.PI/16,m={heading:h,tack:windsurferTack(h),frontHand:0,velocity:speed,trim:speed>175?1:0,steering:Math.sin(h)};
+if(phase>=0)m.flip={from:-m.tack,to:m.tack,elapsed:phase*SAIL_FLIP_DURATION,backHand:1};
+const rig=windsurferRig(0,0,h,1000,m),p=windsurferRiderPose(rig,1000,m);
+bodySamples.push(p);
+}`);
+const samples=JSON.parse(g.run('JSON.stringify(bodySamples)'));
+const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
+for(const p of samples){
+assert.ok(distance(p.hip3,p.shoulder3)<10.5,'torso must not stretch to reach the boom');
+for(const arm of p.hands){
+assert.ok(Math.abs(distance(arm.start3,arm.elbow3)-6)<1e-6,'upper arm keeps its length');
+assert.ok(Math.abs(distance(arm.elbow3,arm.hand3)-6)<1e-6,'forearm keeps its length');
+assert.ok(distance(arm.hand3,arm.target)<1e-6,'held grip stays reachable without stretching');
+}
+for(let i=0;i<2;i++){
+const leg=p.legs[i];assert.ok(distance(leg.foot3,p.feet3[i])<1e-6,'feet stay on the board');
+assert.ok(Math.abs(distance(leg.hip3,leg.knee3)-5.8)<1e-6);assert.ok(Math.abs(distance(leg.knee3,leg.foot3)-5.8)<1e-6);
+}
+}
+});
+test('windsurf rider balances against sail pressure and reduces lean while handling the rig',()=>{
+const g=game();g.run(`globalThis.m={heading:Math.PI*7/4,tack:windsurferTack(Math.PI*7/4),frontHand:0,velocity:125};
+globalThis.loaded=windsurferRiderPose(windsurferRig(0,0,m.heading,0,m),0,m);
+m.velocity=0;globalThis.idle=windsurferRiderPose(windsurferRig(0,0,m.heading,0,m),0,m);
+m.velocity=125;m.flip={from:-m.tack,to:m.tack,elapsed:SAIL_FLIP_DURATION*.5,backHand:1};globalThis.handling=windsurferRiderPose(windsurferRig(0,0,m.heading,0,m),0,m);`);
+assert.ok(g.run('loaded.load')>g.run('idle.load'));assert.ok(g.run('loaded.load')>g.run('handling.load'));
+assert.ok(g.run('loaded.hip3[2]')<g.run('idle.hip3[2]'),'knees bend under pressure');
+});
+test('windsurf sail fabric and inset panel render with fully opaque colors',()=>{
+const g=game();g.run('globalThis.sailPaint=[];const oldPolygon=polygon;polygon=(points,color,...rest)=>{sailPaint.push(color);oldPolygon(points,color,...rest)};drawWindsurferSail(windsurferRig(0,0,0));');
+assert.deepEqual(JSON.parse(g.run('JSON.stringify(sailPaint)')),['#78b9df','#fff2c6']);
+});
+
+test('windsurf hands grip the rider-facing boom rail on both tacks and throughout flips',()=>{
+const g=game();g.run(`globalThis.railChecks=[];
+for(let i=0;i<32;i++)for(const phase of [-1,.1,.35,.5,.7,.9]){
+const h=i*Math.PI/16,m={heading:h,tack:windsurferTack(h),frontHand:0,velocity:70};
+if(phase>=0)m.flip={from:-m.tack,to:m.tack,elapsed:phase*SAIL_FLIP_DURATION,backHand:1};
+const r=windsurferRig(0,0,h,0,m),p=windsurferRiderPose(r,0,m);
+const side=v=>v.reduce((n,x,j)=>n+(x-r.tack3[j])*r.sailNormal[j],0);
+railChecks.push(p.hands.filter(a=>a.gripping).every(a=>side(a.hand3)*side(p.shoulder3)>0));
+const rails=[r.rail3(.5,-1),r.rail3(.5,1)];railChecks.push(side(rails[0])*side(rails[1])<0);
+}`);assert.equal(g.run('railChecks.every(Boolean)'),true);
+});
+test('windsurf fabric clips hidden arms but keeps foreground arms visible on either sail face',()=>{
+const g=game();g.run(`globalThis.clips=[];ctx.clip=rule=>clips.push(rule);globalThis.r=windsurferRig(0,0,0);
+globalThis.center=r.tip3.map((v,i)=>(v+r.tack3[i]+r.clew3[i])/3);
+globalThis.front=center.map((v,i)=>v+(i===0?0:10));globalThis.back=center.map((v,i)=>v-(i===0?0:10));`);
+assert.ok(g.run('windsurfSailSide(r,front)')>0);assert.ok(g.run('windsurfSailSide(r,back)')<0);
+assert.equal(g.run('JSON.stringify(r.project(front))'),g.run('JSON.stringify(r.project(back))'));
+g.run('withWindsurfSailOcclusion(r,front,()=>{});');assert.equal(g.run('clips.length'),0);
+g.run('withWindsurfSailOcclusion(r,back,()=>{});');assert.deepEqual(JSON.parse(g.run('JSON.stringify(clips)')),['evenodd']);
+g.run("clips=[];drawWindsurfLimb(r,back,front,'#f2c992',2)");assert.equal(g.run('clips.length'),1,'arm crossing the sail splits into clipped and visible sections');
+});
+
+test('windsurf rider shoulders, face and gaze follow travel heading throughout sail flips',()=>{
+const g=game();g.run('globalThis.headings=[];const originalFace=drawBoatDriverFace;drawBoatDriverFace=(...args)=>{headings.push(args[4]);originalFace(...args)};');
+for(let i=0;i<16;i++){
+const heading=i*Math.PI/8;g.run(`globalThis.m={heading:${heading},tack:windsurferTack(${heading}),frontHand:0,velocity:70,flip:{from:-1,to:1,elapsed:SAIL_FLIP_DURATION*.5,backHand:1}};globalThis.r=windsurferRig(0,0,m.heading,500,m);globalThis.p=windsurferRiderPose(r,500,m);drawWindsurfRider(r,500,m);`);
+assert.equal(g.run('p.face'),heading);assert.equal(g.run('headings.at(-1)'),heading);
+assert.ok(g.run('(p.head3[0]-p.shoulder3[0])*p.forward[0]+(p.head3[1]-p.shoulder3[1])*p.forward[1]')>0);
+assert.ok(Math.abs(g.run('p.shoulderAxis[0]*p.forward[0]+p.shoulderAxis[1]*p.forward[1]'))<1e-9);
+}
+assert.equal(g.run('headings.length'),16);
+});
+
+test('windsurf feet switch lead roles with a planted support foot and continuous touchdown on each tack',()=>{
+const g=game();for(const [oldTack,heading] of [[-1,0],[1,Math.PI/2]]){
+g.run(`globalThis.m={heading:${heading},tack:${oldTack},frontHand:0,velocity:70};advanceWindsurferRig(m,0);globalThis.start=windsurferFootPose(windsurferRig(0,0,m.heading,0,m),m);`);
+const oldLead=g.run('m.leadFoot');assert.equal(g.run('m.flip.leadFoot'),oldLead);
+let lifted=false;let last=null;
+for(let step=0;step<=100;step++){
+g.run(`m.flip.elapsed=SAIL_FLIP_DURATION*${step/100};globalThis.stance=windsurferFootPose(windsurferRig(0,0,m.heading,0,m),m)`);
+const stance=JSON.parse(g.run('JSON.stringify(stance)'));assert.ok(stance.planted.some(Boolean),'one foot must support the rider');
+if(stance.planted.includes(false))lifted=true;
+for(const f of stance.feet3){assert.ok(f[2]>=1-1e-9&&f[2]<=2.35+1e-9,'step height stays small');}
+if(last)for(let foot=0;foot<2;foot++)assert.ok(Math.hypot(...stance.feet3[foot].map((v,i)=>v-last.feet3[foot][i]))<2,'feet move smoothly');
+last=stance;
+}
+assert.equal(lifted,true);assert.equal(g.run('JSON.stringify(stance.feet3[0])'),g.run('JSON.stringify(start.feet3[1])'));
+assert.equal(g.run('JSON.stringify(stance.feet3[1])'),g.run('JSON.stringify(start.feet3[0])'));
+g.run('advanceWindsurferRig(m,1);globalThis.after=windsurferFootPose(windsurferRig(0,0,m.heading,0,m),m)');
+assert.equal(g.run('m.leadFoot'),1-oldLead);assert.equal(g.run('JSON.stringify(after.feet3)'),g.run('JSON.stringify(stance.feet3)'));
+}
+});
+test('windsurf foot switching reverses on the next turn and render calls never advance it',()=>{
+const g=game();g.run('globalThis.m={heading:Math.PI/2,tack:-1,frontHand:0};advanceWindsurferRig(m,0);globalThis.originalLead=m.leadFoot;m.heading=0;advanceWindsurferRig(m,SAIL_FLIP_DURATION)');
+assert.equal(g.run('m.leadFoot'),1-g.run('originalLead'));
+g.run('m.heading=Math.PI/2;advanceWindsurferRig(m,SAIL_FLIP_DURATION*.5)');
+const before=g.run('JSON.stringify(m)');g.run('globalThis.r=windsurferRig(0,0,m.heading,0,m);drawWindsurfRider(r,0,m);drawWindsurfRider(r,0,m)');assert.equal(g.run('JSON.stringify(m)'),before);
+g.run('advanceWindsurferRig(m,SAIL_FLIP_DURATION*.5)');assert.equal(g.run('m.leadFoot'),g.run('originalLead'));
+});
+
+test('windsurfer reaches the increased 175 maximum on a beam reach and slows when running downwind',()=>{
+const g=game();g.run("state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();player.x=400;player.y=800;windsurfSession.heading=Math.PI*3/4;keys.add('w');for(let i=0;i<300;i++)advanceWindsurfing(20)");
+assert.equal(g.run('windsurfSession.velocity'),175);assert.equal(g.run('WINDSURFER_MAX_SPEED'),175);
+g.run('windsurfSession.heading=Math.PI/4;for(let i=0;i<100;i++)advanceWindsurfing(20)');
+assert.ok(g.run('windsurfSession.velocity')<125);assert.ok(g.run('windsurfSession.velocity')>100);
+});
+
+test('windsurf Space trim works only on a beam reach, builds gradually, and raises maximum speed to 245',()=>{
+const g=game();g.run("state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();trimWindsurfer()");assert.equal(g.run('windsurfSession.trimWanted'),false);
+g.run("player.x=400;player.y=800;windsurfSession.heading=Math.PI*3/4;window.listeners.keydown.forEach(({handler})=>handler({key:' ',target:{tagName:'CANVAS'},preventDefault(){}}))");
+assert.equal(g.run('windsurfSession.trimWanted'),true);assert.equal(g.run('windsurfSession.trim'),0);
+g.run("keys.add('w');advanceWindsurfing(200)");assert.ok(g.run('windsurfSession.trim')>0&&g.run('windsurfSession.trim')<1);
+g.run('for(let i=0;i<290;i++)advanceWindsurfing(20)');assert.ok(Math.abs(g.run('windsurfSession.velocity')-245)<1e-6);
+g.run('advanceWindsurfing(20)');assert.ok(Math.abs(g.run('windsurfSession.velocity')-245)<1e-6,'full throttle holds the target without speed oscillation');
+g.run('trimWindsurfer();advanceWindsurfing(200)');assert.equal(g.run('windsurfSession.trimWanted'),false);assert.ok(g.run('windsurfSession.trim')>0&&g.run('windsurfSession.trim')<1);
+});
+test('windsurf trim eases on a turn or brake, pauses in dialogs, and clears with the ride',()=>{
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();windsurfSession.heading=Math.PI*3/4;trimWindsurfer();advanceWindsurfing(200)');
+const before=g.run('JSON.stringify(windsurfSession)');g.node('#challenge').open=true;g.run('advanceWindsurfing(500);trimWindsurfer()');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+g.node('#challenge').open=false;g.run('windsurfSession.heading=Math.PI/2;advanceWindsurfing(300)');assert.equal(g.run('windsurfSession.trimWanted'),false);assert.equal(g.run('windsurfSession.trim'),0);
+g.run("windsurfSession.heading=Math.PI*3/4;trimWindsurfer();keys.add('s');advanceWindsurfing(40)");assert.equal(g.run('windsurfSession.trimWanted'),false);
+g.run('finishWindsurfing();startWindsurfing()');assert.equal(g.run('windsurfSession.trim'),0);assert.equal(g.run('windsurfSession.trimWanted'),false);
+});
+test('windsurf speed and trim shift weight aft, rake the sail back, and pull the clew toward the rider',()=>{
+const g=game();g.run(`globalThis.m={heading:Math.PI*3/4,tack:-1,frontHand:0,velocity:0,trim:0};
+globalThis.slowRig=windsurferRig(0,0,m.heading,0,m);globalThis.slow=windsurferRiderPose(slowRig,0,m);
+m.velocity=175;globalThis.fastRig=windsurferRig(0,0,m.heading,0,m);globalThis.fast=windsurferRiderPose(fastRig,0,m);
+m.velocity=245;m.trim=1;globalThis.trimRig=windsurferRig(0,0,m.heading,0,m);globalThis.trimmed=windsurferRiderPose(trimRig,0,m);
+globalThis.along=v=>v[0]*Math.cos(m.heading)+v[1]*Math.sin(m.heading);`);
+assert.ok(g.run('along(fast.hip3)')<g.run('along(slow.hip3)'));assert.ok(g.run('along(trimmed.hip3)')<g.run('along(fast.hip3)'));
+assert.ok(g.run('along(fastRig.tip3)')<g.run('along(slowRig.tip3)'));assert.ok(g.run('along(trimRig.tip3)')<g.run('along(fastRig.tip3)'));
+assert.ok(g.run('Math.abs(trimRig.across)')<g.run('Math.abs(fastRig.across)'));
+assert.ok(g.run('Math.hypot(...trimRig.clew3.map((v,i)=>v-trimmed.shoulder3[i]))')<g.run('Math.hypot(...fastRig.clew3.map((v,i)=>v-fast.shoulder3[i]))'));
+});
+test('windsurf trim button matches Space, ignores key repeats, and releases for sail flips',()=>{
+assert.match(fs.readFileSync('dist/index.html','utf8'),/id="mapSailingTrim"/);
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();updateWaterControls()');assert.equal(g.node('#mapSailingTrim').disabled,true);
+g.run('windsurfSession.heading=Math.PI*3/4;updateWaterControls()');assert.equal(g.node('#mapSailingTrim').disabled,false);
+g.node('#mapSailingTrim').onclick();assert.equal(g.run('windsurfSession.trimWanted'),true);
+g.run("window.listeners.keydown.forEach(({handler})=>handler({key:' ',repeat:true,target:{tagName:'CANVAS'},preventDefault(){}}))");assert.equal(g.run('windsurfSession.trimWanted'),true);
+g.run('advanceWindsurfing(100);windsurfSession.heading=0;advanceWindsurfing(20)');assert.notEqual(g.run('windsurfSession.flip'),null);assert.equal(g.run('windsurfSession.trimWanted'),false);
+});
+
+test('windsurf pelvis and knees keep each leg on its own side during either foot switch',()=>{
+const g=game();g.run(`globalThis.legSeparation=[];
+for(let i=0;i<32;i++)for(const phase of [-1,0,.1,.25,.35,.45,.55,.65,.7,.8,.9,1]){
+const h=i*Math.PI/16,m={heading:h,tack:windsurferTack(h),frontHand:0,velocity:245,trim:1};
+if(phase>=0)m.flip={from:-m.tack,to:m.tack,elapsed:phase*SAIL_FLIP_DURATION,backHand:1};
+const p=windsurferRiderPose(windsurferRig(0,0,h,0,m),0,m);
+const along=v=>v.reduce((n,x,j)=>n+x*p.pelvisAxis[j],0);
+const left=[p.legs[0].hip3,p.legs[0].knee3,p.legs[0].foot3].map(along);
+const right=[p.legs[1].hip3,p.legs[1].knee3,p.legs[1].foot3].map(along);
+legSeparation.push(Math.min(...right)-Math.max(...left));
+}`);assert.equal(g.run('legSeparation.every(gap=>gap>.5)'),true,'leg chains must not cross when lead feet exchange');
+});
+test('windsurf rider loads the rear leg and extends the front leg on both beam reaches',()=>{
+const g=game();for(const heading of [Math.PI*3/4,Math.PI*7/4])for(const speed of [175,245]){
+g.run(`globalThis.m={heading:${heading},tack:windsurferTack(${heading}),frontHand:0,velocity:${speed},trim:${speed===245?1:0}};globalThis.p=windsurferRiderPose(windsurferRig(0,0,m.heading,0,m),0,m);
+globalThis.along=v=>v[0]*Math.cos(m.heading)+v[1]*Math.sin(m.heading);globalThis.com=p.hip3.map((v,i)=>v*.45+p.shoulder3[i]*.45+p.head3[i]*.1);
+globalThis.ordered=[...p.legs].sort((a,b)=>along(a.foot3)-along(b.foot3));`);
+assert.ok(g.run('along(com)')<-5,'body weight must sit on the rear half of the stance');
+assert.ok(g.run('Math.abs(along(com)-along(ordered[0].foot3))')<g.run('Math.abs(along(com)-along(ordered[1].foot3))'));
+assert.ok(g.run('Math.hypot(...ordered[1].hip3.map((v,i)=>v-ordered[1].foot3[i]))')>g.run('Math.hypot(...ordered[0].hip3.map((v,i)=>v-ordered[0].foot3[i]))'),'front leg should extend more than the loaded rear leg');
+}
+});
+
+function rocketGame(){const g=game();g.run("state.boatIsland='moonstone';player.x=ROCKET_SAFE.x;player.y=ROCKET_SAFE.y;state.crystals=500");return g;}
+function launchTestRocket(g){g.run('currentProfile().rocketPass=true;currentProfile().rocketFuel=2;useRocket();advanceRocket(2200);keys.add(" ");advanceRocket(16)');}
+test('rocket permanent ticket, fuel, energy and explorer persistence',()=>{
+const g=rocketGame();g.run('useRocket();useRocket()');assert.equal(g.run('rocketAccess()'),true);assert.equal(g.run('state.crystals'),250);assert.equal(g.run('rocketSession'),null);
+g.run('currentProfile().rocketFuel=2;state.power=0;useRocket()');assert.equal(g.run('rocketSession'),null);
+g.run('state.power=100;useRocket();advanceRocket(2200);save()');assert.equal(g.run('rocketSession.phase'),'ready');
+const h=game(null,g.snapshot());assert.equal(h.run('rocketAccess()'),true);assert.equal(h.run('currentProfile().rocketFuel'),2);assert.equal(h.run('rocketSession'),null);assert.equal(h.run('canWalk(player.x,player.y)'),true);
+g.run("switchAge('9-10')");assert.equal(g.run('rocketAccess()'),true);assert.equal(g.run('currentProfile().rocketFuel'),2);assert.equal(g.run('rocketSession'),null);
+g.node('#profileName').value='Space friend';g.run('createProfile()');assert.equal(g.run('rocketAccess()'),false);assert.equal(g.run('currentProfile().rocketFuel'),0);
+});
+test('rocket museum twenty questions per older age, wrong retries, one fuel per answer and cycling',()=>{
+for(const age of ['9-10','11-12']){const g=rocketGame();g.run(`switchAge('${age}');state.boatIsland='moonstone';player.x=SPACE_MUSEUM.x;player.y=SPACE_MUSEUM.y+15;state.power=10;openSpaceMuseum()`);
+assert.equal(g.run('SPACE_QUESTIONS[ageLevel].length'),20);assert.equal(g.run('new Set(SPACE_QUESTIONS[ageLevel].map(q=>q[0])).size'),20);
+g.run('answerSpaceQuestion(1)');assert.equal(g.run('currentProfile().rocketFuel'),0);
+for(let i=0;i<20;i++)g.run('answerSpaceQuestion(0);answerSpaceQuestion(0);nextSpaceQuestion()');
+assert.equal(g.run('currentProfile().rocketFuel'),20);assert.equal(g.run('museumQuestion'),0);assert.equal(g.run('state.power'),100);assert.equal(g.run('state.solved.length'),0);
+g.run("$('#spaceMuseum').close();save()");const h=game(null,g.snapshot());assert.equal(h.run('currentProfile().rocketFuel'),20);}
+});
+test('rocket ten-second held launch, arrow exploration and moderate energy',()=>{
+const g=rocketGame();launchTestRocket(g);assert.equal(g.run('currentProfile().rocketFuel'),1);g.run('advanceRocket(9999)');assert.equal(g.run('rocketSession.phase'),'launch');g.run('advanceRocket(1)');assert.equal(g.run('rocketSession.phase'),'space');
+g.run('keys.add("arrowright");keys.add("arrowup");advanceRocket(1000)');assert.ok(g.run('rocketSession.yaw')>0);assert.ok(g.run('rocketSession.pitch')<0);assert.ok(g.run('rocketSession.distance')>0);
+const x=g.run('player.x');g.run('moveExplorer(50,50)');assert.equal(g.run('player.x'),x);g.run('advancePower(1000)');assert.ok(Math.abs(g.run('state.power')-(100-100/180))<1e-8);
+});
+test('rocket release falls, reuses explosion and crew rebuilds without another ticket',()=>{
+const g=rocketGame();launchTestRocket(g);g.run('advanceRocket(4000);keys.clear();advanceRocket(16)');assert.equal(g.run('rocketSession.phase'),'fall');g.run('advanceRocket(2400)');assert.equal(g.run('rocketSession'),null);assert.ok(g.run('rocketRepair.blast.cloud.length')>0);assert.equal(g.run('boatExplosions.size'),0);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('player.x=ROCKET_SAFE.x;player.y=ROCKET_SAFE.y;useRocket()');assert.equal(g.run('rocketSession'),null);g.run('advanceRocket(22000);useRocket()');assert.equal(g.run('rocketSession.phase'),'boarding');assert.equal(g.run('currentProfile().rocketFuel'),1);
+});
+test('rocket exhausted recovery animates return, reentry and splashdown into water',()=>{
+const g=rocketGame();launchTestRocket(g);g.run('advanceRocket(10000);state.power=.1;advancePower(1000)');assert.equal(g.run('rocketSession.phase'),'return');g.run('advanceRocket(7000)');assert.equal(g.run('rocketSession.phase'),'reentry');g.run('advanceRocket(4500)');assert.equal(g.run('rocketSession.phase'),'splash');g.run('advanceRocket(3200)');assert.equal(g.run('rocketSession.phase'),'egress');g.run('advanceRocket(1800)');assert.equal(g.run('rocketSession'),null);assert.equal(g.run('swimming'),true);assert.equal(g.run('boating'),false);assert.equal(g.run('islandPolys.some(p=>inside(player.x,player.y,p))'),false);assert.ok(g.run('waterEntrySplash'));
+});
+test('rocket keyboard thrust with button focus, dialog pause, cleanup and safe cancellation',()=>{
+const g=rocketGame();g.run('currentProfile().rocketPass=true;currentProfile().rocketFuel=2;useRocket();advanceRocket(2200);window.listeners.keydown.find(l=>!l.capture).handler({key:" ",target:{tagName:"BUTTON"},preventDefault(){}});advanceRocket(16)');assert.equal(g.run('rocketSession.phase'),'launch');
+g.run('$("#spaceMuseum").showModal();advanceRocket(2000)');assert.equal(g.run('rocketSession.elapsed'),0);g.run('$("#spaceMuseum").close();keys.clear();advanceRocket(16);advanceRocket(2400);resetRocket()');assert.equal(g.run('rocketRepair'),null);
+g.run('player.x=ROCKET_SAFE.x;player.y=ROCKET_SAFE.y;useRocket();advanceRocket(2200);returnRocket()');assert.equal(g.run('rocketSession'),null);assert.equal(g.run('currentProfile().rocketFuel'),1);
+});
+test('rocket world, explosion and every cockpit phase render',()=>{
+const g=rocketGame();g.run('ctx.createLinearGradient=ctx.createRadialGradient=()=>({addColorStop(){}});currentProfile().rocketPass=true;currentProfile().rocketFuel=2;useRocket();camera.x=2700;camera.y=100;drawRocketWorld();advanceRocket(2200)');
+for(const phase of ['ready','launch','fall','space','return','reentry','splash'])g.run(`rocketSession.phase='${phase}';rocketSession.elapsed=900;rocketSession.launch=.6;draw()`);
+g.run('crashRocket();drawRocketWorld();advanceRocket(14000);drawRocketWorld();resetRocket();drawRocketSplash()');assert.equal(g.run('boatExplosions.size'),0);
+});
+test('rocket splashdown swimmer can climb Moonstone shore and saves safe land after capsule fades',()=>{
+const g=rocketGame();launchTestRocket(g);g.run('advanceRocket(10000);returnRocket();advanceRocket(7000);advanceRocket(4500);advanceRocket(3200);advanceRocket(1800);advanceRocket(13000);save()');
+assert.equal(g.run('rocketSplash'),null);assert.equal(g.run('rocketRecovery'),true);assert.equal(g.run('state.x'),g.run('ROCKET_SAFE.x'));
+g.run('player.x=3010;player.y=240;moveExplorer(-4,0)');assert.ok(g.run('shoreClimb'));g.run('advanceSwimming(650)');assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+});
+test('rocket adventure reset preserves permanent ticket and fuel, full profile reset clears both',()=>{
+const g=rocketGame();g.run('currentProfile().rocketPass=true;currentProfile().rocketFuel=4;useRocket();$("#resetConfirm").showModal();$("#confirmReset").onclick()');assert.equal(g.run('rocketSession'),null);assert.equal(g.run('rocketAccess()'),true);assert.equal(g.run('currentProfile().rocketFuel'),4);
+g.run('requestProfileAction("reset");confirmProfileAction()');assert.equal(g.run('rocketAccess()'),false);assert.equal(g.run('currentProfile().rocketFuel'),0);
+});
+test('rocket cockpit keeps ferry countdown and offscreen repair clocks running',()=>{
+const g=rocketGame();launchTestRocket(g);g.run('state.ferryRemaining=60000;boatRepairs.set("tow",createBoatRepair("tow"));advanceSwimming(1000)');assert.equal(g.run('state.ferryRemaining'),59000);assert.equal(g.run('boatRepairs.get("tow").elapsed'),1000);assert.equal(g.run('rocketSession.phase'),'launch');
 });

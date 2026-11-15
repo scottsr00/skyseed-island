@@ -61,19 +61,50 @@ and deep ocean. Saves record the safe dock position; activity resets clear the s
 
 The wind always blows from northwest to southeast. A sailing-only compass HUD shows the
 source and direction, plus the current sail-handling stage. `windsurfDrive()` makes a beam
-reach fastest, reduces downwind speed, and removes thrust inside a 40-degree head-to-wind
+reach fastest at 175 world pixels/second, reduces downwind speed, and removes thrust inside a 40-degree head-to-wind
 zone. Coasting bleeds speed in this zone; low-speed steering remains available to turn out.
+Press Space or Sheet in while sailing within about 12 degrees of a beam reach to bring
+the clew in and gain up to 40% more speed (245 world pixels/second on a perfect reach).
+Press again to ease the sail. Trimming builds and releases gradually; turning away from
+the reach, braking, or flipping automatically eases it. The trim button is disabled
+outside this heading window, and the wind HUD announces the available boost. Modal dialogs
+pause trim along with sailing. Trim is session-only and resets with the session.
+
+As speed builds the hips settle toward the rear foot and lower into a loaded stance.
+The rear leg bends under the rider while the front leg extends; during a foot switch the
+hips return toward center. The mast rakes toward the tail as speed increases.
+Sheeting in adds rake and draws the clew closer, keeping the hands on the rider-facing rail.
 Rig handling briefly reduces drive. `advanceWindsurfing()` uses steps of at most 20 ms.
 
 `windsurferRig()` keeps the mast forward and the clew aft. `drawWindsurfer()` directly reuses
 `drawSurfShortboard()` from surfing, including the rails, tail, deck colors and graphics.
-`windsurferRiderPose()` keeps feet on the upwind rail, with the torso leaning northwest and
-the face looking southeast regardless of board heading. Bent knees, articulated elbows,
-gripping/open hands and hair sway animate independently of the board's rotation.
+`windsurferRiderPose()` solves the skeleton in world space before projecting it onto the
+screen. The stance rests on the upwind rail; two 5.8-unit leg segments form each bent leg.
+The pelvis follows the span between the actual feet as they switch, so each leg remains
+attached on its own side rather than crossing toward the other foot. Knees bend in the
+same leeward plane, and legs render far-to-near by world depth.
+Each arm has fixed 6-unit upper/lower segments through `windsurfJoint()`. The shoulder
+position fits the held grips before solving elbows, rather than stretching arms. A shorter
+boom and a windward-raked mast keep both grips within reach. Sail load shifts the hips
+upwind and bends the knees; releasing pressure reduces lean, while steering adds a small
+weight shift. The torso remains compact. The shoulders, chest profile, head and gaze follow the board
+heading while the feet and weight stay on the upwind side. The head uses the shared
+continuous boat-driver face renderer, including a back-of-head view when sailing north. Sleeves, shaped
+vest panels, hands, neck and hair share the joint positions.
+
+Sail fabric and inset panels use opaque colors. The boom has two curved rails, one on
+each side of the fabric; both hands target the rail facing the rider. `windsurfSailSide()`
+classifies geometry against the actual sail plane and camera projection. Arms split at
+plane crossings, and `withWindsurfSailOcclusion()` clips only their hidden overlap with the
+fabric. Both arms, sleeves and hands respect this mask; there is no always-visible arm.
 
 Crossing either wind axis starts an 1100 ms sail flip through `advanceWindsurferRig()`:
 release the back hand, guide the clew around the outside of the bow with the front hand, then regrip and
-exchange hand roles. `windsurferSailPose()` interpolates the swing and grip exchange without
+exchange hand roles and lead foot. `windsurferFootPose()` coordinates three short steps:
+rear foot to center, old front foot aft, then the center foot forward. Only one foot lifts
+at a time, with a small crouch and smooth weight transfer; the paths stay within the deck.
+The new lead foot persists for the next tack, and stepping shares the paused flip clock.
+`windsurferSailPose()` interpolates the swing and grip exchange without
 snapping. The boom takes the long arc around the bow, away from the rider standing behind the
 forward mast, rather than sweeping through their torso on the shorter sternward arc.
 Tack hysteresis prevents repeated flips while hovering near a wind axis. The flip
@@ -106,3 +137,38 @@ See [testing](testing.md). Focus test names on `wakeboard`, `waterski`, `watersp
 `volleyball`, `frisbee`, `windsurf`, or `Sailing dock`. Verify launch eligibility, controls and touch equivalents, exit,
 safe saves, profile/age cleanup, and boat access after returning to the map. For watersports,
 check both equipment choices, rope release, collision recovery, and the empty boat returning.
+
+## Moonstone Spaceport
+
+Moonstone Island has a Space Museum west of a rocket launchpad and boarding ladder. Sail to its
+existing dock and step ashore. E / the nearby action visits the museum or rocket. A permanent
+rocket ticket costs 250 crystals once per explorer, across age levels and adventure resets.
+Each correct museum answer earns one launch fuel (maximum 999 stored) and restores 50 energy;
+wrong answers can be retried and a completed exhibit cannot award twice before moving on.
+There are 20 reusable multiple-choice questions each for ages 9–10 and 11–12, with explanations.
+The museum cycles all exhibits in order, independently per age. It does not alter math discovery
+IDs, crystal rewards, or solved progress. Science references are linked inside the museum.
+
+`dist/rocket.js` loads before `surfing.js` and `app.js`, sharing the classic-script game bindings.
+`rocketSession`, `advanceRocket()`, `rocketKey()`, `drawRocketGame()`, and `drawRocketWorld()` own
+flight, input, and rendering. Boarding animates a ladder climb before the captain’s cockpit opens
+onto blue sky and occasional birds. Hold Space / Hold to launch for 10 uninterrupted seconds.
+Fuel is consumed at ignition; climbing down before ignition costs none. The sky darkens, stars
+appear, and the cabin jitters. Releasing thrust during ascent starts a fall, safely evacuates the
+explorer, reuses `createBoatBlast()` / `drawBoatExplosions()` artwork, and starts a free 22-second
+crew rebuild. Its independent clock does not register or damage a boat. The pad blocks boarding
+until rebuilding completes; the ticket remains owned, and the failed launch uses its fuel.
+
+In space, arrows / WASD / touch arrows steer the forward-moving cockpit past the Sun, Moon,
+and planets. Flight uses the moderate three-minute energy scaling. R / Return to island animates
+a cockpit button press, Earth centering and approaching, re-entry, water landing, hatch opening,
+and the selected explorer climbing out of the capsule into normal swimming. Energy exhaustion
+starts automatic return from space or a safe failed launch during ascent; recovery animations
+use no energy. `rocketRecovery` allows that swimmer to climb back onto Moonstone only, preserving
+normal boat-only access elsewhere. Rocket recovery saves safe launchpad ground. Modal dialogs
+pause flight and effects; profile, age, and reset cleanup clears transient sessions and repairs.
+
+Checks: `node --test --test-name-pattern=rocket tests/game.test.cjs`, plus directly affected energy,
+profile, persistence, island access, and explosion rendering checks. Browser checks should include
+held and released thrust, keyboard/button-focus input, museum questions, hatch exit, and swimming
+back ashore.

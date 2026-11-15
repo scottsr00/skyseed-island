@@ -11,7 +11,7 @@ npm test
 npm run dev
 ```
 
-`check` runs `node --check` on both runtime scripts. `test` runs the Node test suite in
+`check` runs `node --check` on all three runtime scripts. `test` runs the Node test suite in
 `tests/game.test.cjs`. The dev server serves `dist/` at http://localhost:5173.
 
 For a focused test run, pass a name pattern directly to Node (before the file name):
@@ -28,7 +28,7 @@ changes to shared state, persistence, activity dispatch, or script loading.
 ## Harness and coverage
 
 `game(saved, stored, renderTools)` creates a Node VM context with a minimal DOM, storage,
-Canvas substitute, and captured event listeners. It evaluates `surfing.js` before `app.js`,
+Canvas substitute, and captured event listeners. It evaluates `rocket.js`, then `surfing.js`, before `app.js`,
 matching the HTML script order. It returns `run()` for evaluating game expressions, `node()`
 for accessing stub UI nodes, and `snapshot()` for reload tests. Interactive workbench rendering
 is replaced by default; tests may opt into `renderTools`.
