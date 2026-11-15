@@ -125,7 +125,9 @@ tow boat fits then finishes its tower. The ferry separately builds cabin walls, 
 chimney, flagpole, and flag, each in two steps. Dock labels name the current feature and step.
 The crew descends under colored parachutes, lands on the pier, and folds the canopies before
 construction starts. Workers stand and hammer while building. On completion, each worker jumps
-onto a waiting windsurfer and sails away through a clear sea lane, leaving a wake. `BOAT_REPAIR_TIMING` keeps all
+onto a waiting windsurfer and sails away through a clear sea lane, leaving an independent,
+0.42-scale shared boat foam wake. The bow-mounted mast and aft sail follow the heading,
+using the same rig artwork as player sailing. `BOAT_REPAIR_TIMING` keeps all
 durations together: fishing 20 seconds, tow 30 seconds, speedboat 40 seconds, ferry 60 seconds,
 measured from crew arrival. Departure takes 7 seconds, including an 800 ms jump onto the boards; the vessel is usable
 as soon as construction finishes, subject to ordinary sponsorship, ownership, energy, and ticket rules.

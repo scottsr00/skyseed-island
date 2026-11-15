@@ -1798,10 +1798,10 @@ const g=game();g.run('state.ferryTicket=true;state.crystals=70;buyBeachPass();bo
 test('admin unlock separates authentication from custom crystal grants',()=>{
 const g=game();g.run('state.crystals=30;state.earnedCrystals=50;save()');
 g.node('#adminCrystalAmount').value='25';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),30);
-for(const password of ['', '1111', '11112', '11111 ']){
+for(const password of ['', '11111', '1234', '12345', '12346 ']){
 g.node('#adminPassword').value=password;g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),false);assert.equal(g.run('state.crystals'),30);assert.match(g.node('#adminFeedback').textContent,/Incorrect password/);
 }
-let prevented=false;g.node('#adminPassword').value='11111';g.node('#adminOverrideForm').onsubmit({preventDefault(){prevented=true;}});
+let prevented=false;g.node('#adminPassword').value='12346';g.node('#adminOverrideForm').onsubmit({preventDefault(){prevented=true;}});
 assert.equal(prevented,true);assert.equal(g.run('state.crystals'),30);assert.equal(g.node('#adminPassword').value,'');assert.equal(g.node('#adminCrystalsForm').hidden,false);assert.equal(g.node('#adminOverrideForm').hidden,true);
 for(const amount of ['', '0', '-1', '1.5', 'nope', 'Infinity', '9007199254740992']){
 g.node('#adminCrystalAmount').value=amount;g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),30,amount);
@@ -1816,9 +1816,9 @@ g.node('#adminCrystalAmount').value='10';g.run('addAdminCrystals()');assert.equa
 });
 
 test('admin crystals apply only to the selected profile and age, and password clears on switching',()=>{
-const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),1000);
-g.node('#adminPassword').value='11111';g.run("switchAge('5-6')");assert.equal(g.node('#adminPassword').value,'');assert.equal(g.node('#adminCrystalsForm').hidden,true);assert.equal(g.node('#adminCrystalAmount').value,'');assert.equal(g.run('state.crystals'),0);
-g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),1000);
+const g=game();g.node('#adminPassword').value='12346';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),1000);
+g.node('#adminPassword').value='12346';g.run("switchAge('5-6')");assert.equal(g.node('#adminPassword').value,'');assert.equal(g.node('#adminCrystalsForm').hidden,true);assert.equal(g.node('#adminCrystalAmount').value,'');assert.equal(g.run('state.crystals'),0);
+g.node('#adminPassword').value='12346';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),1000);
 g.node('#profileName').value='Another explorer';g.run('createProfile()');assert.equal(g.run('state.crystals'),0);assert.equal(g.node('#adminPassword').value,'');
 g.run("switchProfile('legacy');switchAge('11-12')");assert.equal(g.run('state.crystals'),1000);
 });
@@ -1889,7 +1889,7 @@ g.run('startFrisbee(0)');g.node('#profileName').value='Frisbee friend';g.run('cr
 
 test('power refilled by admin activation survives an immediate refresh',()=>{
 const g=game({power:0,solved:[],upgrades:[]});
-g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');
+g.node('#adminPassword').value='12346';g.run('applyAdminOverride()');
 const restored=game(null,g.snapshot());
 assert.equal(restored.run('adminMode'),false);
 assert.equal(restored.run('state.power'),100);
@@ -1909,13 +1909,13 @@ const named=game(null,g.snapshot());assert.equal(named.run('profileId'),'p1');as
 
 test('authenticated admin mode refills saved power and does not consume it',()=>{
 const g=game({power:0,solved:[],upgrades:[]});g.node('#adminPassword').value='wrong';g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),false);assert.equal(g.run('hasSwimPower()'),false);
-g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),true);assert.equal(g.run('hasSwimPower()'),true);assert.match(g.node('#powerValue').textContent,/Unlimited/);assert.equal(g.node('#powerBar').style.width,'100%');assert.equal(g.node('#exitAdminMode').hidden,false);
+g.node('#adminPassword').value='12346';g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),true);assert.equal(g.run('hasSwimPower()'),true);assert.match(g.node('#powerValue').textContent,/Unlimited/);assert.equal(g.node('#powerBar').style.width,'100%');assert.equal(g.node('#exitAdminMode').hidden,false);
 g.run('startDive({x:600,y:350});advanceSwimming(700);advancePower(180000)');assert.equal(g.run('swimming'),true);assert.equal(g.run('state.power'),100);assert.equal(g.run('currentProfile().power'),100);
 g.run('returnBoat();state.catches={barracuda:5};launchBoat()');assert.equal(g.run('boating'),true);
 });
 test('authenticated admin surfing preserves energy through paddling, wave phases, retries and swimming exits',()=>{
 const g=game({beachPass:true,power:12,crystals:20,solved:[],upgrades:[]});
-g.node('#adminPassword').value='11111';g.node('#adminOverrideForm').onsubmit({preventDefault(){}});
+g.node('#adminPassword').value='12346';g.node('#adminOverrideForm').onsubmit({preventDefault(){}});
 g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;openSurfShack()');
 assert.equal(g.run('surfSession.phase'),'paddling');
 const unchanged=()=>{
@@ -1936,10 +1936,10 @@ g.run('exitAdminMode();advanceSwimming(1000)');assert.ok(g.run('state.power')<10
 });
 
 test('exiting admin mode restores normal limits and safely lands a zero-power swimmer',()=>{
-const g=game({power:0,solved:[],upgrades:[]});g.node('#adminPassword').value='11111';g.run('applyAdminOverride();state.power=0;swimming=true;player.x=600;player.y=350');g.node('#exitAdminMode').onclick();assert.equal(g.run('adminMode'),false);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('hasSwimPower()'),false);assert.equal(g.node('#powerValue').textContent,'0 / 100');assert.equal(g.node('#exitAdminMode').hidden,true);
+const g=game({power:0,solved:[],upgrades:[]});g.node('#adminPassword').value='12346';g.run('applyAdminOverride();state.power=0;swimming=true;player.x=600;player.y=350');g.node('#exitAdminMode').onclick();assert.equal(g.run('adminMode'),false);assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);assert.equal(g.run('hasSwimPower()'),false);assert.equal(g.node('#powerValue').textContent,'0 / 100');assert.equal(g.node('#exitAdminMode').hidden,true);
 });
 test('admin unlimited power ends on reload or changing players, levels, or adventure progress',()=>{
-const g=game({power:12,solved:[],upgrades:[]});const enable=()=>{g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');};
+const g=game({power:12,solved:[],upgrades:[]});const enable=()=>{g.node('#adminPassword').value='12346';g.run('applyAdminOverride()');};
 enable();const restored=game(null,g.snapshot());assert.equal(restored.run('adminMode'),false);assert.equal(restored.run('state.power'),100);
 g.run('switchAge("9-10")');assert.equal(g.run('adminMode'),false);enable();g.node('#profileName').value='Normal Power Player';g.run('createProfile()');assert.equal(g.run('adminMode'),false);
 enable();g.node('#resetBtn').onclick();g.node('#confirmReset').onclick();assert.equal(g.run('adminMode'),false);
@@ -3703,7 +3703,7 @@ g.run('state.crystals=0;save()');assert.equal(game(undefined,g.snapshot()).run('
 });
 
 test('admin crystal grants unlock the speedboat without awarding lifetime squishies',()=>{
-const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');
+const g=game();g.node('#adminPassword').value='12346';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');
 assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.earnedCrystals'),0);assert.equal(g.run('earnedSquishies()'),0);
 
 });
@@ -5354,4 +5354,71 @@ assert.equal(g.run('boatPoseClear(dock.x,dock.y,0,"jetski",true)'),false);
 assert.equal(g.run('boatPoseClear(...vesselPose("ferry"),"jetski",true)'),false);
 assert.equal(g.run('boatPoseClear(WORLD.left+20,900,0,"jetski",true)'),false);
 assert.equal(g.run('boatPoseClear(WORLD.right,900,0,"speedboat",true)'),false);
+});
+
+test('windsurfer costs 50 once and isolates ownership by age and explorer',()=>{
+const g=game();g.run('state.crystals=49;buyWindsurfer()');assert.equal(g.run('state.windsurfer'),false);
+g.run('state.crystals=80;buyWindsurfer();buyWindsurfer()');assert.equal(g.run('state.crystals'),30);
+const reload=game(null,g.snapshot());assert.equal(reload.run('state.windsurfer'),true);
+g.run("switchAge('9-10')");assert.equal(g.run('state.windsurfer'),false);
+g.run("switchAge('11-12')");assert.equal(g.run('state.windsurfer'),true);
+g.node('#profileName').value='Sailor';g.run('createProfile()');assert.equal(g.run('state.windsurfer'),false);
+});
+test('Sailing dock launches on the watersports island and saves a safe return',()=>{
+const g=game();g.run('state.crystals=50;player.x=SAILING_DOCK.x;player.y=SAILING_DOCK.y-18;near=nearby();interact()');
+assert.equal(g.run('near'),106);assert.equal(g.run('state.windsurfer'),true);assert.equal(g.run('windsurfSession'),null);
+g.run('interact()');assert.equal(g.run('currentEnergyActivity()'),'windsurfing');assert.equal(g.run('windsurferClear(player.x,player.y,windsurfSession.heading)'),true);
+assert.equal(g.run('inside(SAILING_DOCK.x,SAILING_DOCK.y-18,islandPolys[1])'),true);
+g.run('save()');const reload=game(null,g.snapshot());assert.equal(reload.run('canWalk(player.x,player.y)'),true);assert.equal(reload.run('player.x'),440);
+g.run('finishWindsurfing()');assert.equal(g.run('swimming'),false);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+});
+test('windsurfing accelerates forward, steers, brakes and leaves scaled boat foam without prop wash',()=>{
+const g=game();g.run("state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();keys.add('w');for(let i=0;i<60;i++)advanceSwimming(16)");
+assert.ok(g.run('player.y')>290);assert.ok(g.run('windsurfSession.bowWake.length')>0);assert.equal(g.run('windsurfSession.wake.length'),0);
+assert.equal(g.run('windsurfSession.bowWake.every(w=>w.scale===.42)'),true);
+const heading=g.run('windsurfSession.heading');g.run("keys.add('d');advanceSwimming(40)");assert.ok(g.run('windsurfSession.heading')>heading);
+g.run("keys.clear();keys.add('s');for(let i=0;i<60;i++)advanceSwimming(16)");assert.equal(g.run('windsurfSession.velocity'),0);
+g.run('ageBoatWake(windsurfSession,4000)');assert.equal(g.run('windsurfSession.bowWake.length'),0);
+});
+test('windsurfing pauses, exits safely at exhaustion and clears on age changes',()=>{
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing()');
+g.node('#challenge').open=true;g.run('advanceWindsurfing(1000);advancePower(1000)');assert.equal(g.run('windsurfSession.clock'),0);assert.equal(g.run('state.power'),100);
+g.node('#challenge').open=false;g.run('state.power=.01;advanceSwimming(100)');assert.equal(g.run('windsurfSession'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run('startWindsurfing()');assert.equal(g.run('windsurfSession'),null);
+g.run("state.power=100;startWindsurfing();switchAge('9-10')");assert.equal(g.run('windsurfSession'),null);assert.equal(g.run('swimming'),false);
+});
+test('windsurfer hull stops at shore, docks, bridges and boats',()=>{
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();windsurfSession.heading=-Math.PI/2;windsurfSession.velocity=125');
+g.run("keys.add('w');for(let i=0;i<100;i++)advanceWindsurfing(16)");assert.ok(g.run('player.y')>215);assert.equal(g.run('windsurfSession.velocity'),0);assert.equal(g.run('windsurferClear(player.x,player.y,windsurfSession.heading)'),true);
+assert.equal(g.run('windsurferClear(SAILING_DOCK.x,SAILING_DOCK.y,0)'),false);
+assert.equal(g.run('windsurferClear(WATERSPORTS_DOCK.x+40,WATERSPORTS_DOCK.y+18,0)'),false);
+g.run("state.upgrades=['bridge']");assert.equal(g.run('windsurferClear(woodlandBridge.x+7,woodlandBridge.y+60,0)'),false);
+});
+test('windsurfer mast stays forward and clew aft at every heading; rendering does not advance animation',()=>{
+const g=game();for(let i=0;i<16;i++){
+const heading=i*Math.PI/8;g.run(`globalThis.testRig=windsurferRig(0,0,${heading},1000)`);
+assert.ok(g.run(`testRig.mast[0]*Math.cos(${heading})+(testRig.mast[1]+1)*Math.sin(${heading})`)>0);
+assert.ok(g.run(`testRig.clew[0]*Math.cos(${heading})+(testRig.clew[1]+13)*Math.sin(${heading})`)<0);
+g.run(`drawWindsurfer(300,300,${heading},1000)`);
+}
+g.run("state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();keys.add('w');advanceSwimming(1000)");
+const before=g.run('JSON.stringify(windsurfSession)');g.run('drawPlayerWindsurfer();drawPlayerWindsurfer()');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+});
+test('repair windsurfers emit independent scaled boat wakes during simulation',()=>{
+const g=game();g.run("globalThis.repair=createBoatRepair('fishing');repair.elapsed=BOAT_REPAIR_TIMING.arrival+BOAT_REPAIR_TIMING.fishing+BOAT_REPAIR_TIMING.jump;for(let i=0;i<60;i++)advanceBoatRepair(repair,40)");
+assert.equal(g.run('repair.crewWakes.every(m=>m.bowWake.length>0&&m.wake.length===0)'),true);
+assert.notEqual(g.run('repair.crewWakes[0]'),g.run('repair.crewWakes[1]'));
+const before=g.run('JSON.stringify(repair)');g.run("drawBoatRepairCrew(repair,{},1)");assert.equal(g.run('JSON.stringify(repair)'),before);
+});
+test('windsurfing blocks other travel entry points until returning to the dock',()=>{
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();visit(0);boardOwnBoat();launchSpeedboat();openFerry()');
+assert.equal(g.run('currentEnergyActivity()'),'windsurfing');assert.equal(g.run('boating'),false);
+});
+test('Sailing purchase and return controls exist, and keyboard and touch share the same safe exit',()=>{
+const html=fs.readFileSync('dist/index.html','utf8');assert.match(html,/id="buyWindsurfer"/);assert.match(html,/id="mapSailingStop"/);
+const g=game();g.run('state.windsurfer=true;player.x=440;player.y=212;startWindsurfing()');
+g.node('#mapSailingStop').onclick();assert.equal(g.run('windsurfSession'),null);
+g.run('startWindsurfing();window.listeners.keydown.forEach(({handler})=>handler({key:"x",target:{tagName:"CANVAS"},preventDefault(){}}))');
+assert.equal(g.run('windsurfSession'),null);assert.equal(g.run('canWalk(player.x,player.y)'),true);
+g.run("startWindsurfing();$('#resetConfirm').showModal()");g.node('#confirmReset').onclick();assert.equal(g.run('windsurfSession'),null);assert.equal(g.run('state.windsurfer'),false);
 });

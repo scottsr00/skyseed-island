@@ -20,7 +20,7 @@ origin retains access to saves; a different origin has separate storage. Failed 
 | Other explorer age saves | `skyseed-profile-${id}-${age}` |
 | Legacy age preference | `skyseed-age`; selected age is also kept in each profile |
 | Explorer across ages/adventure resets | Name, character, selected age, beach pass, speedboat unlock, jet ski ownership, energy, lifetime fish, fishing/speedboat/jet ski fuel tanks, reserve gas |
-| Per explorer and age | Solved IDs, crystals, earned reward total, upgrades, collection inventory/tickets, bait/lure, sponsorship progress, watersports gear, surf rental/best score, island visits and saved travel state |
+| Per explorer and age | Solved IDs, crystals, earned reward total, upgrades, collection inventory/tickets, bait/lure, sponsorship progress, watersports gear (including the 50-crystal windsurfer), surf rental/best score, island visits and saved travel state |
 | Session only | Active mini-game simulation, creature rides, effects, admin unlimited-energy mode |
 
 Some profile-wide values are mirrored into `state` for runtime use. Field location alone does
@@ -78,7 +78,7 @@ age, and adventure/full-profile resets. See [boats and fishing](boats-and-fishin
 
 ## Admin override
 
-Settings → Admin override accepts password `11111` to unlock admin mode without adding crystals.
+Settings → Admin override accepts password `12346` to unlock admin mode without adding crystals.
 Once unlocked, a separate Crystals to add input accepts a positive whole number and the Add crystals
 button grants that amount to the active explorer’s current age level. Grants save immediately and
 leave discovery progress and lifetime earned rewards unchanged. Invalid amounts and totals beyond

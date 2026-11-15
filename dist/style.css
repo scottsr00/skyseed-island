@@ -405,3 +405,6 @@ button{border-radius:var(--action-button-radius)!important}
 
 /* Keep the Space instructions in one compact row on desktop and phones. */
 .map-stage[data-surf-view] .surf-overlay .surf-touch-controls #surfAction{white-space:nowrap;width:max-content;min-width:0;max-width:calc(100% - 24px);min-height:36px;padding:8px 12px;font:bold clamp(10px,2.6vw,12px)/1.2 monospace}
+
+.sailing-wind-direction{display:flex;align-items:center;gap:8px}
+.sailing-wind #sailingWindStatus{font:600 10px/1.3 monospace}

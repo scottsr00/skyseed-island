@@ -44,6 +44,28 @@ The return approach gives the dock more clearance, brakes before the final low-s
 maneuver, and leaves foam fading in the water after it parks. Dialogs pause the motion and wakes;
 profile, age, and adventure changes clear them. Board ownership and safe reload positions are saved.
 
+## Sailing
+
+Buy a windsurfer for 50 crystals in Fishing & travel or at the Sailing dock on
+Moonwater Island, west of the Watersports dock. Ownership follows the other watersports
+gear: per explorer and age, retained on reload and removed by adventure/profile resets.
+E or tapping the dock buys it first; a second interaction launches into its clear berth.
+Up/W accelerates, Down/S brakes, and Left/Right or A/D steers. Touch arrows use the same
+controls; X/Escape or Return to Sailing dock ends the session safely on the pier.
+Windsurfing uses strenuous energy scaling and returns to this dock on exhaustion.
+
+`windsurfSession`, `startWindsurfing()`, `advanceWindsurfing()`, and `finishWindsurfing()` own
+the session. Swimming marks the water occupancy, while the dispatcher bypasses swimmer
+movement and sea mounts. Swept board hull checks block islands, piers, bridges, other boats,
+and deep ocean. Saves record the safe dock position; activity resets clear the session.
+
+`windsurferRig()` projects a bow-mounted upright mast and an aft sail clew at every heading;
+`drawWindsurfer()` shares this artwork with departing boat repair crews. The sail flexes
+with time, and the player braces and leans while turning. `recordWindsurferWake()` feeds
+`recordHullWake()` at 0.42 scale, retaining the shared spreading bow foam and spray without
+motor wash. Player and crew wakes have separate simulation-owned samples, age while stopped,
+and pause in dialogs. Drawing does not advance their clocks.
+
 ## Beach volleyball
 
 Mainland Beach spans the southern edge of the map, with colorful umbrellas, sunbathers, strolling
@@ -64,6 +86,6 @@ scoreboard shows the current catch streak and best streak, with play and leave a
 ## Verification
 
 See [testing](testing.md). Focus test names on `wakeboard`, `waterski`, `watersports`,
-`volleyball`, or `frisbee`. Verify launch eligibility, controls and touch equivalents, exit,
+`volleyball`, `frisbee`, `windsurf`, or `Sailing dock`. Verify launch eligibility, controls and touch equivalents, exit,
 safe saves, profile/age cleanup, and boat access after returning to the map. For watersports,
 check both equipment choices, rope release, collision recovery, and the empty boat returning.
