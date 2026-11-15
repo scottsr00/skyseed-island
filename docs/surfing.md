@@ -159,7 +159,7 @@ Intact boards are swept up with the same flow. The animation uses simulation tim
 on the next wave. The broken board is an animation effect within the existing rental.
 After the wipeout (3.6 seconds on the open face, 5.8 seconds inside the tube), the surfer returns to overhead beach paddling to find the next lip; three
 wipeouts end the heat. The selected coastal wave size persists throughout takeoff and riding.
-The heat clock starts with takeoff and waits while paddling out.
+The heat clock starts when the session begins and keeps counting down while paddling out, including paddle-out after a wipeout. Dialogs still freeze the countdown; reaching zero ends the heat and returns the surfer safely to the beach.
 
 Riding continues on the face-on scrolling wave: the surfer stays near screen center, travelling left
 while water streams right, with breaking whitewater chasing from the right. Up/W climbs and Down/S
@@ -222,16 +222,19 @@ its speed, freezes for pause/dialogs, and finishes even after Space is released.
 one snap. Away from the reversal, fresh Space presses retain normal air controls; paddling still
 requires separate taps. The action label advertises holding to snap. Ride
 inside the barrel curtain for **Tube Ride!**: riding points start at **10×** on curtain
-contact and rise with depth to **50×**, reaching the maximum 10 wave-view units before the
-55-unit overrun limit. `surfBarrelState().lineMultiplier` uses distance behind the curtain
+contact and rise with depth to **50×**, reaching the maximum 45 wave-view units behind the falling curtain edge.
+Deeper rides keep the 50× multiplier without a depth limit. `surfBarrelState().lineMultiplier` uses distance behind the curtain
 edge, so fully hidden rides continue gaining value after coverage reaches 100%. Outside
 the tube the multiplier is 1×; airs and snap bonuses retain their separate proximity scoring.
 The HUD and riding message show the current multiplier. Each entry adds one completed
 Tube Ride! to the heat history.
-`surfBarrelState()` separates coverage from survival: a rider can remain fully hidden inside
-the curl while within 55 wave-view units behind the falling lip’s opening edge. Only exceeding
-that distance wipes out from being caught by the break. `surfTubeOpening()` shares the
-curtain edge with the occupant clip at every caught wave size. The HUD shows **Tube Ride!**, the current multiplier, and **HIGH LINE**
+`surfBarrelState()` separates coverage from survival: riding has no maximum tube depth.
+Inside the curtain, stay below the lip (`y > 0.12`) and above the trough (`y < 0.9`);
+roof or trough contact wipes out. The 55-unit overrun check still applies to airborne
+riders caught by the curl. Covered riding sprites render at 8% opacity, with the portion
+inside the opening drawn clearly; wake masking remains unchanged.
+`surfTubeOpening()` shares the
+curtain edge with the occupant clip at every caught wave size. The HUD shows **Tube Ride!**, the current multiplier, and **HOLD YOUR LINE**
 while hidden; a faster high line can bring the rider back out. Press Space at the
 crest while climbing with speed to launch an air. `surfAirLaunchVelocity()` retains the
 normal launch curve through 90% HUD speed, then adds a continuous extra lift ramp
@@ -283,6 +286,7 @@ Sandbox](https://store.steampowered.com/app/4480760/Surf_Sandbox/).
 
 ## Surf HUD
 
+Paddle-out speed reports actual movement relative to maximum paddling speed, including acceleration, coasting, and stopping at the movement bounds. Riding speed retains its wave-speed scale.
 Large speed sits at top left, completed tricks at top center, and large points at top right
 with the heat timer directly below. The Space action button stays at bottom center during both paddling and wave riding, with compact variants for narrow and short
 screens. Directional buttons are hidden; arrows / WASD steer the surfer.

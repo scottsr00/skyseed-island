@@ -78,16 +78,18 @@ age, and adventure/full-profile resets. See [boats and fishing](boats-and-fishin
 
 ## Admin override
 
-Settings → Admin override accepts password `11111` to add 1,000 spendable crystals to the active
-explorer’s current age level. The grant saves immediately, requires the password each time, and
-leaves discovery progress and lifetime earned rewards unchanged.
+Settings → Admin override accepts password `11111` to unlock admin mode without adding crystals.
+Once unlocked, a separate Crystals to add input accepts a positive whole number and the Add crystals
+button grants that amount to the active explorer’s current age level. Grants save immediately and
+leave discovery progress and lifetime earned rewards unchanged. Invalid amounts and totals beyond
+the safe integer range are rejected. Exiting admin mode hides and clears the amount input; unlocking
+again requires the password.
 
 The password-protected Settings admin override refills and saves the explorer’s normal energy to
 100, and also enables session-only unlimited energy for the selected explorer and age level. The
 saved refill survives a page refresh. The meter displays “∞ Unlimited,” water activities do not
 drain saved energy, and Exit admin mode restores normal limits. Changing player or age, resetting
-the adventure, or reloading ends admin mode. The existing 1,000-crystal grant still requires the
-password each time.
+the adventure, or reloading ends admin mode. Crystal grants are available only while admin mode is active.
 
 The password is a client-side convenience control in this browser-local game. Admin grants do
 not increase `earnedCrystals` or discovery progress, but can qualify for the speedboat unlock.

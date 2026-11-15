@@ -1543,7 +1543,7 @@ function surfTakeoffGame(){const g=surfGame();g.run('surfClock=1000;surfSession.
 test('surf beach paddle-out retains momentum and requires a nearby curling lip before takeoff',()=>{
 const g=surfGame();assert.equal(g.run('catchSurfWave()'),false);assert.match(g.node('#surfAction').textContent,/Catch wave/);
 const start=g.run('player.y');g.run('keys.add("up");advanceSurfing(1000);draw()');assert.ok(g.run('player.y')<start-65);assert.ok(g.run('surfSession.vy')<0);
-assert.equal(g.run('surfSession.phase'),'paddling');assert.equal(g.run('surfSession.remaining'),90000);
+assert.equal(g.run('surfSession.phase'),'paddling');assert.equal(g.run('surfSession.remaining'),89000);
 g.run('player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock);handleSurfKey(" ",{repeat:false,preventDefault(){}})');
 assert.equal(g.run('surfSession.phase'),'paddling');assert.match(g.run('surfSession.message'),/toward the beach/);
 g.run('keys.clear();keys.add("down");advanceSurfing(220);player.x=beachWaveProfile(player.x,1,surfClock,true).front;player.y=beachWaveSurfaceY(player.x,1,surfClock);handleSurfKey(" ",{repeat:false,preventDefault(){}})');
@@ -1733,7 +1733,7 @@ assert.equal(g.run('surfBarrelState().lineMultiplier'),expected);
 assert.match(g.node('#surfLine').textContent,new RegExp(expected+'×'));
 }
 g.run('setTubeDistance(-60)');assert.equal(g.run('surfBarrelState().lineMultiplier'),1);
-g.run('setTubeDistance(56)');assert.equal(g.run('surfBarrelState().lineMultiplier'),1);
+g.run('setTubeDistance(560)');assert.equal(g.run('surfBarrelState().lineMultiplier'),50);
 for(const distance of [23,45]){
 g.run(`setTubeDistance(${distance});surfSession.score=0;advanceSurfing(1)`);
 assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfBarrelState().coverage'),1);
@@ -1795,21 +1795,30 @@ test('surfing leaves an anchored ferry and the return-to-boat route intact',()=>
 const g=game();g.run('state.ferryTicket=true;state.crystals=70;buyBeachPass();boardFerry();player.x=SURF_SHACK.x;player.y=beachShoreY(player.x)-50;anchorBoatAtBeach();if(boatAnchorCasting())advanceSwimming(FISH_CAST_DURATION);advanceSwimming(900);rentSurfboard();startSurfing();keys.add("up");advanceSurfing(1000);stopSurfing()');assert.equal(g.run('onMainlandBeach()'),true);assert.equal(g.run('canReturnToAnchoredBoat()'),true);assert.equal(g.run('state.surfRental'),true);g.run('returnToAnchoredBoat();advanceSwimming(900)');assert.equal(g.run('boating'),true);assert.equal(g.run('activeVessel'),'ferry');
 });
 
-test('settings admin override requires the password for each 1000-crystal grant',()=>{
+test('admin unlock separates authentication from custom crystal grants',()=>{
 const g=game();g.run('state.crystals=30;state.earnedCrystals=50;save()');
+g.node('#adminCrystalAmount').value='25';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),30);
 for(const password of ['', '1111', '11112', '11111 ']){
-g.node('#adminPassword').value=password;g.run('applyAdminOverride()');assert.equal(g.run('state.crystals'),30);assert.equal(g.node('#adminPassword').value,'');assert.match(g.node('#adminFeedback').textContent,/Incorrect password/);
+g.node('#adminPassword').value=password;g.run('applyAdminOverride()');assert.equal(g.run('adminMode'),false);assert.equal(g.run('state.crystals'),30);assert.match(g.node('#adminFeedback').textContent,/Incorrect password/);
 }
 let prevented=false;g.node('#adminPassword').value='11111';g.node('#adminOverrideForm').onsubmit({preventDefault(){prevented=true;}});
-assert.equal(prevented,true);assert.equal(g.run('state.crystals'),1030);assert.equal(g.run('state.earnedCrystals'),50);assert.equal(g.run('state.solved.length'),0);assert.equal(g.node('#adminPassword').value,'');assert.match(g.node('#adminFeedback').textContent,/Added 1,000 crystals/);
-g.run('applyAdminOverride()');assert.equal(g.run('state.crystals'),1030);
-const restored=game(null,g.snapshot());assert.equal(restored.run('state.crystals'),1030);
+assert.equal(prevented,true);assert.equal(g.run('state.crystals'),30);assert.equal(g.node('#adminPassword').value,'');assert.equal(g.node('#adminCrystalsForm').hidden,false);assert.equal(g.node('#adminOverrideForm').hidden,true);
+for(const amount of ['', '0', '-1', '1.5', 'nope', 'Infinity', '9007199254740992']){
+g.node('#adminCrystalAmount').value=amount;g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),30,amount);
+}
+g.node('#adminCrystalAmount').value='275';g.node('#adminCrystalsForm').onsubmit({preventDefault(){}});
+assert.equal(g.run('state.crystals'),305);assert.equal(g.run('state.earnedCrystals'),50);assert.equal(g.run('state.solved.length'),0);assert.match(g.node('#adminFeedback').textContent,/Added 275 crystals/);
+g.node('#adminCrystalAmount').value='9007199254740991';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),305);
+g.node('#adminCrystalAmount').value='5';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),310);
+assert.equal(game(null,g.snapshot()).run('state.crystals'),310);
+g.run('exitAdminMode()');assert.equal(g.node('#adminCrystalsForm').hidden,true);assert.equal(g.node('#adminCrystalAmount').value,'');assert.equal(g.node('#adminCrystalAmount').disabled,true);
+g.node('#adminCrystalAmount').value='10';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),310);
 });
 
 test('admin crystals apply only to the selected profile and age, and password clears on switching',()=>{
-const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');assert.equal(g.run('state.crystals'),1000);
-g.node('#adminPassword').value='11111';g.run("switchAge('5-6')");assert.equal(g.node('#adminPassword').value,'');assert.equal(g.run('state.crystals'),0);
-g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');assert.equal(g.run('state.crystals'),1000);
+const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),1000);
+g.node('#adminPassword').value='11111';g.run("switchAge('5-6')");assert.equal(g.node('#adminPassword').value,'');assert.equal(g.node('#adminCrystalsForm').hidden,true);assert.equal(g.node('#adminCrystalAmount').value,'');assert.equal(g.run('state.crystals'),0);
+g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');assert.equal(g.run('state.crystals'),1000);
 g.node('#profileName').value='Another explorer';g.run('createProfile()');assert.equal(g.run('state.crystals'),0);assert.equal(g.node('#adminPassword').value,'');
 g.run("switchProfile('legacy');switchAge('11-12')");assert.equal(g.run('state.crystals'),1000);
 });
@@ -1905,7 +1914,7 @@ g.run('startDive({x:600,y:350});advanceSwimming(700);advancePower(180000)');asse
 g.run('returnBoat();state.catches={barracuda:5};launchBoat()');assert.equal(g.run('boating'),true);
 });
 test('authenticated admin surfing preserves energy through paddling, wave phases, retries and swimming exits',()=>{
-const g=game({beachPass:true,power:12});
+const g=game({beachPass:true,power:12,crystals:20,solved:[],upgrades:[]});
 g.node('#adminPassword').value='11111';g.node('#adminOverrideForm').onsubmit({preventDefault(){}});
 g.run('player.x=SURF_SHACK.x;player.y=SURF_SHACK.y;openSurfShack()');
 assert.equal(g.run('surfSession.phase'),'paddling');
@@ -2895,13 +2904,16 @@ const scroll=g.run('surfSession.scroll');g.run('draw();draw()');assert.equal(g.r
 g.run('surfSession.paused=true;advanceSurfing(1000)');assert.equal(g.run('surfSession.scroll'),scroll);
 });
 
-test('surf tube riding stays alive while hidden near the opening and fails only too far behind it',()=>{
+test('surf tube riding stays alive at unlimited depth and fails at the roof or trough',()=>{
 for(const size of [.48,.7,1]){
 const g=surfGame();g.run(`setSurfTestRide();surfSession.waveSize=${size};surfSession.x=.98;surfSession.y=.4;surfSession.angle=Math.PI;surfSession.speed=.7;updateSurfUI()`);
 assert.equal(g.run('surfBarrelState().hidden'),true);assert.equal(g.run('surfBarrelState().overrun'),false);assert.match(g.node('#surfLine').textContent,/Tube Ride!/);
 g.run('advanceSurfing(100);drawSurfGame()');assert.equal(g.run('surfSession.phase'),'riding');assert.ok(g.run('surfSession.score')>0);
 g.run('advanceSurfing(1000)');assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfBarrelState().hidden'),false,'high pace brings rider out of curtain');
-g.run('surfSession.x=1.1;advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),'wipeout');
+g.run('surfSession.x=1.1;advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),'riding');
+for(const x of [1.5,3]){g.run(`surfSession.x=${x};surfSession.y=.4;advanceSurfing(1000)`);assert.equal(g.run('surfSession.phase'),'riding');assert.equal(g.run('surfBarrelState().lineMultiplier'),50);}
+g.run('surfSession.y=.1;advanceSurfing(16)');assert.equal(g.run('surfSession.phase'),'wipeout');assert.match(g.run('surfSession.message'),/tube roof/);
+g.run("setSurfTestRide();surfSession.x=3;surfSession.y=.95;advanceSurfing(16)");assert.equal(g.run('surfSession.phase'),'wipeout');assert.match(g.run('surfSession.message'),/Too low/);
 }
 });
 test('surf faster curl gains on medium-speed coasting while a fast line opens a gap',()=>{
@@ -2911,7 +2923,7 @@ assert.equal(slow.run('surfSession.phase'),'riding');assert.equal(fast.run('surf
 assert.ok(slow.run('surfRideView().breakX-surfRideView().riderX')<slow.run('startingGap'),'moderate coasting no longer outruns the curl');
 assert.ok(fast.run('surfRideView().breakX-surfRideView().riderX')>fast.run('startingGap'),'speed still lets the rider escape');
 slow.run("for(let t=0;t<12000&&surfSession.phase==='riding';t+=16)advanceSurfing(16)");
-assert.equal(slow.run('surfSession.phase'),'wipeout');assert.match(slow.run('surfSession.message'),/breaking wave caught/);
+assert.equal(slow.run('surfSession.phase'),'riding');assert.equal(slow.run('surfBarrelState().hidden'),true);
 });
 test('surf high lines gain speed and pull ahead of the curl while low lines lose ground',()=>{
 const high=surfGame(),low=surfGame();
@@ -2920,6 +2932,11 @@ assert.equal(high.run('surfSession.phase'),'riding');assert.equal(low.run('surfS
 assert.ok(high.run('surfSession.speed')>low.run('surfSession.speed')+.15);
 assert.ok(high.run('surfRideView().breakX-surfRideView().riderX')>high.run('lineGap'));
 assert.ok(low.run('surfRideView().breakX-surfRideView().riderX')<low.run('lineGap'));
+});
+test('surf covered rider renders a very faint silhouette while the opening remains clear',()=>{
+const g=surfGame();g.run(`setSurfTestRide();surfSession.x=2;surfSession.y=.4;var silhouettePasses=[],silhouetteAlpha=[];ctx.globalAlpha=1;ctx.save=()=>silhouetteAlpha.push(ctx.globalAlpha);ctx.restore=()=>{ctx.globalAlpha=silhouetteAlpha.pop()};drawSurfTubeOccupant(()=>silhouettePasses.push(ctx.globalAlpha),false,true)`);
+assert.deepEqual(Array.from(g.run('silhouettePasses')),[.08,1]);assert.equal(g.run('ctx.globalAlpha'),1);
+g.run('surfSession.x=.3;silhouettePasses=[];drawSurfTubeOccupant(()=>silhouettePasses.push(ctx.globalAlpha),false,true)');assert.deepEqual(Array.from(g.run('silhouettePasses')),[1]);
 });
 test('surf tube curtain clips submerged occupants, with matching opening positions at every wave size',()=>{
 const g=surfGame();
@@ -2938,16 +2955,16 @@ assert.ok(Math.abs(g.run('surfRideView().riderX-beforeChase.riderX'))<5);
 }
 assert.ok(slow.run('surfRideView().breakX')<slow.run('beforeChase.breakX'));
 assert.ok(fast.run('surfRideView().breakX')>fast.run('beforeChase.breakX'));
-slow.run("surfSession.x=1.08;advanceSurfing(16)");assert.equal(slow.run('surfSession.phase'),'wipeout');assert.match(slow.run('surfSession.message'),/breaking wave caught/);
+slow.run("surfSession.x=1.08;advanceSurfing(16)");assert.equal(slow.run('surfSession.phase'),'riding');assert.equal(slow.run('surfBarrelState().hidden'),true);
 });
 
-test('pumping keeps the lip behind the surfer while coasting is overrun and crest-holding wipes out',()=>{
+test('pumping keeps the lip behind the surfer while coasting enters the tube and crest-holding wipes out',()=>{
 const pumped=surfGame(),coast=surfGame();
 for(const g of [pumped,coast])g.run(`setSurfTestRide();surfSession.angle=Math.PI;surfSession.y=.45`);
 pumped.run(`let pumpKey='down';for(let t=0;t<12000&&surfSession.phase==='riding';t+=40){if(surfSession.y>.66)pumpKey='up';if(surfSession.y<.22)pumpKey='down';keys.clear();if(t%240!==0)keys.add(pumpKey);advanceSurfing(40)}`);
 assert.equal(pumped.run('surfSession.phase'),'riding');assert.ok(pumped.run('surfSession.speed')>.65);
 coast.run(`for(let t=0;t<12000&&surfSession.phase==='riding';t+=40)advanceSurfing(40)`);
-assert.equal(coast.run('surfSession.phase'),'wipeout');assert.match(coast.run('surfSession.message'),/breaking wave caught/);
+assert.equal(coast.run('surfSession.phase'),'riding');assert.equal(coast.run('surfBarrelState().hidden'),true);
 const crest=surfGame();crest.run(`setSurfTestRide();surfSession.angle=Math.PI+.72;surfSession.y=.012;surfSession.speed=.5;keys.add('up');advanceSurfing(400)`);
 assert.equal(crest.run('surfSession.phase'),'wipeout');assert.match(crest.run('surfSession.message'),/tail clears the lip/);
 });
@@ -3686,7 +3703,7 @@ g.run('state.crystals=0;save()');assert.equal(game(undefined,g.snapshot()).run('
 });
 
 test('admin crystal grants unlock the speedboat without awarding lifetime squishies',()=>{
-const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');
+const g=game();g.node('#adminPassword').value='11111';g.run('applyAdminOverride()');g.node('#adminCrystalAmount').value='1000';g.run('addAdminCrystals()');
 assert.equal(g.run('speedboatUnlocked()'),true);assert.equal(g.run('state.earnedCrystals'),0);assert.equal(g.run('earnedSquishies()'),0);
 
 });
@@ -5270,4 +5287,27 @@ assert.equal(g.run('beachWaveSubmersion(player.x,player.y,surfClock,.7)'),null,`
 }
 g.run(`surfClock=1000;const breakX=beachWaveProfile(1100,1,surfClock,true).front+300;const trail=beachWaveWhitewaterProfile(breakX,1,surfClock);player.x=breakX;player.y=trail.y+(trail.top+trail.bottom)/2;let occupantClips=0;ctx.clip=()=>occupantClips++;clipBeachWaveOccupant(player.x,player.y)`);
 assert.equal(g.run('occupantClips'),0,'the paddler renderer does not clip the unbroken section');
+});
+
+test('surf paddle-out speed HUD follows acceleration, coasting, and blocked movement',()=>{
+const g=surfGame();assert.equal(g.node('#surfSpeed').textContent,'0%');
+g.run('keys.add("up");advanceSurfing(80)');const accelerating=parseInt(g.node('#surfSpeed').textContent);
+assert.ok(accelerating>0&&accelerating<100);
+g.run('advanceSurfing(700)');assert.equal(g.node('#surfSpeed').textContent,'100%');
+g.run('keys.clear();advanceSurfing(80)');const coasting=parseInt(g.node('#surfSpeed').textContent);assert.ok(coasting>0&&coasting<100);
+g.run('advanceSurfing(900)');assert.equal(g.node('#surfSpeed').textContent,'0%');
+g.run('player.y=beachShoreY(player.x)-300;keys.add("up");advanceSurfing(700)');assert.equal(g.node('#surfSpeed').textContent,'0%');
+g.run('keys.clear();player.y=beachShoreY(player.x)-100;keys.add("right");keys.add("up");advanceSurfing(800)');assert.equal(g.node('#surfSpeed').textContent,'100%');
+g.run('prepareSurfTakeoff();surfSession.speed=.425;updateSurfUI()');assert.equal(g.node('#surfSpeed').textContent,'50%');
+});
+
+test('surf heat counts down throughout beach paddling and ends safely at zero',()=>{
+const g=surfGame();g.run('advanceSurfing(1000)');assert.equal(g.run('surfSession.remaining'),89000);assert.equal(g.node('#surfTime').textContent,'1:29');
+g.run('keys.add("up");advanceSurfing(500)');assert.equal(g.run('surfSession.remaining'),88500);
+g.node('#challenge').showModal();g.run('advanceSurfing(1000)');assert.equal(g.run('surfSession.remaining'),88500);g.node('#challenge').close();
+g.run('prepareSurfPaddleOut(true);advanceSurfing(500)');assert.equal(g.run('surfSession.remaining'),88000,'returning to paddle-out does not reset or freeze the timer');
+g.run('surfSession.remaining=20;surfSession.score=125;keys.add("up");advanceSurfing(1000)');
+assert.equal(g.run('surfSession.remaining'),0);assert.equal(g.run('surfSession.phase'),'results');assert.equal(g.node('#surfTime').textContent,'0:00');
+assert.equal(g.run('state.surfBest'),125);assert.equal(g.run('keys.size'),0);assert.equal(g.run('onMainlandBeach()'),true);
+g.run('advanceSurfing(1000)');assert.equal(g.run('surfSession.remaining'),0);
 });

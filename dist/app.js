@@ -49,13 +49,26 @@ function applyAdminOverride(){
 const password=$('#adminPassword').value;$('#adminPassword').value='';
 const feedback=$('#adminFeedback');
 if(password!=='11111'){feedback.className='feedback error';feedback.textContent='Incorrect password. No crystals were added.';return;}
-adminMode=true;state.power=POWER_MAX;state.crystals+=1000;update();chime();
-feedback.className='feedback success';feedback.textContent=`Added 1,000 crystals to ${currentProfile().name} (ages ${ageLevel.replace('-','–')}). Admin mode now has unlimited energy.`;
+adminMode=true;state.power=POWER_MAX;update();chime();
+feedback.className='feedback success';feedback.textContent='Admin mode unlocked with unlimited energy. Enter an amount below to add crystals.';
 }
 $('#adminOverrideForm').onsubmit=e=>{e.preventDefault();applyAdminOverride();};
+function addAdminCrystals(){
+const feedback=$('#adminFeedback'),amount=Number($('#adminCrystalAmount').value);
+if(!adminMode){feedback.className='feedback error';feedback.textContent='Unlock admin mode before adding crystals.';return;}
+if(!Number.isSafeInteger(amount)||amount<=0||!Number.isSafeInteger(state.crystals+amount)){
+feedback.className='feedback error';feedback.textContent='Enter a positive whole number of crystals within the supported range.';return;
+}
+state.crystals+=amount;update();chime();
+feedback.className='feedback success';feedback.textContent=`Added ${amount.toLocaleString('en-US')} crystals to ${currentProfile().name} (ages ${ageLevel.replace('-','–')}).`;
+}
+$('#adminCrystalsForm').onsubmit=e=>{e.preventDefault();addAdminCrystals();};
 function updateAdminModeUI(){
 $('#adminModeStatus').textContent=adminMode?'Admin mode active · unlimited energy':'Admin mode inactive';
 $('#exitAdminMode').hidden=!adminMode;
+$('#adminOverrideForm').hidden=adminMode;$('#adminCrystalsForm').hidden=!adminMode;
+$('#adminCrystalAmount').disabled=!adminMode;
+if(!adminMode)$('#adminCrystalAmount').value='';
 }
 function exitAdminMode(){
 adminMode=false;updateAdminModeUI();updatePowerMeter();
