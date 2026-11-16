@@ -1221,18 +1221,73 @@ backHand:flip?.backHand??1,handSwap:flip?smooth((progress-.8)/.2):0,release:flip
 phase:!flip?'sailing':progress<.16?'release':progress<.8?'swing':'regrip'};
 }
 function windsurferOnBeamReach(heading){return Math.abs(Math.cos(heading)*SAILING_WIND.x+Math.sin(heading)*SAILING_WIND.y)<=.2;}
-function canTrimWindsurfer(){return !!windsurfSession&&!windsurfSession.flip&&windsurferOnBeamReach(windsurfSession.heading);}
+function canTrimWindsurfer(){return !!windsurfSession&&!windsurfSession.crash&&!windsurfSession.flip&&!windsurfSession.air&&windsurferOnBeamReach(windsurfSession.heading);}
 function trimWindsurfer(){
 if(!windsurfSession||document.querySelector('dialog[open]'))return;
-if(!windsurfSession.trimWanted&&!canTrimWindsurfer()){toast('Turn across the wind to find a beam reach, then press Space to sheet in.');return;}
+if(windsurfSession.air||windsurfSession.crash)return;
+if(!windsurfSession.trimWanted&&!canTrimWindsurfer()){toast('Turn across the wind to find a beam reach, then press T to sheet in.');return;}
 windsurfSession.trimWanted=!windsurfSession.trimWanted;updateSailingWindUI();canvas.focus({preventScroll:true});
 }
+// Use the visible Mainland Beach crests and the local offshore normal.
+function windsurferJumpWave(m=windsurfSession,x=player.x,y=player.y){
+if(!m||m.crash||m.flip||m.air||m.velocity<60)return null;
+const distance=beachShoreY(x)-y,slope=(beachShoreY(x+2)-beachShoreY(x-2))/4;
+const offshore=(Math.cos(m.heading)*slope-Math.sin(m.heading))/Math.hypot(slope,1);
+if(distance<25||distance>350||offshore<.35||!windsurferClear(x,y,m.heading))return null;
+const time=state.surfRental?surfClock:frame*16.667;
+let strength=0;
+for(let i=0;i<3;i++){
+const hit=boatWaveContact(x,y,m.heading,'fishing',i,time,10);
+if(hit)strength=Math.max(strength,hit.strength*Math.max(0,1-Math.abs(hit.offset)/28));
+}
+return {strength,impulse:45+m.velocity*.18+strength*58};
+}
+function windsurferCanFrontFlip(m=windsurfSession){
+return !!m?.air&&!m.crash&&m.air.flipElapsed===null;
+}
+function jumpWindsurfer(){
+const m=windsurfSession;if(!m||m.crash||document.querySelector('dialog[open]'))return;
+if(m.air){
+if(windsurferCanFrontFlip(m)){m.air.flipElapsed=0;m.air.flipDuration=820;}
+}else{
+const wave=windsurferJumpWave(m);
+if(!wave){toast('Build speed, then head out from Mainland Beach into the waves. Space jumps; T trims the sail.');return;}
+m.air={height:.1,velocity:wave.impulse,elapsed:0,flipElapsed:null,flipDuration:820};
+m.windsurfWakeGap=true;
+}
+updateSailingWindUI();canvas.focus({preventScroll:true});
+}
+function advanceWindsurferAir(m,dt){
+if(m.landing){m.landing.age+=dt;if(m.landing.age>650)m.landing=null;}
+if(!m.air)return;
+const a=m.air,t=dt/1000,height=Math.max(0,a.height);
+// Resolve rotation at the actual instant of water contact, not the end of the frame.
+const touchdown=(a.velocity+Math.sqrt(a.velocity*a.velocity+360*height))/180;
+const flying=Math.min(t,touchdown);a.elapsed+=flying*1000;
+a.height=Math.max(0,height+a.velocity*flying-90*flying*flying);a.velocity-=180*flying;
+if(a.flipElapsed!==null)a.flipElapsed=Math.min(a.flipDuration,a.flipElapsed+flying*1000);
+if(touchdown>t)return;
+a.height=0;
+if(a.flipElapsed!==null&&a.flipElapsed<a.flipDuration-1e-6){crashWindsurfer(m,'unfinished-roll');return;}
+if(!windsurferClear(player.x,player.y,m.heading)){crashWindsurfer(m);return;}
+const impact=Math.min(1,Math.abs(a.velocity)/140);
+m.landing={x:player.x,y:player.y,age:0,impact};m.air=null;m.velocity*=.9;
+emitBoatWaveSpray(player.x,player.y,m.heading,impact*140,true,null,windsurferSprayEffect(m));
+for(const side of [-1,1])m.bowWake.push({x:player.x-Math.cos(m.heading)*14,y:player.y-Math.sin(m.heading)*14,
+heading:m.heading,side,age:0,scale:.42,wakeSize:1.3+impact,speed:1,velocity:m.velocity,breakBefore:true});
+m.windsurfWakeGap=true;
+}
 function updateSailingWindUI(){
-$('#sailingWindHud').hidden=!windsurfSession;$('#mapSailingTrim').hidden=!windsurfSession;if(!windsurfSession)return;
-$('#mapSailingTrim').disabled=!windsurfSession.trimWanted&&!canTrimWindsurfer();
-setSuggestionContent($('#mapSailingTrim'),windsurfSession.trimWanted?'Ease sail · Space ↗':'Sheet in · Space ↗');
+$('#mapSailingRemount').hidden=!windsurfSession?.crash;
+$('#mapSailingRemount').disabled=!!windsurfSession?.crash?.remountWanted;
+$('#sailingWindHud').hidden=!windsurfSession;$('#mapSailingTrim').hidden=!windsurfSession;$('#mapSailingJump').hidden=!windsurfSession;if(!windsurfSession)return;
+const jumpWave=windsurferJumpWave();
+$('#mapSailingJump').disabled=windsurfSession.air?!windsurferCanFrontFlip():!jumpWave;
+setSuggestionContent($('#mapSailingJump'),windsurfSession.air?'Front flip · Space ↗':'Jump · Space ↗');
+$('#mapSailingTrim').disabled=!!windsurfSession.crash||!!windsurfSession.air||(!windsurfSession.trimWanted&&!canTrimWindsurfer());
+setSuggestionContent($('#mapSailingTrim'),windsurfSession.trimWanted?'Ease sail · T ↗':'Sheet in · T ↗');
 const pose=windsurferSailPose(windsurfSession.heading,windsurfSession.clock,windsurfSession),drive=windsurfDrive(windsurfSession.heading);
-const status=pose.phase==='release'?'Release back hand':pose.phase==='swing'?'Let the clew swing':pose.phase==='regrip'?'Regrip the boom':drive===0?'Head to wind · turn to catch the breeze':windsurfSession.trimWanted?'Trimmed reach · speed boost':canTrimWindsurfer()?'Beam reach · Space to sheet in':drive>.9?'Reaching · full breeze':'Sailing with the breeze';
+const status=windsurfSession.crash?(windsurfSession.crash.phase==='fall'?'Wipeout · E to get back on':windsurfSession.crash.phase==='collect'?'Collecting yourself…':windsurfSession.crash.phase==='ready'?'Ready · E to get back on':windsurfSession.crash.phase==='return'?'Returning to the board…':'Climbing aboard…'):windsurfSession.air?(windsurfSession.air.flipElapsed!==null?'Forward loop!':windsurferCanFrontFlip()?'Airborne · Space to front flip':'Airborne · prepare to land'):jumpWave?.strength>.4?'Big wave · Space to jump':pose.phase==='release'?'Release back hand':pose.phase==='swing'?'Let the clew swing':pose.phase==='regrip'?'Regrip the boom':drive===0?'Head to wind · turn to catch the breeze':windsurfSession.trimWanted?'Trimmed reach · speed boost':canTrimWindsurfer()?'Beam reach · T to sheet in · Space jumps into waves':drive>.9?'Reaching · full breeze':'Sailing with the breeze';
 if($('#sailingWindStatus').textContent!==status)$('#sailingWindStatus').textContent=status;
 }
 function nearSailingDock(){return !swimming&&!boating&&!voyage&&!surfSession&&!wakeboardRide&&!wakeboardCrash&&!dragonFlight&&!frisbeeGame&&!volleyball&&!beachTransfer&&!shoreRecovery&&!shoreClimb&&!diveAnimation&&Math.hypot(player.x-SAILING_DOCK.x,player.y-SAILING_DOCK.y)<38;}
@@ -1242,13 +1297,164 @@ if(state.crystals<WINDSURFER_COST){toast('A windsurfer costs 50 crystals.');retu
 state.crystals-=WINDSURFER_COST;state.windsurfer=true;update();chime();toast('Windsurfer ready! Visit the Sailing dock on Moonwater Island.');
 }
 function useSailingDock(){if(!nearSailingDock())return;if(!state.windsurfer){buyWindsurfer();return;}startWindsurfing();}
+function windsurferHull(x,y,heading){
+const c=Math.cos(heading),s=Math.sin(heading);return [[21,0],[9,4.8],[-5,4.6],[-18,2.8],[-18,-2.8],[-5,-4.6],[9,-4.8]].map(([a,b])=>[x+c*a-s*b,y+s*a+c*b]);
+}
 function windsurferClear(x,y,heading){
-const c=Math.cos(heading),s=Math.sin(heading),hull=[[21,0],[9,4.8],[-5,4.6],[-18,2.8],[-18,-2.8],[-5,-4.6],[9,-4.8]].map(([a,b])=>[x+c*a-s*b,y+s*a+c*b]);
+const hull=windsurferHull(x,y,heading);
 const timber=[...crossings,...activePiers(),...(state.upgrades.includes('bridge')?[woodlandBridge]:[])];
 const decks=timber.map(p=>[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]]);
 return hull.every(([px,py])=>sharkWater(px,py)&&!deepWater(px,py))&&
 ![...islandPolys,...decks,...boatObstacles('windsurfer')].some(poly=>boatPolygonsOverlap(hull,poly));
 }
+function windsurferFlightClear(x,y,heading,height){
+if(height<=2)return windsurferClear(x,y,heading);
+const hull=windsurferHull(x,y,heading);
+if(hull.some(([px,py])=>px<WORLD.left+15||px>WORLD.right-15||py<15||py>WORLD.height-15||deepWater(px,py)))return false;
+const timber=[...crossings,...activePiers(),...(state.upgrades.includes('bridge')?[woodlandBridge]:[])];
+if(height<=10&&timber.some(p=>boatPolygonsOverlap(hull,[[p.x,p.y],[p.x+p.w,p.y],[p.x+p.w,p.y+p.h],[p.x,p.y+p.h]])))return false;
+return height>24||!boatObstacles('windsurfer').some(p=>boatPolygonsOverlap(hull,p));
+}
+function windsurferImpactFloor(x,y){
+if(boatObstacles('windsurfer').some(p=>inside(x,y,p)))return 12;
+return wakeboardSolidAt(x,y)?.kind==='timber'?6:0;
+}
+function crashWindsurfer(m,reason='collision'){
+if(m.crash)return;
+const rig=windsurferRig(player.x,player.y,m.heading,m.clock,m),pose=windsurferRiderPose(rig,m.clock,m),speed=m.velocity;
+const height=Math.max(0,m.air?.height||0),floor=windsurferImpactFloor(player.x,player.y);
+const phase=m.air?.flipElapsed==null?0:Math.min(1,m.air.flipElapsed/m.air.flipDuration);
+const roll=-Math.PI*2*phase*phase*(3-2*phase),ca=Math.cos(roll),sa=Math.sin(roll),f=Math.cos(m.heading),sn=Math.sin(m.heading);
+const center=[player.x-f*4,player.y-sn*4,16],dx=pose.hip3[0]-center[0],dy=pose.hip3[1]-center[1];
+const along=dx*f+dy*sn,across=-dx*sn+dy*f,z=pose.hip3[2]-center[2],a=along*ca-z*sa;
+m.crash={elapsed:0,reason,roll:Math.atan2(sa,ca),heading:m.heading,speed,
+x:center[0]+f*a-sn*across,y:center[1]+sn*a+f*across,z:16+along*sa+z*ca+height,
+vx:Math.cos(m.heading)*speed,vy:Math.sin(m.heading)*speed,vz:Math.max(8,(m.air?.velocity||0)*.3+18),
+board:{x:player.x,y:player.y,height:Math.max(floor,height),floor},pose,grounded:false,settle:0,phase:'fall',remountWanted:false,collectElapsed:0};
+m.air=null;m.velocity=0;m.steering=0;m.trimWanted=false;m.trim=0;m.flip=null;m.waveSpraySweep=null;m.waveContacts=null;keys.clear();
+player.x=m.crash.x;player.y=m.crash.y;
+updateSailingWindUI();toast(reason==='unfinished-roll'?'Not enough airtime! Wipeout · E to recover, X for the dock.':'Wipeout! Press E to collect yourself and get back on. X returns to the dock.');
+}
+function remountWindsurfer(){
+const c=windsurfSession?.crash;if(!c||c.remountWanted||document.querySelector('dialog[open]'))return;
+c.remountWanted=true;keys.clear();updateSailingWindUI();canvas.focus({preventScroll:true});
+}
+function windsurferRemountSpot(m){
+const c=m.crash,b=c.board,headings=[c.heading+Math.PI,c.heading,c.heading+Math.PI/2,c.heading-Math.PI/2];
+// Prefer heading away from the impact, and retrieve a stranded board to nearby clear water.
+for(let radius=0;radius<=240;radius+=8)for(let i=0;i<(radius?16:1);i++){
+const a=c.heading+Math.PI+i*Math.PI/8,x=b.x+Math.cos(a)*radius,y=b.y+Math.sin(a)*radius;
+for(const heading of headings)if(windsurferClear(x,y,heading)&&windsurferClear(x+Math.cos(heading)*8,y+Math.sin(heading)*8,heading))return {x,y,heading};
+}
+return null;
+}
+function beginWindsurferRemount(m){
+const c=m.crash,target=windsurferRemountSpot(m);
+if(!target){c.remountWanted=false;toast('The board is blocked. Press E to retry, or X to return to the Sailing dock.');return;}
+const f=Math.cos(target.heading),sn=Math.sin(target.heading);
+c.phase='return';c.returnElapsed=0;c.boardFrom={...c.board};c.target=target;
+c.from={x:c.x,y:c.y};c.to={x:target.x-f*6-SAILING_WIND.x*5,y:target.y-sn*6-SAILING_WIND.y*5};
+c.returnDuration=Math.max(650,Math.hypot(c.to.x-c.x,c.to.y-c.y)/65*1000);
+c.facing=Math.atan2(c.to.y-c.y,c.to.x-c.x);
+}
+function advanceWindsurferCrash(m,dt){
+const c=m.crash,t=dt/1000;c.elapsed+=dt;
+const smooth=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
+if(c.phase==='collect'){
+c.collectElapsed=Math.min(700,c.collectElapsed+dt);
+const u=smooth(c.collectElapsed/700),wet=sharkWater(c.x,c.y)&&windsurferImpactFloor(c.x,c.y)===0;
+c.z=windsurferImpactFloor(c.x,c.y)+2+(wet?0:c.pose.hip3[2]-2)*u;
+if(c.collectElapsed===700)c.phase='ready';
+}else if(c.phase==='ready'){
+if(c.remountWanted)beginWindsurferRemount(m);
+}else if(c.phase==='return'){
+c.returnElapsed=Math.min(c.returnDuration,c.returnElapsed+dt);const u=smooth(c.returnElapsed/c.returnDuration);
+c.x=c.from.x+(c.to.x-c.from.x)*u;c.y=c.from.y+(c.to.y-c.from.y)*u;
+const floor=windsurferImpactFloor(c.x,c.y),wet=sharkWater(c.x,c.y)&&floor===0;
+c.z=floor+(wet?2:c.pose.hip3[2])+Math.sin(c.returnElapsed*.015)*.2;
+c.board.x=c.boardFrom.x+(c.target.x-c.boardFrom.x)*u;c.board.y=c.boardFrom.y+(c.target.y-c.boardFrom.y)*u;
+c.board.height=c.boardFrom.height*(1-u);c.board.floor=c.boardFrom.floor*(1-u);
+const angle=Math.atan2(Math.sin(c.target.heading-c.heading),Math.cos(c.target.heading-c.heading));c.board.heading=c.heading+angle*u;
+if(c.returnElapsed===c.returnDuration){c.phase='mount';c.mountElapsed=0;c.board.height=0;c.board.floor=0;}
+}else if(c.phase==='mount'){
+c.mountElapsed=Math.min(1100,c.mountElapsed+dt);
+if(c.mountElapsed===1100){
+if(!windsurferClear(c.board.x,c.board.y,c.target.heading)){c.phase='ready';c.remountWanted=false;toast('The board is blocked. Press E to recover it again.');}
+else{player.x=c.board.x;player.y=c.board.y;m.heading=c.target.heading;m.tack=windsurferTack(m.heading);m.frontHand=0;m.leadFoot=m.tack<0?0:1;
+m.velocity=0;m.steering=0;m.trim=0;m.trimWanted=false;m.air=null;m.flip=null;m.crash=null;m.waveContacts=null;m.waveSpraySweep=null;m.distance=0;m.windsurfWakeGap=true;keys.clear();updateSailingWindUI();return;}
+}
+}
+if(c.phase==='fall'){
+const drag=c.grounded?6:.8,travel=(1-Math.exp(-drag*t))/drag;
+c.x=Math.max(WORLD.left+20,Math.min(WORLD.right-20,c.x+c.vx*travel));
+c.y=Math.max(20,Math.min(WORLD.height-20,c.y+c.vy*travel));
+c.vx*=Math.exp(-drag*t);c.vy*=Math.exp(-drag*t);
+const floor=windsurferImpactFloor(c.x,c.y);
+if(!c.grounded){c.z+=c.vz*t-90*t*t;c.vz-=180*t;
+if(c.z<=floor+9){c.z=floor+9;c.vz=0;c.grounded=true;
+if(sharkWater(c.x,c.y))emitBoatWaveSpray(c.x,c.y,c.heading,Math.max(30,c.speed*.55),true,null,windsurferSprayEffect(m));
+}}
+else{c.settle=Math.min(1,c.settle+t*3);c.z=floor+9-7*c.settle;}
+if(c.grounded&&c.settle===1&&c.elapsed>=1000){c.phase='collect';c.collectElapsed=0;c.vx=0;c.vy=0;}
+}
+player.x=c.x;player.y=c.y;
+m.spray=(m.spray||[]).filter(p=>{p.age+=t;return p.age<p.life+.22;});
+m.waveSplashes=(m.waveSplashes||[]).filter(p=>{p.age+=dt;return p.age<850;});
+
+}
+function drawWindsurferCrash(m,boardRig){
+const c=m.crash,originalF=Math.cos(c.heading),originalS=Math.sin(c.heading),base=c.pose.hip3;
+const smooth=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
+const collect=smooth(c.collectElapsed/700),f=Math.cos(c.facing??c.heading),sn=Math.sin(c.facing??c.heading);
+const turn=Math.min(1,c.elapsed/(650-Math.min(245,c.speed)*1.2)),angle=((c.roll||0)-Math.PI/2*smooth(turn))*(1-collect),ca=Math.cos(angle),sa=Math.sin(angle);
+const world=v=>{
+const dx=v[0]-base[0],dy=v[1]-base[1],a=dx*originalF+dy*originalS,b=-dx*originalS+dy*originalF,z=v[2]-base[2];
+const along=a*ca-z*sa,height=(a*sa+z*ca)*(1-c.settle*.85*(1-collect));
+return [c.x+f*along-sn*b,c.y+sn*along+f*b,c.z+height];
+};
+const p={...c.pose,face:c.facing??c.heading};
+for(const key of ['hip3','shoulder3','head3'])p[key]=world(c.pose[key]);
+p.legs=c.pose.legs.map(l=>{const leg={...l};for(const key of ['hip3','knee3','foot3','heel3','toe3'])leg[key]=world(l[key]);return leg;});
+const release=Math.min(1,c.elapsed/140);
+p.hands=c.pose.hands.map((h,i)=>{
+const side=i?1:-1,target=h.start3.map((v,j)=>v+(j===0?originalF*5-originalS*side*5:j===1?originalS*5+originalF*side*5:-3));
+// A brief hand to the head reads as gathering oneself before returning to the rig.
+if(c.phase==='collect'&&i===0){const wipe=Math.sin(Math.PI*collect);for(let j=0;j<3;j++)target[j]+=(c.pose.head3[j]-target[j])*wipe;}
+const end=h.hand3.map((v,j)=>v+(target[j]-v)*release),arm=windsurfJoint(h.start3,end,6,6,[0,0,-1]);
+return {...h,gripping:false,start3:world(h.start3),elbow3:world(arm.joint),hand3:world(arm.end)};
+});
+if(c.phase==='mount'){
+const target=windsurferRiderPose(boardRig,m.clock,{velocity:0,frontHand:0,leadFoot:windsurferTack(c.target.heading)<0?0:1});
+const body=smooth((c.mountElapsed/1100-.25)/.75),hand=smooth(c.mountElapsed/1100);
+const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+for(const key of ['hip3','shoulder3','head3'])p[key]=mix(p[key],target[key],body);
+for(let i=0;i<2;i++){
+const leg=p.legs[i],step=smooth((c.mountElapsed/1100-(i?.55:.25))/(i?.45:.5));
+leg.hip3=mix(leg.hip3,target.legs[i].hip3,body);
+for(const key of ['foot3','heel3','toe3'])leg[key]=mix(leg[key],target.legs[i][key],step);
+const foot=leg.foot3.map((v,j)=>v+(j===2?Math.sin(Math.PI*step)*2:0));
+const solved=windsurfJoint(leg.hip3,foot,5.4,5.4,[Math.cos(c.target.heading),Math.sin(c.target.heading),-.1]);
+for(const key of ['heel3','toe3'])leg[key]=leg[key].map((v,j)=>v+solved.end[j]-leg.foot3[j]);
+leg.foot3=solved.end;leg.knee3=solved.joint;
+for(const key of ['start3','elbow3','hand3'])p.hands[i][key]=mix(p.hands[i][key],target.hands[i][key],key==='start3'?body:hand);
+const arm=windsurfJoint(p.hands[i].start3,p.hands[i].hand3,6,6,[SAILING_WIND.x*.3,SAILING_WIND.y*.3,-1]);
+p.hands[i].elbow3=arm.joint;p.hands[i].hand3=arm.end;p.hands[i].gripping=hand>.9;
+}
+p.face+=(Math.atan2(Math.sin(target.face-p.face),Math.cos(target.face-p.face)))*body;
+}
+const wet=sharkWater(c.x,c.y)&&windsurferImpactFloor(c.x,c.y)===0;
+if(wet&&c.phase!=='fall'){
+// Water conceals the legs while gathering oneself and swimming back to the rig.
+p.legs=p.legs.filter(leg=>c.phase==='mount'&&leg.foot3[2]>=0);
+ctx.save();ctx.globalAlpha=.5;ellipse(c.x,c.y+1,6+Math.sin(m.clock*.006)*.5,2,'#ddfaf0');ctx.restore();
+}
+const rig={...boardRig,project:v=>[v[0],v[1]-v[2]],cameraRay:c.phase==='mount'?boardRig.cameraRay:[0,0,0]};
+p.hip=rig.project(p.hip3);p.shoulder=rig.project(p.shoulder3);p.head=rig.project(p.head3);
+for(const l of p.legs){l.hip=rig.project(l.hip3);l.knee=rig.project(l.knee3);l.foot=rig.project(l.foot3);}
+for(const h of p.hands){h.start=rig.project(h.start3);h.elbow=rig.project(h.elbow3);h.point=rig.project(h.hand3);}
+drawWindsurfRider(rig,m.clock,null,null,p);
+}
+
 function startWindsurfing(){
 if(!state.windsurfer||!nearSailingDock()||document.querySelector('dialog[open]')||!requireActivityPower())return;
 if(!windsurferClear(SAILING_BERTH.x,SAILING_BERTH.y,Math.PI/2)){toast('Clear the Sailing berth before launching.');return;}
@@ -1260,38 +1466,99 @@ function finishWindsurfing(){
 if(!windsurfSession)return;
 const safe=windsurfSession.safe;windsurfSession=null;swimming=false;player.x=safe.x;player.y=safe.y;keys.clear();resetSwimMotion();save();updateWaterControls();canvas.focus({preventScroll:true});
 }
+// One surface-contact model drives the board, rider/rig and foam. The immersed
+// length shrinks to the last three board units (roughly a foot) when planing.
+function windsurferWaterPose(velocity=0,clock=0){
+const t=Math.max(0,Math.min(1,(velocity-75)/100)),planing=t*t*(3-2*t);
+const wave=Math.sin(clock*.023)+.47*Math.sin(clock*.037+1.3)+.2*Math.sin(clock*.061+.4);
+const rise=Math.max(0,wave-.2),lift=planing*rise*.95;
+const falling=-(.023*Math.cos(clock*.023)+.01739*Math.cos(clock*.037+1.3)+.0122*Math.cos(clock*.061+.4));
+return {planing,lift,pitch:planing*(.055+.018*Math.sin(clock*.019)+rise*.025),
+contactLength:39-36*planing,contact:lift<.12,impact:planing*Math.max(0,falling)*20};
+}
 function recordWindsurferWake(motion,from,to,heading){
-recordHullWake(motion,from,to,heading,'fishing',0,0,.42,sharkWater);motion.wake=[];
+if(motion.air){motion.windsurfWakeGap=true;return;}
+const distance=Math.hypot(to.x-from.x,to.y-from.y);if(distance<.001)return;
+motion.wake=[];motion.bowWake??=[];motion.distance??=0;
+const spacing=2.52,c=Math.cos(heading),s=Math.sin(heading),velocity=motion.velocity||0;
+for(let d=spacing-motion.distance;d<=distance;d+=spacing){
+const clock=(motion.clock||0)-(distance-d)/Math.max(1,velocity)*1000,water=windsurferWaterPose(velocity,clock);
+if(!water.contact){motion.windsurfWakeGap=true;continue;}
+const serial=motion.wakeSerial=(motion.wakeSerial||0)+1;
+const jitter=water.planing*Math.sin(serial*2.399+clock*.009),along=-18+water.contactLength*.12;
+for(const side of [-1,1]){
+const across=side*(1.8+(1-water.planing)*1.7)+jitter*.6;
+const x=from.x+(to.x-from.x)*d/distance+c*along-s*across;
+const y=from.y+(to.y-from.y)*d/distance+s*along+c*across;
+if(sharkWater(x,y))motion.bowWake.push({x,y,heading:heading+jitter*.08,side,age:0,scale:.42,
+wakeSize:1-water.planing*.3+water.impact*.6+(jitter+1)*water.planing*.25,
+speed:Math.min(1,velocity/175)*(.65+water.impact*.35),velocity,breakBefore:!!motion.windsurfWakeGap});
+}
+motion.windsurfWakeGap=false;
+}
+motion.distance=(motion.distance+distance)%spacing;motion.bowWake=motion.bowWake.slice(-256);
+}
+const WINDSURFER_SPRAY_EDGE=[[21,0],[9,3.36],[-5,3.22],[-18,1.96]];
+function windsurferSprayEffect(m){return {motion:m,edge:WINDSURFER_SPRAY_EDGE,scale:.5,perSection:4};}
+function advanceWindsurferWaves(m,dt){
+m.spray=(m.spray||[]).filter(p=>{p.age+=dt/1000;return p.age<p.life+.22;}).slice(-400);
+m.waveSplashes=(m.waveSplashes||[]).filter(p=>{p.age+=dt;return p.age<850;});
+if((m.air?.height||0)>2){m.waveContacts=null;m.waveSpraySweep=null;return;}
+const time=state.surfRental?surfClock:frame*16.667,effect=windsurferSprayEffect(m);
+advanceBoatWaveSpray(time,effect);
+const previous=m.waveContacts||[],contacts=Array.from({length:3},(_,i)=>boatWaveContact(player.x,player.y,m.heading,'fishing',i,time,21));
+m.waveContacts=contacts;
+if(m.velocity<12)return;
+for(let i=0;i<contacts.length;i++){
+const hit=contacts[i],before=previous[i];
+if(!hit||!before||Math.abs(hit.offset-before.offset)>=60||hit.offset*before.offset>0)continue;
+const impact=(24+Math.min(180,m.velocity)*.65)*Math.sqrt(hit.strength);
+emitBoatWaveSpray(hit.x,hit.y,m.heading,impact,false,0,effect);
+m.waveSpraySweep={next:1,index:i,impact,direction:Math.sign(hit.offset-before.offset)};
+advanceBoatWaveSpray(time,effect);break;
+}
+}
+function clipWindsurferWaveSpray(rig){
+const edge=WINDSURFER_SPRAY_EDGE,outline=[...edge.map(([a,b])=>[a,-b]),...edge.slice(1).reverse()];
+ctx.beginPath();ctx.rect(WORLD.left-1000,-1000,WORLD.width+2000,WORLD.height+2000);
+outline.forEach(([a,b],i)=>{const p=rig.point(a,b,0);if(i===0)ctx.moveTo(...p);else ctx.lineTo(...p);});
+ctx.closePath();ctx.clip('evenodd');
 }
 function advanceWindsurfing(dt){
 if(!windsurfSession||dt<=0||document.querySelector('dialog[open]'))return;
 // Small simulation steps keep the hand release and rig swing consistent at any frame rate.
-for(let remaining=dt;remaining>0;remaining-=Math.min(20,remaining))stepWindsurfing(Math.min(20,remaining));
+for(let remaining=dt;remaining>0&&windsurfSession;remaining-=Math.min(20,remaining))stepWindsurfing(Math.min(20,remaining));
 }
 function stepWindsurfing(dt){
 const m=windsurfSession,seconds=dt/1000,pressed=(...names)=>names.some(k=>keys.has(k));
 m.clock+=dt;ageBoatWake(m,dt);
+if(m.crash){advanceWindsurferCrash(m,dt);return;}
 const thrust=pressed('w','arrowup','up'),brake=pressed('s','arrowdown','down'),steer=Number(pressed('d','arrowright','right'))-Number(pressed('a','arrowleft','left'));
 m.steering+=(steer-m.steering)*Math.min(1,seconds*6);
 // Retain a little rudder/rig authority in irons so the rider can turn out of the no-go zone.
 const heading=m.heading+steer*2.2*seconds*Math.max(.24,Math.min(1,m.velocity/35))*(m.flip?.78:1);
+if(!m.air){
 if(windsurferClear(player.x,player.y,heading))m.heading=heading;
-advanceWindsurferRig(m,dt);
+else if(steer&&m.velocity>1){crashWindsurfer(m);return;}
+}
+if(!m.air)advanceWindsurferRig(m,dt);
 const drive=windsurfDrive(m.heading),sheet=m.flip?.48:1;
 if(m.flip||!windsurferOnBeamReach(m.heading)||brake)m.trimWanted=false;
 const trimTarget=m.trimWanted?1:0;m.trim??=0;
 m.trim+=Math.sign(trimTarget-m.trim)*Math.min(Math.abs(trimTarget-m.trim),seconds*1.5);
 const target=WINDSURFER_MAX_SPEED*(1+WINDSURFER_TRIM_BOOST*m.trim)*drive*sheet;
-const acceleration=brake?-100:thrust&&drive>0?(m.velocity<target?55*drive*sheet:m.velocity>target?-45:0):drive===0?-55:-18;
+const acceleration=m.air?0:brake?-100:thrust&&drive>0?(m.velocity<target?55*drive*sheet:m.velocity>target?-45:0):drive===0?-55:-18;
 const nextVelocity=m.velocity+acceleration*seconds;
 const controlled=thrust&&!brake&&drive>0?(m.velocity<target?Math.min(target,nextVelocity):Math.max(target,nextVelocity)):nextVelocity;
 m.velocity=Math.max(0,Math.min(WINDSURFER_MAX_SPEED*(1+WINDSURFER_TRIM_BOOST),controlled));
 const from={x:player.x,y:player.y},distance=m.velocity*seconds,steps=Math.max(1,Math.ceil(distance/2));
 for(let i=0;i<steps;i++){
 const x=player.x+Math.cos(m.heading)*distance/steps,y=player.y+Math.sin(m.heading)*distance/steps;
-if(!windsurferClear(x,y,m.heading)){m.velocity=0;break;}player.x=x;player.y=y;
+if(!windsurferFlightClear(x,y,m.heading,m.air?.height||0)){
+if(m.velocity>0){crashWindsurfer(m);return;}break;
+}player.x=x;player.y=y;
 }
-recordWindsurferWake(m,from,player,m.heading);
+advanceWindsurferWaves(m,dt);advanceWindsurferAir(m,dt);recordWindsurferWake(m,from,player,m.heading);
 }
 // Fixed-length joints in world space; height is projected only after solving the body.
 function windsurfJoint(root,end,upper,lower,bendHint){
@@ -1305,25 +1572,26 @@ const radius=Math.sqrt(Math.max(0,upper*upper-along*along));
 return {joint:root.map((v,i)=>v+axis[i]*along+bend[i]/length*radius),end:tip};
 }
 function windsurferFootPose(rig,m=null){
-const sail=rig.sail,flip=m?.flip,across=-(SAILING_WIND.x*-Math.sin(rig.heading)+SAILING_WIND.y*Math.cos(rig.heading))*2.2;
-const leadFoot=flip?.leadFoot??m?.leadFoot??(sail.tack<0?0:1),t=sail.progress;
+const sail=rig.sail,flip=m?.flip,rail=1.8,t=sail.progress;
+const leadFoot=flip?.leadFoot??m?.leadFoot??(sail.tack<0?0:1);
+const oldRail=-(flip?.from??sail.tack)*rail,newRail=-(flip?.to??sail.tack)*rail;
 const ease=(start,end)=>{const u=Math.max(0,Math.min(1,(t-start)/(end-start)));return u*u*(3-2*u);};
 const step=(from,to,start,end)=>{
 const u=ease(start,end),moving=t>start&&t<end;
 return {local:moving?from.map((v,i)=>v+(to[i]-v)*u+(i===2?Math.sin(Math.PI*u)*1.35:0)):(u===0?from:to).slice(),planted:!moving};
 };
-let front={local:[0,across,1],planted:true},rear={local:[-10,across,1],planted:true};
+let front={local:[0,oldRail,1],planted:true},rear={local:[-10,oldRail,1],planted:true};
 if(flip){
-// Rear foot steps into the center first. The old front foot then steps aft,
-// leaving a clear lane for the other foot to become the new front foot.
-const middle=[-5,flip.to*3,1];
-rear=t<.42?step([-10,across,1],middle,.22,.4):step(middle,[0,across,1],.68,.86);
-front=step([0,across,1],[-10,across,1],.42,.66);
+// First stand shoulder-width apart at the front, facing the nose. Then move
+// only the old front foot aft onto the new rail; the new front foot stays put.
+rear=step([-10,oldRail,1],[0,newRail,1],.2,.44);
+front=step([0,oldRail,1],[-10,newRail,1],.54,.86);
 }
 const feet=[];feet[leadFoot]=front;feet[1-leadFoot]=rear;
+const across=(front.local[1]+rear.local[1])*.5;
 const shifting=flip?Math.sin(Math.PI*ease(.18,.9)):0;
-const weight=flip?.9*(ease(.18,.28)-ease(.34,.44)-ease(.62,.72)+ease(.84,.94)):0;
-return {feet3:feet.map(f=>rig.world(...f.local)),planted:feet.map(f=>f.planted),leadFoot,across,weight,crouch:shifting*.55};
+const weight=flip?4*(ease(.18,.44)-ease(.54,.9)):0;
+return {feet3:feet.map(f=>rig.world(...f.local)),feetLocal:feet.map(f=>f.local),planted:feet.map(f=>f.planted),leadFoot,across,weight,crouch:shifting*.55};
 }
 function windsurferRiderPose(rig,clock=0,m=null){
 const wind=SAILING_WIND,sail=rig.sail,heading=rig.heading;
@@ -1365,12 +1633,14 @@ return {...hand,start3:start,elbow3:solved.joint,hand3:solved.end,start:rig.proj
 // left/right frame. Otherwise swapping lead feet attaches each leg across its mate.
 const footSpan=feet3[1].map((v,i)=>i<2?v-feet3[0][i]:0),spanLength=Math.hypot(...footSpan)||1;
 const pelvisAxis=footSpan.map(v=>v/spanLength);
-let kneeFacing=[-pelvisAxis[1],pelvisAxis[0],0];
-if(kneeFacing[0]*wind.x+kneeFacing[1]*wind.y<0)kneeFacing=kneeFacing.map(v=>-v);
+// Knees follow the toes/board, with a small leeward bias. Never flip their
+// bend pole when the pelvis rotates during the foot switch.
+const kneeFacing=[forward[0]+wind.x*.15,forward[1]+wind.y*.15,-.1];
 const legs=feet3.map((foot,i)=>{
 const root=hip3.map((v,j)=>v+pelvisAxis[j]*(i?1:-1)*1.2);
-const solved=windsurfJoint(root,foot,5.8,5.8,kneeFacing);
-return {index:i,hip3:root,knee3:solved.joint,foot3:solved.end,hip:rig.project(root),knee:rig.project(solved.joint),foot:rig.project(solved.end)};
+const solved=windsurfJoint(root,foot,5.4,5.4,kneeFacing);
+const heel3=solved.end.map((v,j)=>v-forward[j]*.7),toe3=solved.end.map((v,j)=>v+forward[j]*1.5);
+return {index:i,hip3:root,knee3:solved.joint,foot3:solved.end,heel3,toe3,hip:rig.project(root),knee:rig.project(solved.joint),foot:rig.project(solved.end)};
 });
 const head3=[shoulder3[0]+forward[0]*.6,shoulder3[1]+forward[1]*.6,shoulder3[2]+6];
 return {hip:rig.project(hip3),shoulder:rig.project(shoulder3),head:rig.project(head3),feet:legs.map(l=>l.foot),hands:arms,legs,
@@ -1378,15 +1648,15 @@ hip3,shoulder3,head3,feet3,stance,release,flex,load,forward,shoulderAxis,pelvisA
 }
 function windsurfSailSide(rig,point){
 const n=rig.sailNormal,delta=point.map((v,i)=>v-rig.tack3[i]);
-// Toward-camera rays follow (0, +1, +1), leaving (x, y-height) unchanged.
-return delta.reduce((sum,v,i)=>sum+v*n[i],0)*(n[1]+n[2]);
+// Transform the toward-camera ray back through the forward loop for sail occlusion.
+return delta.reduce((sum,v,i)=>sum+v*n[i],0)*n.reduce((sum,v,i)=>sum+v*rig.cameraRay[i],0);
 }
 function withWindsurfSailOcclusion(rig,point,draw){
 ctx.save();
 if(windsurfSailSide(rig,point)<-1e-6){
 // Hide only the overlap with the opaque fabric, preserving the limb outside it.
 ctx.beginPath();ctx.rect(rig.mast[0]-10000,rig.mast[1]-10000,20000,20000);
-ctx.moveTo(...rig.tip);ctx.lineTo(...rig.clew);ctx.lineTo(...rig.tack);ctx.closePath();ctx.clip('evenodd');
+windsurferSailPath(rig);ctx.clip('evenodd');
 }
 draw();ctx.restore();
 }
@@ -1399,17 +1669,21 @@ drawWindsurfLimb(rig,a,cross,color,width);drawWindsurfLimb(rig,cross,b,color,wid
 const middle=a.map((v,i)=>(v+b[i])*.5);
 withWindsurfSailOcclusion(rig,middle,()=>characterLimb([rig.project(a),rig.project(b)],color,width));
 }
-function drawWindsurfRider(rig,clock=0,m=null,uniform=null){
-const pose=windsurferRiderPose(rig,clock,m),{hip,shoulder,head}=pose;
+function drawWindsurfRider(rig,clock=0,m=null,uniform=null,poseOverride=null){
+const pose=poseOverride||windsurferRiderPose(rig,clock,m),{hip,shoulder,head}=pose;
 const colors=uniform||characterColors(),skin=uniform?.skin||'#f2c992',pants=uniform?.trousers||'#294d61';
 const chestWidth=2+Math.abs(Math.sin(pose.face))*1.5;
+const up=rig.project(pose.head3.map((v,i)=>v+(i===2?1:0))),ux=up[0]-head[0],uy=up[1]-head[1],ul=Math.hypot(ux,uy)||1;
+const cross=[-uy/ul,ux/ul],offset=(p,d)=>[p[0]+cross[0]*d,p[1]+cross[1]*d];
 ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
 withWindsurfSailOcclusion(rig,pose.hip3,()=>{
 const legDepth=leg=>leg.hip3[1]+leg.knee3[1]+leg.foot3[1]+leg.hip3[2]+leg.knee3[2]+leg.foot3[2];
 for(const leg of [...pose.legs].sort((a,b)=>legDepth(a)-legDepth(b))){
 characterLimb([leg.hip,leg.knee,leg.foot],'#193d50',3.4);
-characterLimb([leg.hip,leg.knee],pants,2.8);characterLimb([leg.knee,leg.foot],skin,2.1);
-ellipse(leg.foot[0]+.5,leg.foot[1],2.2,1.1,skin);
+const shortsEnd=leg.hip.map((v,i)=>v+(leg.knee[i]-v)*.58);
+characterLimb([leg.hip,shortsEnd],pants,2.8);characterLimb([shortsEnd,leg.knee,leg.foot],skin,2.2);
+ellipse(leg.knee[0],leg.knee[1],1.2,1.2,skin);ellipse(leg.knee[0]-.25,leg.knee[1]-.3,.45,.65,'#fff3cf45');
+characterLimb([rig.project(leg.heel3),rig.project(leg.toe3)],skin,1.9);
 }
 });
 const arm=hand=>{
@@ -1426,13 +1700,13 @@ if(!hand.gripping)for(let finger=0;finger<3;finger++)characterLimb([hand.point,[
 arm(pose.hands[0]);
 withWindsurfSailOcclusion(rig,pose.shoulder3,()=>{
 ellipse(hip[0],hip[1]+.5,3.4,1.8,pants);
-polygon([[hip[0]-2.8,hip[1]],[hip[0]+2.8,hip[1]],[shoulder[0]+chestWidth,shoulder[1]],[shoulder[0]-chestWidth,shoulder[1]]],colors.shirt);
-polygon([[hip[0]-2.5,hip[1]-1],[hip[0]-.6,hip[1]-1],[shoulder[0]+Math.cos(pose.face)*(chestWidth-1),shoulder[1]+1],[shoulder[0]+Math.cos(pose.face)*chestWidth,shoulder[1]+1]],colors.accent||'#ffda76');
-characterLimb([[hip[0]+2,hip[1]-1],[shoulder[0]+2.5,shoulder[1]+2]],'#294d6135',.8);
-characterLimb([[shoulder[0],shoulder[1]],[head[0],head[1]+2.5]],skin,2.5);
+polygon([offset(hip,-2.8),offset(hip,2.8),offset(shoulder,chestWidth),offset(shoulder,-chestWidth)],colors.shirt);
+polygon([offset(hip,-2.5),offset(hip,-.6),offset(shoulder,-chestWidth+1),offset(shoulder,-chestWidth)],colors.accent||'#ffda76');
+characterLimb([offset(hip,2),offset(shoulder,2.5)],'#294d6135',.8);
+characterLimb([shoulder,[head[0]-ux*2.5,head[1]-uy*2.5]],skin,2.5);
 });
 withWindsurfSailOcclusion(rig,pose.head3,()=>{
-ctx.save();ctx.translate(head[0],head[1]);ctx.scale(.78,.78);
+ctx.save();ctx.translate(head[0],head[1]);ctx.rotate(Math.atan2(ux,-uy));ctx.scale(.78,.78);
 drawBoatDriverFace(0,0,colors.hair||'#654a37',!uniform&&currentProfile().character==='girl',pose.face);
 if(uniform?.hat){ellipse(0,-4.5,5.1,2.2,uniform.hat);characterLimb([[-4.8,-3.6],[4.8,-3.6]],uniform.hat,1.3);}
 ctx.restore();
@@ -1442,10 +1716,16 @@ arm(pose.hands[1]);ctx.restore();
 function drawPlayerWindsurfer(){
 if(!windsurfSession)return;
 const m=windsurfSession;drawBoatWake(m);
-const rig=drawWindsurfer(player.x,player.y,m.heading,m.clock,0,m);
-drawWindsurfRider(rig,m.clock,m);
+const effect=windsurferSprayEffect(m);drawBoatWaveSplashes('windsurfer',effect);
+drawBoatTrimSpray(player.x,player.y,m.heading,'windsurfer',false,effect);
+const c=m.crash,board=c?.board;
+const wreck=c?{...m,crash:null,velocity:0,wreckFold:Math.min(1,c.elapsed/600)*(c.phase==='mount'?Math.max(0,1-c.mountElapsed/600):1),air:{height:Math.max(board.floor,board.height-c.elapsed*c.elapsed*.00009),flipElapsed:null}}:m;
+if(c){wreck.tack=windsurferTack(board.heading??m.heading);wreck.frontHand=0;}
+const rig=drawWindsurfer(board?.x??player.x,board?.y??player.y,board?.heading??m.heading,m.clock,0,wreck);
+if(c)drawWindsurferCrash(m,rig);else drawWindsurfRider(rig,m.clock,m);
+effect.clip=()=>clipWindsurferWaveSpray(rig);drawBoatTrimSpray(player.x,player.y,m.heading,'windsurfer',true,effect);
 }
-$('#buyWindsurfer').onclick=buyWindsurfer;$('#mapSailingStop').onclick=finishWindsurfing;$('#mapSailingTrim').onclick=trimWindsurfer;
+$('#buyWindsurfer').onclick=buyWindsurfer;$('#mapSailingStop').onclick=finishWindsurfing;$('#mapSailingTrim').onclick=trimWindsurfer;$('#mapSailingJump').onclick=jumpWindsurfer;$('#mapSailingRemount').onclick=remountWindsurfer;
 
 const WATERSPORTS_DOCK={x:550,y:247},WAKEBOARD_COST=25,WATERSKIS_COST=100,WAKEBOARD_ROPE=110,WAKEBOARD_SPEED=.15;
 let wakeboardRide=null,wakeboardBoatTrip=null,wakeboardDockWake=null,wakeboardCrash=null,wakeboardDockHeading=0,watersportsRiderWake={wake:[],bowWake:[]};
@@ -3905,7 +4185,7 @@ const motion=repair.crewWakes?.[i];if(!motion)continue;
 ageBoatWake(motion,dt);
 const crew=boatRepairCrewPose(repair,i);
 if(crew.mode==='windsurf'&&before[i].board){
-const seconds=dt/1000;motion.velocity=seconds>0?Math.hypot(crew.board.x-before[i].board.x,crew.board.y-before[i].board.y)/seconds:0;
+motion.clock=repair.elapsed;const seconds=dt/1000;motion.velocity=seconds>0?Math.hypot(crew.board.x-before[i].board.x,crew.board.y-before[i].board.y)/seconds:0;
 recordWindsurferWake(motion,before[i].board,crew.board,crew.heading);
 }
 }
@@ -3991,16 +4271,38 @@ ctx.restore();
 }
 function windsurferRig(x,y,heading,clock=0,m=null){
 const c=Math.cos(heading),s=Math.sin(heading),sail=windsurferSailPose(heading,clock,m);
-const world=(along,across,height)=>[x+c*along-s*across,y+s*along+c*across,height];
-const project=v=>[v[0],v[1]-v[2]],point=(a,b,h)=>project(world(a,b,h));
+const water=windsurferWaterPose(m?.velocity??70,clock),pitchCos=Math.cos(water.pitch),pitchSin=Math.sin(water.pitch);
+const world=(along,across,height)=>[x+c*along*pitchCos-s*across,y+s*along*pitchCos+c*across,height+water.lift+(along+18)*pitchSin];
+const air=m?.air,flipT=air?.flipElapsed===null||!air?0:Math.min(1,air.flipElapsed/air.flipDuration);
+const loop=-Math.PI*2*flipT*flipT*(3-2*flipT),ca=Math.cos(loop),sa=Math.sin(loop);
+const center=[x-c*4,y-s*4,16];
+const project=v=>{
+const dx=v[0]-center[0],dy=v[1]-center[1],a=dx*c+dy*s,b=-dx*s+dy*c,z=v[2]-center[2];
+const along=a*ca-z*sa,height=a*sa+z*ca;
+return [center[0]+c*along-s*b,center[1]+s*along+c*b-center[2]-height-(air?.height||0)];
+},point=(a,b,h)=>project(world(a,b,h));
+const cameraAlong=s*ca+sa,cameraRay=[c*cameraAlong-s*c,s*cameraAlong+c*c,-s*sa+ca];
 // The universal joint lets the mast rake toward the rider, keeping a compact boom
 // within human reach while the clew still takes the outside arc around the bow.
 const speed=Math.min(1,(m?.velocity??70)/(WINDSURFER_MAX_SPEED*(1+WINDSURFER_TRIM_BOOST)));
-const rake=(speed*6+(m?.trim||0)*2)*(1-sail.release*.5);
-const spar=(a,b,h)=>{const v=world(a-rake*h/44,b,h),lean=9.5*h/44;return [v[0]-SAILING_WIND.x*lean,v[1]-SAILING_WIND.y*lean,h];};
+const rakeAngle=(.08+speed*.45+(m?.trim||0)*.12+(m?.wreckFold||0)*1.3)*(1-sail.release);
+const rake=44*Math.sin(rakeAngle),heightScale=Math.cos(rakeAngle);
+const spar=(a,b,h)=>{const v=world(a-rake*h/44,b,h*heightScale),lean=9.5*h/44;return [v[0]-SAILING_WIND.x*lean,v[1]-SAILING_WIND.y*lean,v[2]];};
 const along=6-23*Math.cos(sail.angle),across=23*Math.sin(sail.angle);
 const centerGrip3=t=>spar(6+(along-6)*t,across*t,18-5*t);
-const boomStart3=centerGrip3(0),clew3=centerGrip3(1),tack3=spar(6,0,7),tip3=spar(6,sail.flutter,44);
+const sailPoint3=(u,h)=>spar(6-u*Math.cos(sail.angle),u*Math.sin(sail.angle),h);
+const headSweep=1+sail.flutter*.1;
+// Curved luff, broad swept head, rounded leech and low, scooped foot.
+const shape=[
+[[0,3.5],[-.5,15],[-.5,32],[headSweep,44]],
+[[headSweep,44],[4,44.6],[8,44.1],[10,43]],
+[[10,43],[16,37],[18.5,23],[23,13]],
+[[23,13],[21,6.5],[10,2.8],[0,3.5]]];
+const sailCurves=shape.map(curve=>curve.map(([u,h])=>project(sailPoint3(u,h))));
+const outlineLocal=shape.flatMap((curve,index)=>Array.from({length:9},(_,i)=>{
+const t=i/8,q=1-t;return [0,1].map(axis=>q*q*q*curve[0][axis]+3*q*q*t*curve[1][axis]+3*q*t*t*curve[2][axis]+t*t*t*curve[3][axis]);
+}).slice(index?1:0));
+const boomStart3=centerGrip3(0),clew3=centerGrip3(1),tack3=sailPoint3(0,3.5),tip3=sailPoint3(headSweep,44);
 const u=tip3.map((v,i)=>v-tack3[i]),v=clew3.map((a,i)=>a-tack3[i]);
 const cross=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
 const length=Math.hypot(...cross)||1,sailNormal=cross.map(v=>v/length);
@@ -4009,24 +4311,46 @@ const rider=world(-4.5,-(-s*SAILING_WIND.x+c*SAILING_WIND.y)*2.2,19);
 rider[0]-=SAILING_WIND.x*3;rider[1]-=SAILING_WIND.y*3;
 const riderSide=Math.sign(rider.reduce((sum,v,i)=>sum+(v-boomStart3[i])*sailNormal[i],0))||1;
 const grip3=t=>rail3(t,riderSide),grip=t=>project(grip3(t));
-return {point,world,project,spar,heading,sail,grip,grip3,boomStart3,clew3,tack3,tip3,sailNormal,rail3,riderSide,
+return {point,world,project,spar,heading,sail,water,cameraRay,grip,grip3,boomStart3,clew3,tack3,tip3,sailNormal,rail3,riderSide,sailPoint3,sailCurves,outlineLocal,rakeAngle,
 mast:point(6,0,1),tip:project(tip3),clew:project(clew3),tack:project(tack3),along,across};
 }
+function windsurferSailPath(rig){
+ctx.moveTo(...rig.sailCurves[0][0]);
+for(const curve of rig.sailCurves)ctx.bezierCurveTo(...curve[1],...curve[2],...curve[3]);
+ctx.closePath();
+}
 function drawWindsurferSail(rig){
-const p=(a,b,h)=>rig.project(rig.spar(a,b,h));
-const nearSide=(rig.sailNormal[1]+rig.sailNormal[2])>=0?1:-1;
-const rail=side=>characterLimb(Array.from({length:13},(_,i)=>rig.project(rig.rail3(i/12,side))),'#42616a',1.25);
+const p=(u,h)=>rig.project(rig.sailPoint3(u,h));
+const nearSide=rig.sailNormal.reduce((sum,v,i)=>sum+v*rig.cameraRay[i],0)>=0?1:-1;
+const rail=side=>characterLimb(Array.from({length:13},(_,i)=>rig.project(rig.rail3(i/12,side))),'#344951',1.25);
 rail(-nearSide);
-polygon([rig.tip,rig.clew,rig.tack],rig.sailColor||'#78b9df');
-const sailPoint=(t,h)=>p(6+(rig.along-6)*t,rig.across*t,h);
-polygon([p(6,0,35),sailPoint(.72,16),p(6,0,11)],'#fff2c6');
-characterLimb([rig.mast,rig.tip],'#e8eedb',1.3);
-characterLimb([p(6,0,30),sailPoint(.48,24)],'#fff2cf',.65);
+ctx.save();ctx.beginPath();windsurferSailPath(rig);ctx.fillStyle=rig.sailColor||'#ed963f';ctx.fill();ctx.clip();
+// Opaque light panels follow the diagonal freeride cut; no see-through fabric.
+polygon([[.5,5],[18,9],[12.5,17],[5,23],[11,35],[8,42],[1.7,42],[.7,25]].map(([u,h])=>p(u,h)),'#dbecef');
+for(const h of [8,15,25,35,42]){
+const intersections=[];
+for(let i=1;i<rig.outlineLocal.length;i++){
+const a=rig.outlineLocal[i-1],b=rig.outlineLocal[i];
+if((a[1]<=h&&b[1]>h)||(b[1]<=h&&a[1]>h))intersections.push(a[0]+(b[0]-a[0])*(h-a[1])/(b[1]-a[1]));
+}
+if(intersections.length<2)continue;
+const lo=Math.min(...intersections),hi=Math.max(...intersections);
+characterLimb([p(lo,h),p(lo+(hi-lo)*.5,h-.4),p(hi,h-.8)],'#293d49',.9);
+}
+characterLimb([p(1,5),p(18,9),p(11,35),p(8,42)],'#f7cf57',.45);
+ctx.restore();
+ctx.beginPath();windsurferSailPath(rig);ctx.strokeStyle='#344951';ctx.lineWidth=.65;ctx.stroke();
+// The mast follows the curved luff instead of cutting across the sail as a straight pole.
+const luff=rig.sailCurves[0];ctx.beginPath();ctx.moveTo(...rig.mast);ctx.lineTo(...luff[0]);ctx.bezierCurveTo(...luff[1],...luff[2],...luff[3]);ctx.strokeStyle='#f6be49';ctx.lineWidth=1.45;ctx.stroke();
 rail(nearSide);
 }
 function drawWindsurfer(x,y,heading,clock=0,index=0,m=null){
-const rig=windsurferRig(x,y,heading,clock,m);rig.sailColor=index?'#ed965a':'#78b9df';
-ctx.save();ctx.translate(x,y);ctx.rotate(heading);drawSurfShortboard(false,.7);ctx.restore();
+const rig=windsurferRig(x,y,heading,clock,m);rig.sailColor=index?'#e3ad52':'#ed963f';
+ctx.save();ctx.translate(x,y);ctx.rotate(heading);ctx.globalAlpha=m?.air?.height>0?.28:.55;
+ellipse(-1,2,19,4,'#3c7e80');ctx.restore();
+const origin=rig.point(0,0,0),along=rig.point(1,0,0),across=rig.point(0,1,0);
+ctx.save();ctx.transform(along[0]-origin[0],along[1]-origin[1],across[0]-origin[0],across[1]-origin[1],...origin);
+drawSurfShortboard(false,.7,false);ctx.restore();
 drawWindsurferSail(rig);return rig;
 }
 function drawRepairWindsurfer(crew,clock,index){
@@ -4442,25 +4766,26 @@ const segment=Math.max(1,edge.findIndex(p=>p[0]<=along));
 const [ax,ay]=edge[segment-1],[bx,by]=edge[segment];
 return ay+(by-ay)*(ax-along)/(ax-bx);
 }
-function emitBoatWaveSpray(x,y,heading,impact,landing=false,section=null){
-const edge=BOAT_WAKE_HULLS[activeVessel].edge,bow=edge[0][0],stern=edge.at(-1)[0];
-const perSection=landing?5:6,count=landing?40:Math.ceil(bow-stern)*perSection;
-boatMotion.spray??=[];
+function emitBoatWaveSpray(x,y,heading,impact,landing=false,section=null,effect=null){
+const motion=effect?.motion||boatMotion,scale=effect?.scale??1;
+const edge=effect?.edge||BOAT_WAKE_HULLS[activeVessel].edge,bow=edge[0][0],stern=edge.at(-1)[0];
+const perSection=effect?.perSection??(landing?5:6),count=landing?Math.round(40*scale):Math.ceil(bow-stern)*perSection;
+motion.spray??=[];
 for(let i=section===null?0:section*perSection;i<(section===null?count:section*perSection+perSection);i++){
-const noise=n=>surfFoamNoise(i*17+n+(boatMotion.waveSerial||0)*53);
+const noise=n=>surfFoamNoise(i*17+n+(motion.waveSerial||0)*53);
 const angle=landing?noise(1)*Math.PI*2:heading+(i%2?1:-1)*(Math.PI/2+(noise(1)-.5)*.36);
 const mist=!landing&&i%perSection<2,gravity=landing?180:320;
-const speed=(landing?18+noise(2)*35:8+noise(2)*20)*(.5+impact/100);
-const vz=(landing?20+noise(3)*35:mist?16+noise(3)*16:28+noise(3)*50)*(.6+impact/120);
+const speed=(landing?18+noise(2)*35:8+noise(2)*20)*(.5+impact/100)*scale;
+const vz=(landing?20+noise(3)*35:mist?16+noise(3)*16:28+noise(3)*50)*(.6+impact/120)*Math.sqrt(scale);
 // Wave impact pushes water sideways, with only a little forward carry.
-const inherited=landing?0:Math.sign(boatMotion.velocity||0)*Math.min(Math.abs(boatMotion.velocity||0)*.06,speed*.18);
+const inherited=landing?0:Math.sign(motion.velocity||0)*Math.min(Math.abs(motion.velocity||0)*.06,speed*.18);
 let px=x,py=y,vx=Math.cos(angle)*speed+Math.cos(heading)*inherited,vy=Math.sin(angle)*speed+Math.sin(heading)*inherited;
 if(!landing){
 // Follow the actual tapered gunwale, including the pointed bow.
 const t=Math.floor(i/perSection)/(count/perSection-1),along=bow+(stern-bow)*t;
 const width=boatSprayHullWidth(edge,along),side=i%2?1:-1,across=(width+.4)*side;
 // Push water clear of the widening hull instead of moving its origin offshore.
-const relative=(boatMotion.velocity||0)-(Math.cos(heading)*vx+Math.sin(heading)*vy);
+const relative=(motion.velocity||0)-(Math.cos(heading)*vx+Math.sin(heading)*vy);
 const widening=Math.max(0,...edge.filter(p=>(along-p[0])*relative>0).map(p=>(p[1]-width)/Math.abs(along-p[0])));
 const outward=(-Math.sin(heading)*vx+Math.cos(heading)*vy)*side;
 const extra=Math.max(0,Math.abs(relative)*widening+4-outward);
@@ -4468,10 +4793,10 @@ vx-=Math.sin(heading)*side*extra;vy+=Math.cos(heading)*side*extra;
 px+=Math.cos(heading)*(along-bow)-Math.sin(heading)*across;
 py+=Math.sin(heading)*(along-bow)+Math.cos(heading)*across;
 }
-boatMotion.spray.push({x:px,y:py,vx,vy,vz,gravity,life:2*vz/gravity,age:0,size:landing?.7+noise(4)*1.3:mist?.2+noise(4)*.6:.45+noise(4)**2*4.4,trim:.8,wave:true,bow:!landing,mist});
+motion.spray.push({x:px,y:py,vx,vy,vz,gravity,life:2*vz/gravity,age:0,size:(landing?.7+noise(4)*1.3:mist?.2+noise(4)*.6:.45+noise(4)**2*4.4)*scale,trim:.8,wave:true,bow:!landing,mist});
 }
-if(section===null||section===0)boatMotion.waveSerial=(boatMotion.waveSerial||0)+1;
-if(landing){boatMotion.waveSplashes??=[];boatMotion.waveSplashes.push({x,y,age:0,impact});}
+if(section===null||section===0)motion.waveSerial=(motion.waveSerial||0)+1;
+if(landing){motion.waveSplashes??=[];motion.waveSplashes.push({x,y,age:0,impact});}
 }
 function advanceBoatLanding(dt){
 const landing=boatMotion.waveLanding;if(!landing)return;
@@ -4496,20 +4821,20 @@ const tilt=Math.sin(boatWavePitch(vessel))*.85,c=Math.cos(heading),s=Math.sin(he
 // Pivot the complete hull, cabin and rider around the stern; shadows stay on water.
 ctx.transform(1,-c*tilt,0,1-s*tilt,0,tilt*(c*x+s*y+stern));
 }
-function advanceBoatWaveSpray(time){
-const sweep=boatMotion.waveSpraySweep;if(!sweep)return;
-if(!boating||activeVessel!==sweep.vessel||fishingActive||boatAnchorBusy()){boatMotion.waveSpraySweep=null;return;}
-const edge=BOAT_WAKE_HULLS[activeVessel].edge,bow=edge[0][0],stern=edge.at(-1)[0],sections=Math.ceil(bow-stern);
+function advanceBoatWaveSpray(time,effect=null){
+const motion=effect?.motion||boatMotion,sweep=motion.waveSpraySweep;if(!sweep)return;
+if(!effect&&(!boating||activeVessel!==sweep.vessel||fishingActive||boatAnchorBusy())){motion.waveSpraySweep=null;return;}
+const edge=effect?.edge||BOAT_WAKE_HULLS[activeVessel].edge,bow=edge[0][0],stern=edge.at(-1)[0],sections=Math.ceil(bow-stern);
 for(;sweep.next<sections;sweep.next++){
 const along=bow+(stern-bow)*sweep.next/(sections-1);
-const contact=boatWaveContact(player.x,player.y,boatMotion.heading,activeVessel,sweep.index,time,along);
+const contact=boatWaveContact(player.x,player.y,motion.heading,effect?'fishing':activeVessel,sweep.index,time,along);
 // Each hull section emits only when it reaches this crest, even during a jump.
-if(!contact||Math.abs(contact.offset)>60){boatMotion.waveSpraySweep=null;return;}
+if(!contact||Math.abs(contact.offset)>60){motion.waveSpraySweep=null;return;}
 if(contact.offset*sweep.direction<0)break;
-const heading=boatMotion.heading;
-emitBoatWaveSpray(player.x+Math.cos(heading)*bow,player.y+Math.sin(heading)*bow,heading,sweep.impact,false,sweep.next);
+const heading=motion.heading;
+emitBoatWaveSpray(player.x+Math.cos(heading)*bow,player.y+Math.sin(heading)*bow,heading,sweep.impact,false,sweep.next,effect);
 }
-if(sweep.next>=sections)boatMotion.waveSpraySweep=null;
+if(sweep.next>=sections)motion.waveSpraySweep=null;
 }
 function advanceBoatWaves(dt){
 if(dt<=0)return;
@@ -4552,12 +4877,13 @@ motion.wavePitch=boatTrimLevel()*.065;motion.waveFlightAge=0;
 break;
 }
 }
-function drawBoatWaveSplashes(vessel){
-if(activeVessel!==vessel)return;
+function drawBoatWaveSplashes(vessel,effect=null){
+if(!effect&&activeVessel!==vessel)return;
+const motion=effect?.motion||boatMotion,scale=effect?.scale??1;
 ctx.save();
-for(const p of boatMotion.waveSplashes||[]){
-const t=p.age/850,r=8+t*(18+p.impact*.15);
-ctx.globalAlpha=(1-t)*.65;ctx.strokeStyle='#e7fff6';ctx.lineWidth=2*(1-t)+.5;
+for(const p of motion.waveSplashes||[]){
+const t=p.age/850,r=(8+t*(18+p.impact*.15))*scale;
+ctx.globalAlpha=(1-t)*.65;ctx.strokeStyle='#e7fff6';ctx.lineWidth=(2*(1-t)+.5)*scale;
 ctx.beginPath();ctx.ellipse(p.x,p.y,r,r*.45,0,0,Math.PI*2);ctx.stroke();
 }
 ctx.restore();
@@ -4641,18 +4967,19 @@ if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
 });
 ctx.closePath();ctx.clip('evenodd');
 }
-function drawBoatTrimSpray(x,y,heading,vessel,foreground=false){
-if(activeVessel!==vessel)return;
+function drawBoatTrimSpray(x,y,heading,vessel,foreground=false,effect=null){
+if(!effect&&activeVessel!==vessel)return;
+const motion=effect?.motion||boatMotion;
 ctx.save();ctx.lineCap='round';
 for(const bowPass of [false,true]){
 if(bowPass&&!foreground)continue;
-ctx.save();if(bowPass)clipBoatWaveSpray(vessel);
-for(const p of boatMotion.spray||[]){
+ctx.save();if(bowPass){if(effect)effect.clip?.();else clipBoatWaveSpray(vessel);}
+for(const p of motion.spray||[]){
 if(!!p.bow!==bowPass)continue;
 const t=Math.min(p.age,p.life),progress=t/p.life;
 const px=p.x+p.vx*t,py=p.y+p.vy*t,z=Math.max(0,(p.z||0)+p.vz*t-p.gravity*t*t/2);
 const dragon=dragonFlight?player:petDragonPosition,altitude=dragonFlight?.altitude||0;
-const overDragon=p.age<p.life&&z>=altitude&&Math.abs(px-dragon.x)<42&&Math.abs(py-z-(dragon.y-altitude))<35;
+const overDragon=!effect&&p.age<p.life&&z>=altitude&&Math.abs(px-dragon.x)<42&&Math.abs(py-z-(dragon.y-altitude))<35;
 // Bow impact spray rises in front of the hull and the breaking wave.
 if((p.bow||overDragon)!==foreground)continue;
 if(p.mist){
@@ -4864,6 +5191,8 @@ if(girl){
 characterEllipse(-c*3.5,2,2.5,4.2,hair);
 characterLimb([[-c*4,1],[-c*4.5,5]],'#ffffff20',.65);
 }
+// The scalp occludes the ears on rear views and the far ear at every heading.
+for(const side of [-1,1])characterEllipse(s*side*4,.8,1,1.4,skin);
 characterEllipse(0,0,4.5,5,hair);
 // Facial features travel around the round head continuously as the bow changes direction.
 const visibility=Math.max(0,Math.min(1,(s+.45)/.65));
@@ -4880,8 +5209,10 @@ ctx.globalAlpha=visibility;
 characterEllipse(c*3.6,1.3,1.1,.85,skin);
 characterLimb([[c*2-s*.7,2.8],[c*2,3],[c*2+s*.7,2.8]],'#b47861',.55);
 ctx.restore();
-characterEllipse(-s*4,.8,1,1.4,s<-.4?hair:skin);
-characterEllipse(s*4,.8,1,1.4,s<-.4?hair:skin);
+// Bring only the near ear forward as the face turns toward the camera.
+ctx.save();ctx.globalAlpha=Math.min(1,front*4);
+characterEllipse(s*(c>=0?1:-1)*4,.8,1,1.4,skin);
+ctx.restore();
 polygon([[-4.4,-1.6],[-4,-3.9],[-1.8,-5.3],[1.8,-5.3],[4,-3.6],[4.4,-1.5],[c*2,-2.5],[-c*2,-1.8]],hair);
 characterLimb([[-2.8,-3.6],[0,-4.3],[2,-3.8]],'#ffffff24',.7);
 ctx.restore();
@@ -5144,7 +5475,7 @@ ctx.save();
 // Overlapping sections join into the long whitewater arms left by the hull.
 for(let layer=0;layer<2;layer++)for(let i=1;i<points.length;i++){
 const a=points[i-1],b=points[i];
-if(Math.hypot(b.x-a.x,b.y-a.y)>40)continue;
+if(b.w.breakBefore||Math.hypot(b.x-a.x,b.y-a.y)>40)continue;
 ctx.globalAlpha=b.fade*(layer?.55:.22);
 const aw=a.width*(layer?.5:1.25),bw=b.width*(layer?.5:1.25);
 const ax=-Math.sin(a.w.heading)*aw,ay=Math.cos(a.w.heading)*aw;
@@ -6528,7 +6859,7 @@ function nearby(){if(rocketSession)return -1;const spaceSite=nearSpaceSite();if(
 function interact(){if(near===107){useRocket();return;}if(near===108){openSpaceMuseum();return;}if(near===106){useSailingDock();return;}if(near===105){useJetskiDock();return;}if(near>=300){visitBeachDiscovery(near-300);return;}if(near===104){launchSpeedboat();return;}if(near===103){openSurfShack();return;}if(near>=200){startVolleyball(near-200);return;}if(near===102){returnToAnchoredBoat();return;}if(near===101){if(canCallWatersportsBoat()){callWatersportsBoat();return;}if(state.wakeboard)startWakeboarding('wakeboard');return;}if(near===100){mountPetDragon();return;}if(near>=8){visitBoatIsland(near-8);return;}if(near===7)boardOwnBoat();else if(near===6)launchBoat();else if(near===5)openFerry();else if(near>=0)visit(near);}
 let last=0;function tick(t){const dt=Math.min(40,t-last||16);last=t;if(!document.querySelector('dialog[open]'))advanceSwimming(dt);advanceFishing(dt);if(!fishingActive&&!diveAnimation&&!document.querySelector('dialog[open]')){let dx=(keys.has('right')||keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('left')||keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('down')||keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('up')||keys.has('w')||keys.has('arrowup')?1:0),speed=dt*(dragonFlight?(dragonFlight.stage==='swimming'?SWIMMING_DRAGON_SPEED:FLYING_DRAGON_SPEED):boating?.14:swimming?.065:.09)/(dx&&dy?Math.sqrt(2):1);if(boating)driveBoat(dt,-dy,dx);else moveExplorer(dx*speed,dy*speed);}draw();near=voyage||fishingActive?-1:nearby();$('#interaction').innerHTML=near>=0&&near!==6&&near!==101?`<button id="interactBtn">${suggestionMarkup(near===108?'E · Visit Space Museum · earn fuel ↗':near===107?(rocketRepair?'Rocket crew rebuilding…':!rocketAccess()?'E · Permanent rocket ticket · 250 ◆':!(currentProfile().rocketFuel>0)?'E · Rocket · earn museum fuel first':'E · Climb rocket ladder ↗'):near===106?(state.windsurfer?'E · Launch windsurfer ↗':'E · Buy windsurfer · 50 ◆'):near===105?(state.jetski?'E · Launch jet ski ↗':'E · Buy jet ski · 150 ◆'):near===104?'E · Launch speedboat ↗':near===103?'E · '+surfCommandLabel()+' ↗':near>=300?'E · Visit '+BEACH_DISCOVERIES[near-300].name+' ↗':near>=200?'E · Play beach volleyball ↗':near===102?'E · Return to anchored boat ↗':near===100?'E · Fly on your pet dragon ↗':near===7?'E · Climb into your boat ↗':near===5?'E · Board the ferry ↗':'E · '+(near>=8?boatIslands[near-8].name:locations[near].name)+' ↗')}</button>`:'';if(near>=0&&near!==6&&near!==101)$('#interactBtn').onclick=interact;$('#region').textContent=rocketSession?'Rocket · '+rocketSession.phase:windsurfSession?'Windsurfing!':frisbeeGame?'Playing frisbee on the beach!':volleyball?'Playing beach volleyball!':wakeboardRide?(wakeboardRide.equipment==='waterskis'?'Waterskiing behind the tow boat!':'Wakeboarding behind the tow boat!'):dragonFlight?(dragonFlight.stage==='swimming'?'Swimming on your pet dragon!':'Flying on your pet dragon!'):sharkRide?(sharkRide.kind==='dragon'?'Riding the Loch Ness monster!':sharkRide.kind==='marlin'?'Riding a blue marlin!':'Riding a shark!'):swimming?(diveAnimation?'Diving into the sea…':'Swimming · head to shore or your boat'):boating?(activeVessel==='jetski'?'Riding your jet ski':activeVessel==='speedboat'?'Driving your triple-outboard speedboat':activeVessel==='ferry'?'Driving the ferry':'Your sponsored fishing boat'):voyage?'Sailing the Skyseed sea…':near===6?'Fishing dock':near===5?'Ferry landing':allIslands[islandPolys.findIndex(p=>inside(player.x,player.y,p))]?.name||'Island crossing';requestAnimationFrame(tick);}
 window.addEventListener('keydown',e=>{if(rocketKey(e))return;if(document.querySelector('dialog[open]'))return;const k=e.key.toLowerCase();if(activeMapPanel==='ferry'&&(k==='enter'||k==='e')){e.preventDefault();if(!e.repeat)confirmFerryBoarding();return;}if(activeMapPanel==='ferry'&&['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k))closeMapPanel();if(k==='escape'&&(activeMapPanel||activeSubmenu)){e.preventDefault();closeMapPanel();keys.clear();canvas.focus({preventScroll:true});return;}if(['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName)||e.target?.isContentEditable)return;
-if(windsurfSession&&['x','escape','e','f','q',' '].includes(k)){e.preventDefault();if(!e.repeat){if(k===' ')trimWindsurfer();else if(['x','escape'].includes(k))finishWindsurfing();}return;}
+if(windsurfSession&&['x','escape','e','f','q','t',' '].includes(k)){e.preventDefault();if(!e.repeat){if(k===' ')jumpWindsurfer();else if(k==='t')trimWindsurfer();else if(k==='e')remountWindsurfer();else if(['x','escape'].includes(k))finishWindsurfing();}return;}
 if(k==='e'&&canCallWatersportsBoat()){e.preventDefault();if(!e.repeat)callWatersportsBoat();return;}
 if(nearWatersportsDock()&&((k==='e'&&state.wakeboard)||(k==='r'&&state.waterskis))){e.preventDefault();if(!e.repeat)startWakeboarding(k==='r'?'waterskis':'wakeboard');return;}
 if(e.target?.tagName==='BUTTON')return;

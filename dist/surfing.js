@@ -1239,9 +1239,9 @@ surfWaterDrop(impact-12+age*(31+grain*53),280+grain*8,1.5+grain*4.5,.4+grain*.6,
 }
 ctx.restore();
 }
-function drawSurfShortboard(paddling,deck=.48){
+function drawSurfShortboard(paddling,deck=.48,shadow=true){
 ctx.save();ctx.scale(1,paddling?1:deck);
-ellipse(-1,4,19,6,'#3c7e8055');
+if(shadow)ellipse(-1,4,19,6,'#3c7e8055');
 // Pulled-in rails run from a squared squash tail to a sharp, rockered nose.
 ctx.beginPath();ctx.moveTo(21,0);ctx.bezierCurveTo(12,-7,-3,-8,-17,-4);
 ctx.lineTo(-18,-2.5);ctx.lineTo(-18,2.5);ctx.lineTo(-17,4);

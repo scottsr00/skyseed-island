@@ -20,7 +20,8 @@ boat occupants with bent legs and forward arms. Driver shoulders, elbows, vest p
 hands use the hull projection continuously through turns. Hidden vest faces are culled,
 and the hands grip the corresponding sides of the wheel using that vessel’s steering state.
 `drawBoatDriverFace()` moves facial features around a round, banked head continuously with
-heading. The tow captain shares this renderer with its own motion. Explorer side-view
+heading. Ears draw behind the scalp; only the near ear comes forward as the face turns toward
+the camera, keeping rear views occluded. The tow captain shares this renderer with its own motion. Explorer side-view
 shoulders sit behind the chest, elbows bend forward, and arms counter-swing against their legs.
 
 ## Presentation

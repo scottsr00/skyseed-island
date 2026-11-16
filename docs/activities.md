@@ -56,33 +56,88 @@ Windsurfing uses strenuous energy scaling and returns to this dock on exhaustion
 
 `windsurfSession`, `startWindsurfing()`, `advanceWindsurfing()`, and `finishWindsurfing()` own
 the session. Swimming marks the water occupancy, while the dispatcher bypasses swimmer
-movement and sea mounts. Swept board hull checks block islands, piers, bridges, other boats,
+movement and sea mounts. Swept board hull checks detect islands, piers, bridges, other boats,
 and deep ocean. Saves record the safe dock position; activity resets clear the session.
+
+Impacts call `crashWindsurfer()` instead of simply setting speed to zero. The board
+stops at the last clear hull position; the rider releases both hands and pitches forward
+with their incoming horizontal velocity. `advanceWindsurferCrash()` applies gravity,
+water/ground drag and a splash for water contact. The rider then pauses to collect
+themselves and waits beside the board. The rig collapses separately while the articulated rider leaves the board.
+`windsurferFlightClear()` permits high jumps over low obstacles, checks timber below
+10 units and boats below 24, and restores full hull checks near the surface. Touchdown
+also checks the complete hull before accepting a landing. A blocked low flight or
+landing starts the same momentum wipeout. Controls cannot launch, trim or steer during
+the fall. E or Get back on queues `remountWindsurfer()`; early presses wait for the
+fall and 700 ms collect-yourself animation. In water the rider treads with submerged
+legs while waiting and returning; each foot emerges during the climb. The rider returns to the board, lifts
+the rig and steps aboard one foot at a time. Fixed-length limb solves keep the hands
+and knees natural through the climb. A board stranded on an obstacle is retrieved
+to nearby clear water, facing away from the impact. Remounting rechecks hull clearance
+before restoring sailing at zero speed. Repeated E does not restart recovery. Without E
+the rider stays ready; X/Escape or Return to Sailing dock still ends the ride. Crashes pause in dialogs, retain safe-dock saves
+and ownership, and clear with exit, exhaustion, profile/age changes and reset.
 
 The wind always blows from northwest to southeast. A sailing-only compass HUD shows the
 source and direction, plus the current sail-handling stage. `windsurfDrive()` makes a beam
 reach fastest at 175 world pixels/second, reduces downwind speed, and removes thrust inside a 40-degree head-to-wind
 zone. Coasting bleeds speed in this zone; low-speed steering remains available to turn out.
-Press Space or Sheet in while sailing within about 12 degrees of a beam reach to bring
+Press T or Sheet in while sailing within about 12 degrees of a beam reach to bring
 the clew in and gain up to 40% more speed (245 world pixels/second on a perfect reach).
 Press again to ease the sail. Trimming builds and releases gradually; turning away from
 the reach, braking, or flipping automatically eases it. The trim button is disabled
 outside this heading window, and the wind HUD announces the available boost. Modal dialogs
 pause trim along with sailing. Trim is session-only and resets with the session.
 
+Space or the Jump button launches a wave hop when sailing offshore from Mainland Beach
+at 60+ world pixels/second, within the visible 25–350-unit surf belt. `windsurferJumpWave()`
+samples the same crests as `drawBeachWaves()`; meeting a larger breaking crest boosts
+launch velocity and airtime. Press Space or Front flip again on any jump to attempt one 360° forward loop.
+`windsurferCanFrontFlip()` permits the attempt regardless of remaining airtime. The
+820 ms rotation must finish before touchdown: smaller hops or late presses wipe out
+if the roll is incomplete, preserving its impact orientation and forward momentum.
+The outcome uses the exact water-contact time, including when touchdown and roll
+completion occur in the same simulation step. E recovers through the usual collect-yourself
+and remount sequence. Key repeats cannot start or restart a roll.
+
+`advanceWindsurferAir()` owns ballistic height, one loop per jump, and landing spray.
+Airborne travel retains launch heading and momentum, uses height-aware swept hull checks,
+and emits no hull wake. The complete solved rider, board and rig rotate together around
+the cross-board axis during projection; sail occlusion uses the rotated camera ray.
+The shadow remains on the water. Landing restores normal sailing with a brief splash
+and a small speed loss. `advanceWindsurferWaves()` detects the same visible crest
+crossings as boats and passes a board-sized hull through `advanceBoatWaveSpray()`.
+`windsurferSprayEffect()` supplies independent particles, half-sized droplets/mist,
+scaled water rings and fewer particles per section to the shared boat emitter/renderers.
+The spray sweeps from bow to tail as sections cross water, clips behind the narrow deck,
+and stops emitting high in the air. Jump landings use `emitBoatWaveSpray()` too.
+Existing particles fall and fade while sailing or stopped; dialogs freeze them, and
+session cleanup removes them. Dialogs pause flight; exiting, exhaustion, profile/age changes,
+and resets clear it with the session. Saves retain the safe dock, never an airborne pose.
+
+
 As speed builds the hips settle toward the rear foot and lower into a loaded stance.
 The rear leg bends under the rider while the front leg extends; during a foot switch the
 hips return toward center. The mast rakes toward the tail as speed increases.
 Sheeting in adds rake and draws the clew closer, keeping the hands on the rider-facing rail.
+The freeride rig reaches about 37° of aft rake at maximum speed and full trim; the
+mast foot stays attached to the board and the rig comes upright during a flip for boom clearance.
+`windsurferWaterPose()` raises the nose as the board planes, reducing the wet length
+from the full hull to its last three board units (about a foot). Irregular, speed-scaled
+skips lift the board, feet and rig together. `recordWindsurferWake()` uses that same
+contact model to emit narrow tail foam, omit airborne samples and vary landing spray.
+The shared boat wake renderer respects these gaps instead of joining across skips;
+ordinary boat wakes keep their continuous strips.
 Rig handling briefly reduces drive. `advanceWindsurfing()` uses steps of at most 20 ms.
 
 `windsurferRig()` keeps the mast forward and the clew aft. `drawWindsurfer()` directly reuses
 `drawSurfShortboard()` from surfing, including the rails, tail, deck colors and graphics.
 `windsurferRiderPose()` solves the skeleton in world space before projecting it onto the
-screen. The stance rests on the upwind rail; two 5.8-unit leg segments form each bent leg.
+screen. The stance rests on the upwind rail; two 5.4-unit leg segments form each bent leg.
 The pelvis follows the span between the actual feet as they switch, so each leg remains
-attached on its own side rather than crossing toward the other foot. Knees bend in the
-same leeward plane, and legs render far-to-near by world depth.
+attached on its own side rather than crossing toward the other foot. Knees bend forward with the toes, using a continuous pole that does not flip when the
+pelvis turns. Rounded kneecaps and short hems keep the calf silhouette natural; legs
+render far-to-near by world depth.
 Each arm has fixed 6-unit upper/lower segments through `windsurfJoint()`. The shoulder
 position fits the held grips before solving elbows, rather than stretching arms. A shorter
 boom and a windward-raked mast keep both grips within reach. Sail load shifts the hips
@@ -92,7 +147,9 @@ heading while the feet and weight stay on the upwind side. The head uses the sha
 continuous boat-driver face renderer, including a back-of-head view when sailing north. Sleeves, shaped
 vest panels, hands, neck and hair share the joint positions.
 
-Sail fabric and inset panels use opaque colors. The boom has two curved rails, one on
+The freeride sail has a curved luff, broad swept head, rounded leech and low curved
+foot, with dark battens and orange and pale panels. Its cubic outline also defines
+the rider occlusion boundary. Sail fabric and inset panels use opaque colors. The boom has two curved rails, one on
 each side of the fabric; both hands target the rail facing the rider. `windsurfSailSide()`
 classifies geometry against the actual sail plane and camera projection. Arms split at
 plane crossings, and `withWindsurfSailOcclusion()` clips only their hidden overlap with the
@@ -100,17 +157,20 @@ fabric. Both arms, sleeves and hands respect this mask; there is no always-visib
 
 Crossing either wind axis starts an 1100 ms sail flip through `advanceWindsurferRig()`:
 release the back hand, guide the clew around the outside of the bow with the front hand, then regrip and
-exchange hand roles and lead foot. `windsurferFootPose()` coordinates three short steps:
-rear foot to center, old front foot aft, then the center foot forward. Only one foot lifts
-at a time, with a small crouch and smooth weight transfer; the paths stay within the deck.
+exchange hand roles and lead foot. Every transition uses the same two-step sequence in
+`windsurferFootPose()`: the back foot steps forward onto the new side, alongside the old
+front foot. Both feet briefly stand shoulder-width apart and point at the nose. The old
+front foot then steps aft onto the new side while the new front foot stays planted.
+Only one foot lifts at a time; the hips move forward over the temporary parallel stance,
+then settle aft again. Both steps stay within the deck.
 The new lead foot persists for the next tack, and stepping shares the paused flip clock.
 `windsurferSailPose()` interpolates the swing and grip exchange without
 snapping. The boom takes the long arc around the bow, away from the rider standing behind the
 forward mast, rather than sweeping through their torso on the shorter sternward arc.
 Tack hysteresis prevents repeated flips while hovering near a wind axis. The flip
 clock and hand roles are session-only, pause in dialogs, and clear with the sailing session.
-Departing repair crews share the board, wind-oriented rig and rider artwork. `recordWindsurferWake()` feeds
-`recordHullWake()` at 0.42 scale, retaining the shared spreading bow foam and spray without
+Departing repair crews share the board, wind-oriented rig and rider artwork. `recordWindsurferWake()` supplies
+the shared boat wake renderer at 0.42 scale, retaining spreading foam and spray without
 motor wash. Player and crew wakes have separate simulation-owned samples, age while stopped,
 and pause in dialogs. Drawing does not advance their clocks.
 
