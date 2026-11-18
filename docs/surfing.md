@@ -120,8 +120,11 @@ and `drawBoatWake()` during paddling, pop-up, and riding: distance-spaced hull c
 connected spreading whitewater arms, turbulent center foam, and short-lived hull spray.
 It uses 55% of the tow hull's size, further scaled to the caught wave size, and projects the
 samples through the scrolling wave camera. `drawSurfHullWake()` clips the shared wake to the
-wave face; `s.hullWake` is independent of the boat and wakeboarder accumulators. Riding still
-adds turn/landing rail spray. Pauses/dialogs freeze trails, airs stop emission while existing
+wave face; `s.hullWake` is independent of the boat and wakeboarder accumulators. During a carve, the hips settle over the tail and the rear knee turns toward the nose.
+The leading hand drops while the trailing elbow opens. As the shoulders unwind, weight moves
+forward over the planted feet. Rail pressure and speed set the size of the spray fan.
+Each sample leaves the tail tangent to the board and spreads toward the outside of that turn.
+Short water sheets break into droplets that arc back down. Landing spray spreads to both sides. Pauses/dialogs freeze trails, airs stop emission while existing
 foam fades, and each new wave resets the samples. `surfWipeout()` captures the starting screen position, board heading, and whether the fall began
 in the air. `surfWipeoutPose()` / `drawSurfWipeout()` tumble the detached rider down to the trough
 in 0.95 seconds, then submerge the body beneath the trough over 0.28 seconds. A short splash

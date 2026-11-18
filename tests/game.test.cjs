@@ -3197,9 +3197,9 @@ for(const [g,speed] of [[slow,.22],[fast,.7]])g.run(`setSurfTestRide();surfSessi
 slow.run('advanceSurfing(600)');fast.run(`keys.add('down');advanceSurfing(300);keys.clear();keys.add('up');advanceSurfing(300)`);
 assert.ok(fast.run('surfRiderPose().crouch')>slow.run('surfRiderPose().crouch'));
 assert.ok(Math.abs(fast.run('surfRiderPose().lean'))>Math.abs(slow.run('surfRiderPose().lean')));
-for(const g of [slow,fast])g.run(`let sprayCount=0;const wakeRect=rect;rect=(...args)=>{if(args[4]==='#f0fff1'||args[4]==='#b5e7db')sprayCount++;wakeRect(...args)};drawSurfBoardWake()`);
+for(const g of [slow,fast])g.run(`let sprayCount=0;const wakeStroke=ctx.stroke;ctx.stroke=function(){if(this.strokeStyle==='#f0fff1'||this.strokeStyle==='#b5e7db')sprayCount++;wakeStroke.call(this)};drawSurfBoardWake()`);
 assert.ok(fast.run('sprayCount')>slow.run('sprayCount'));
-assert.ok(fast.run('surfSession.wake.some(mark=>mark.strength>.4)'));
+assert.ok(fast.run('surfSession.wake.some(mark=>Math.abs(mark.rail)>.4)'));
 assert.ok(fast.run('surfSession.wake.at(-1).y!==surfSession.wake[0].y'));
 });
 

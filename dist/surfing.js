@@ -810,7 +810,7 @@ s.wakeClock=(s.wakeClock||0)+ms;
 while(s.wakeClock>=32){
 s.wakeClock-=32;
 const {riderX}=surfRideView(s),crest=surfRideCrest(riderX),y=crest+s.y*(279-crest);
-s.wake.push({x:riderX-(s.scroll||0),y,speed:s.speed,strength:s.carveStrength,side:-Math.sign(s.carveLean||Math.sin(s.angle)||1),angle:s.angle-Math.PI,age:s.wakeClock,seed:Math.floor((s.scroll||0)*7),landing:(s.landingSpray||0)/400});
+s.wake.push({x:riderX-(s.scroll||0),y,speed:s.speed,rail:s.carveLean,deck:surfBoardPerspective(s).deck,angle:s.angle,age:s.wakeClock,seed:Math.floor((s.scroll||0)*7),landing:(s.landingSpray||0)/400});
 }
 }
 function emitSurfLipSpray(s,power,kind){
@@ -860,22 +860,34 @@ if(i%4===0){ctx.globalAlpha=(1-t)*.12;surfWaterDrop(x+1,y+1,1.5+power,1+grain,'#
 }
 ctx.restore();
 }
-function surfWakePower(mark){return Math.min(1,mark.speed/.85)*(.2+mark.strength*.8)+(mark.landing||0)*.5;}
 function drawSurfBoardWake(){
 const s=surfSession;if(!s)return;
 drawSurfHullWake();
 const marks=s.wake||[];
 ctx.save();
 for(const mark of marks){
-const power=surfWakePower(mark),x=mark.x+(s.scroll||0)+Math.cos(mark.angle)*12,y=mark.y+Math.sin(mark.angle)*12+3;
-if(mark.age>700)continue;
-const count=Math.floor(1+mark.speed*3+mark.strength*9+mark.landing*8);
+if(mark.age>=700)continue;
+const t=mark.age/700,load=Math.abs(mark.rail),impact=mark.landing||0;
+const power=Math.min(1,load*mark.speed/.85+impact*.6);
+const dx=Math.cos(mark.angle),dy=Math.sin(mark.angle);
+const count=Math.ceil(power*14);
 for(let i=0;i<count;i++){
-const grain=surfFoamNoise(mark.seed+i*17),t=mark.age/700;
-const px=x+t*(16+mark.speed*70)+grain*7;
-const py=y+mark.side*t*(4+mark.strength*32)-Math.sin(t*Math.PI)*(3+power*(12+grain*14))+t*t*7;
-ctx.globalAlpha=(1-t)*(.35+power*.55);
-rect(px,py,grain>.7&&power>.5?2:1,1,grain>.4?'#f0fff1':'#b5e7db');
+const grain=surfFoamNoise(mark.seed+i*17),fan=surfFoamNoise(mark.seed+i*31+91);
+// Landing water splits to both sides. A carving rail sheds a sheet outside the turn.
+const side=impact>load?(i%2?1:-1):Math.sign(mark.rail);
+const nx=dy*side,ny=-dx*side,tail=10+grain*7;
+const x=mark.x+(s.scroll||0)-dx*tail+nx*3.5*mark.deck;
+const y=mark.y-dy*tail+ny*3.5*mark.deck;
+const spread=(9+power*43)*(.35+fan*.85),trail=(7+mark.speed*18)*(1.2-fan*.6);
+const vx=nx*spread-dx*trail,vy=ny*spread*.65-dy*trail-(11+power*40)*(.45+grain*.75);
+const px=x+vx*t,py=y+vy*t+35*t*t;
+if(i===0&&t<.4&&power>.25){
+ctx.globalAlpha=(1-t/.4)*power*.36;
+surfWaterShape([[x+dx*4,y+dy*4],[px+dx*3,py+dy*3],[px,py-1],[x-dx*2,y-dy*2]],'#dafaf3');
+}
+ctx.globalAlpha=(1-t)*(1-t)*(.35+power*.6);
+ctx.beginPath();ctx.strokeStyle=grain>.4?'#f0fff1':'#b5e7db';ctx.lineWidth=.55+grain*.65;ctx.lineCap='round';
+ctx.moveTo(px-vx*.036,py-(vy+70*t)*.036);ctx.lineTo(px,py);ctx.stroke();
 }
 }
 ctx.restore();
@@ -900,7 +912,11 @@ const bank=s?.phase==='riding'?Math.max(-1,Math.min(1,lean))*(1-surfSnapPose(s).
 const intoFace=Math.max(0,-Math.cos(heading)*bank),sideLean=Math.sin(heading)*bank*7;
 const faceLeanOffset=intoFace*6;
 const torsoHeight=8*(1-intoFace*.65)*(1-grab*.35),armDepth=.55*(1-intoFace*.35);
-return {grab,grabRail:surfBoardPerspective(s).deck*6.4,intoFace,faceLeanOffset,torsoHeight,armDepth,armLead,armHeading,lean:sideLean,crouch:fall?6:air?5+grab*7:1+strength*5+speed*1.3+impact*4,reach:fall?13:air?8:4+strength*6,speed,strength};
+// Settle over the tail under rail pressure, then drive forward as the shoulders unwind.
+const railLoad=Math.abs(bank)*(.45+.55*speed);
+const release=Math.max(0,Math.abs(bank)-Math.abs(armLead/.8));
+const tailWeight=railLoad*3.4-release*5;
+return {railLoad,tailWeight,grab,grabRail:surfBoardPerspective(s).deck*6.4,intoFace,faceLeanOffset,torsoHeight,armDepth,armLead,armHeading,lean:sideLean,crouch:fall?6:air?5+grab*7:1+strength*5+speed*1.3+impact*4,reach:fall?13:air?8:4+strength*6,speed,strength};
 }
 function surfRiderArms(pose,shoulderX,shoulderY){
 // Project the shoulder turn and bank together; the arms remain attached as the chest foreshortens.
@@ -910,6 +926,9 @@ const reach=side>0?15+pose.reach*.25:13+pose.reach*.2;
 const shoulder=[shoulderX+side*dx*3.8,shoulderY+side*dy*3.8+1];
 const elbow=[shoulderX+side*dx*9,shoulderY+side*dy*9+3-pose.strength];
 const hand=[shoulderX+side*dx*reach,shoulderY+side*dy*reach+1-pose.strength*2];
+// The leading hand guides the rail low while the trailing elbow opens for balance.
+elbow[1]+=side*pose.railLoad*2;
+hand[1]+=side*pose.railLoad*5;
 const grab=pose.grab||0;
 elbow[0]+=(side*6-elbow[0])*grab;
 // Both hands close onto opposite rails in the board's shared aerial frame.
@@ -1324,13 +1343,15 @@ drawSwimmingCharacter(0,-.5,{phase:s?.paddlePhase||0,effort:s?.paddleEffort||0,t
 // Draw the feet in that shared frame so the board rotation is not applied twice.
 const air=s?.phase==='airborne';ctx.save();if(air)ctx.rotate(-rotation);
 const pose=surfRiderPose(s),snap=surfSnapPose(s),board=surfBoardFrame(air?0:rotation,s),crouch=pose.crouch,back=Math.cos(s?.angle??Math.PI)*snap.leanBack;
-const hipX=pose.lean*.6+back*.55+board.x*.85,hipY=-12+crouch*.55-snap.tailLift*.35+board.y*.2-pose.intoFace*2;
+const hipX=-board.cos*pose.tailWeight+pose.lean*.6+back*.55+board.x*.85,hipY=-board.sin*pose.tailWeight-12+crouch*.55+pose.railLoad*2-snap.tailLift*.35+board.y*.2-pose.intoFace*2;
 const shoulderX=hipX+pose.lean*.75+(s?.phase==='airborne'?0:1)+back*.8,shoulderY=hipY-pose.torsoHeight-pose.faceLeanOffset;
 // Knees and hips follow the inside rail; the chest leans and foreshortens toward the face.
 const feet=[-7,7].map(v=>({x:v*board.cos*(s?.phase==='wipeout'?1.4:1)+board.x,y:v*board.sin+board.y-1+(s?.phase==='wipeout'?Math.sin((s.wipeoutTime||0)*.012+v)*4:0)}));
 const limb=(points,color,width)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(...points[0]);for(const p of points.slice(1))ctx.lineTo(...p);ctx.stroke();};
 for(let i=0;i<2;i++){
-const foot=feet[i],kneeX=(foot.x+hipX)*.5+(i?3:-3)+pose.lean*.35,kneeY=(foot.y+hipY)*.5-crouch*.12-pose.grab*3;
+const foot=feet[i],kneeDrive=pose.railLoad*(i?2:6);
+const kneeX=(foot.x+hipX)*.5+(i?3:-3)*(1-pose.railLoad)+board.cos*kneeDrive+pose.lean*.35;
+const kneeY=(foot.y+hipY)*.5+board.sin*kneeDrive-crouch*.12-pose.grab*3;
 limb([[hipX+(i?2:-2),hipY],[kneeX,kneeY],[foot.x,foot.y]],'#25485c',3.6);
 limb([[kneeX,kneeY],[foot.x,foot.y]],'#d99b70',2.5);
 ellipse(foot.x,foot.y,2.9,1.4,'#f2c992');
