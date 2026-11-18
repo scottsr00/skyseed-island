@@ -30,6 +30,9 @@ starts beside the mouth's top edge, where the lip meets the curl, with three lin
 Crumbling foam follows island coastlines; offshore waves clip to water beneath land. Renting adds
 crests in the local break. Coastal wave height increases with distance from shore: the outer break
 at 280 world units retains the original full-size wave, while every nearer wave is smaller.
+Every sixth incoming crest (about every 25 seconds) is 45% taller in the outermost
+of the three breaks. It follows the usual path and tapers to regular size before
+reaching the middle break.
 Catching a coastal lip fixes that wave size for the takeoff and ride.
 
 ## Riding artwork

@@ -3973,9 +3973,9 @@ const poor=game();poor.run('state.crystals=24;openFerry();confirmFerryBoarding()
 test('restricted boats hint before deep water, avoid repeated hints, and hint again after retreating',()=>{
 for(const vessel of ['fishing','ferry'])for(const side of [-1,1]){
 const g=game();g.run(`boating=true;activeVessel='${vessel}';state.ferryRemaining=FERRY_RIDE_DURATION;player.x=${side<0?'WORLD.left+WORLD.width*.14+90':'WORLD.left+WORLD.width*.86-90'};player.y=900;boatPosition={x:player.x,y:player.y};resetBoatMotion();moveBoat(${side*10},0,${side<0?'Math.PI':'0'})`);
-assert.match(g.node('#toast').textContent,/Only the speedboat/);
+assert.match(g.node('#toast').textContent,/speedboat or windsurfer/);
 g.node('#toast').textContent='Another hint';g.run(`moveBoat(${side*2},0,${side<0?'Math.PI':'0'})`);assert.equal(g.node('#toast').textContent,'Another hint');
-g.run(`player.x=0;moveBoat(2,0,0);player.x=${side<0?'WORLD.left+WORLD.width*.14+90':'WORLD.left+WORLD.width*.86-90'};moveBoat(${side*10},0,${side<0?'Math.PI':'0'})`);assert.match(g.node('#toast').textContent,/Only the speedboat/);
+g.run(`player.x=0;moveBoat(2,0,0);player.x=${side<0?'WORLD.left+WORLD.width*.14+90':'WORLD.left+WORLD.width*.86-90'};moveBoat(${side*10},0,${side<0?'Math.PI':'0'})`);assert.match(g.node('#toast').textContent,/speedboat or windsurfer/);
 }
 const g=game();g.run('boating=true;activeVessel="speedboat";player.x=WORLD.left+WORLD.width*.14+80;player.y=900;resetBoatMotion();moveBoat(-20,0,Math.PI)');assert.doesNotMatch(g.node('#toast').textContent,/Deep water ahead/);
 });
@@ -6029,4 +6029,95 @@ const before=g.run('JSON.stringify(windsurfSession)');g.node('#challenge').open=
 g.node('#challenge').open=false;g.run('advanceWindsurfing(20)');assert.equal(g.run('windsurfSession.crash.reason'),'unfinished-roll');
 assert.ok(g.run('Math.abs(windsurfSession.crash.roll)')>2.8,'impact begins near the inverted pose');
 const crash=g.run('JSON.stringify(windsurfSession)');g.run('drawPlayerWindsurfer()');assert.equal(g.run('JSON.stringify(windsurfSession)'),crash);
+});
+
+
+test('windsurf jump raises the nose and touches down on the tail before the bow settles',()=>{
+const g=game();g.run(`state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();player.x=100;player.y=400;
+const m=windsurfSession;m.heading=0;m.velocity=175;m.air={height:.1,velocity:115,launchVelocity:115,elapsed:0,flipElapsed:null,flipDuration:820};
+advanceWindsurferAir(m,150);globalThis.launchRig=windsurferRig(player.x,player.y,0,m.clock,m);`);
+assert.ok(g.run('launchRig.water.pitch')>.25,'distinct nose-up takeoff');
+assert.ok(g.run('launchRig.world(21,0,0)[2]-launchRig.world(-18,0,0)[2]')>9);
+g.run('while(windsurfSession.air)advanceWindsurferAir(windsurfSession,20);globalThis.touchRig=windsurferRig(player.x,player.y,0,0,windsurfSession)');
+assert.ok(g.run('windsurfSession.landing.pitch')>.2);assert.equal(g.run('touchRig.world(-18,0,0)[2]'),0,'tail is at the water');
+assert.ok(g.run('touchRig.world(21,0,0)[2]')>8,'bow remains raised on first contact');
+assert.equal(g.run('windsurfSession.landing.next'),1,'only tail section splashes first');
+assert.ok(g.run('windsurfSession.spray.every(p=>p.x<player.x-15)'));
+g.run('advanceWindsurferAir(windsurfSession,400)');assert.equal(g.run('windsurfSession.landing.next'),5);
+assert.equal(g.run('windsurfSession.waveSplashes.every((p,i,a)=>!i||p.x>a[i-1].x)'),true,'water contact progresses tail to nose');
+assert.ok(g.run('windsurferRig(player.x,player.y,0,0,windsurfSession).water.pitch')<g.run('touchRig.water.pitch')*.5);
+});
+
+test('windsurf landing splash grows with jump height and pauses with the ride',()=>{
+const samples=[];
+for(const peak of [5,55]){
+const g=game();g.run(`state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();player.x=100;player.y=400;
+windsurfSession.heading=0;windsurfSession.velocity=175;windsurfSession.air={height:.1,velocity:-Math.sqrt(360*${peak}),peakHeight:${peak},elapsed:1000,flipElapsed:null,flipDuration:820};
+advanceWindsurferAir(windsurfSession,20);`);
+samples.push(JSON.parse(g.run('JSON.stringify({strength:windsurfSession.landing.strength,count:windsurfSession.spray.length,scale:windsurfSession.waveSplashes[0].scale,maxV:Math.max(...windsurfSession.spray.map(p=>p.vz))})')));
+const before=g.run('JSON.stringify(windsurfSession)');g.node('#challenge').open=true;g.run('advanceWindsurfing(400)');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+g.node('#challenge').open=false;g.run('drawPlayerWindsurfer()');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+}
+for(const key of ['strength','count','scale','maxV'])assert.ok(samples[1][key]>samples[0][key],key+' grows for a high jump');
+});
+
+test('windsurf nose-up jump geometry keeps feet on the board and both hands within human reach',()=>{
+const g=game();g.run(`globalThis.jumpFit=[];for(let i=0;i<16;i++)for(const elapsed of [0,100,400,800,1200]){
+const m={heading:i*Math.PI/8,velocity:245,trim:1,tack:windsurferTack(i*Math.PI/8),frontHand:0,air:{height:30,velocity:130-elapsed*.18,launchVelocity:130,peakHeight:47,elapsed,flipElapsed:null,flipDuration:820}};
+const rig=windsurferRig(0,0,m.heading,0,m),p=windsurferRiderPose(rig,0,m);
+for(const [j,l] of p.legs.entries())jumpFit.push(Math.hypot(...l.foot3.map((v,k)=>v-p.feet3[j][k])));
+for(const h of p.hands)jumpFit.push(Math.hypot(...h.hand3.map((v,k)=>v-h.target[k])));}
+`);
+assert.equal(g.run('jumpFit.every(error=>error<1e-6)'),true,'fixed-length limbs reach planted feet and boom grips');
+});
+
+
+test('windsurf water recovery uses the shared idle swimmer and swims back with an independent wake',()=>{
+const g=game();g.run(`state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();player.x=100;player.y=400;windsurfSession.heading=0;windsurfSession.velocity=175;crashWindsurfer(windsurfSession);
+globalThis.globalSwimBefore=JSON.stringify(swimMotion);advanceWindsurfing(2000);
+globalThis.swimmerCalls=[];const originalSwimmer=drawSwimmingCharacter;drawSwimmingCharacter=(x,y,motion,onBoard)=>{swimmerCalls.push({x,y,effort:motion.effort,onBoard:!!onBoard,local:motion===windsurfSession.crash.swim});originalSwimmer(x,y,motion,onBoard);};drawPlayerWindsurfer();`);
+assert.equal(g.run('windsurfSession.crash.phase'),'ready');assert.equal(g.run('sharkWater(player.x,player.y)'),true);
+assert.equal(g.run('swimmerCalls.length'),1);assert.equal(g.run('swimmerCalls[0].local'),true);assert.equal(g.run('swimmerCalls[0].onBoard'),false);assert.equal(g.run('swimmerCalls[0].effort'),0,'ordinary idle tread with submerged body');
+const phase=g.run('windsurfSession.crash.swim.phase');g.run('advanceWindsurfing(200)');assert.ok(g.run('windsurfSession.crash.swim.phase')>phase);
+g.run('remountWindsurfer();advanceWindsurfing(370);drawPlayerWindsurfer()');
+assert.equal(g.run('windsurfSession.crash.phase'),'return');assert.ok(g.run('windsurfSession.crash.swim.effort')>.5,'return movement drives actual swimming strokes');
+assert.ok(g.run('windsurfSession.crash.swim.wake.length')>0);assert.equal(g.run('JSON.stringify(swimMotion)===globalSwimBefore'),true,'recovery does not borrow the global swimmer state');
+const before=g.run('JSON.stringify(windsurfSession)');g.run('drawPlayerWindsurfer()');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+g.node('#challenge').open=true;g.run('advanceWindsurfing(300)');assert.equal(g.run('JSON.stringify(windsurfSession)'),before);
+g.node('#challenge').open=false;g.run('advanceWindsurfing(10000)');assert.equal(g.run('windsurfSession.crash'),null);
+});
+
+test('windsurf falls stay airborne until impact and land recovery keeps its articulated standing pose',()=>{
+for(const water of [true,false]){
+const g=game();g.run(`state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();player.x=${water?'100':'SAILING_DOCK.x'};player.y=${water?'400':'SAILING_DOCK.y-20'};
+windsurfSession.heading=0;windsurfSession.velocity=0;crashWindsurfer(windsurfSession);
+globalThis.swims=0;const originalSwimmer=drawSwimmingCharacter;drawSwimmingCharacter=(...args)=>{swims++;originalSwimmer(...args)};drawPlayerWindsurfer();`);
+assert.equal(g.run('swims'),0,'initial fall keeps the detached rider');
+g.run('advanceWindsurfing(2000);drawPlayerWindsurfer()');assert.equal(g.run('swims'),water?1:0);
+assert.equal(g.run('windsurfSession.crash.phase'),'ready');
+}
+});
+
+
+test('windsurfers sail across both deep-water boundaries, land and recover there while world edges stay blocked',()=>{
+for(const direction of [-1,1]){
+const g=game();g.run(`state.windsurfer=true;player.x=440;player.y=212;startWindsurfing();
+const direction=${direction},boundary=WORLD.left+WORLD.width*(direction<0?.14:.86),heading=direction<0?Math.PI:0,x=boundary-direction*30;
+globalThis.lane=null;
+for(let y=350;y<1600;y+=50)if(Array.from({length:12},(_,i)=>windsurferClear(x+direction*i*20,y,heading)).every(Boolean)){lane={x,y,heading};break;}
+if(!lane)throw Error('No clear deep-water crossing');
+player.x=lane.x;player.y=lane.y;windsurfSession.heading=lane.heading;windsurfSession.tack=windsurferTack(lane.heading);windsurfSession.velocity=175;
+for(let i=0;i<40;i++)advanceWindsurfing(20);`);
+assert.equal(g.run('!!windsurfSession.crash'),false,'crossing depth alone never causes a wipeout');
+assert.equal(g.run('deepWater(player.x,player.y)'),true);
+assert.equal(g.run('windsurferClear(player.x,player.y,windsurfSession.heading)'),true);
+assert.equal(g.run('windsurferFlightClear(player.x,player.y,windsurfSession.heading,20)'),true);
+g.run('windsurfSession.air={height:5,velocity:-40,elapsed:200,flipElapsed:null,flipDuration:820};advanceWindsurferAir(windsurfSession,500)');
+assert.equal(g.run('windsurfSession.air'),null);assert.equal(g.run('!!windsurfSession.crash'),false,'deep-water touchdown is valid');
+assert.ok(g.run('windsurfSession.landing'));
+g.run('crashWindsurfer(windsurfSession);remountWindsurfer();advanceWindsurfing(10000)');
+assert.equal(g.run('windsurfSession.crash'),null);assert.equal(g.run('deepWater(player.x,player.y)'),true,'recovery stays with the board in deep water');
+assert.equal(g.run('windsurferClear(WORLD.left+20,700,Math.PI)'),false);
+assert.equal(g.run('windsurferFlightClear(WORLD.right-20,700,0,40)'),false);
+}
 });

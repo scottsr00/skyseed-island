@@ -56,8 +56,9 @@ Windsurfing uses strenuous energy scaling and returns to this dock on exhaustion
 
 `windsurfSession`, `startWindsurfing()`, `advanceWindsurfing()`, and `finishWindsurfing()` own
 the session. Swimming marks the water occupancy, while the dispatcher bypasses swimmer
-movement and sea mounts. Swept board hull checks detect islands, piers, bridges, other boats,
-and deep ocean. Saves record the safe dock position; activity resets clear the session.
+movement and sea mounts. Windsurfers can sail, land jumps and remount in both shallow
+and deep water. Swept board hull checks still detect islands, piers, bridges, other boats
+and the outer world boundary. Saves record the safe dock position; activity resets clear the session.
 
 Impacts call `crashWindsurfer()` instead of simply setting speed to zero. The board
 stops at the last clear hull position; the rider releases both hands and pitches forward
@@ -69,8 +70,13 @@ themselves and waits beside the board. The rig collapses separately while the ar
 also checks the complete hull before accepting a landing. A blocked low flight or
 landing starts the same momentum wipeout. Controls cannot launch, trim or steer during
 the fall. E or Get back on queues `remountWindsurfer()`; early presses wait for the
-fall and 700 ms collect-yourself animation. In water the rider treads with submerged
-legs while waiting and returning; each foot emerges during the climb. The rider returns to the board, lifts
+fall and 700 ms collect-yourself animation. In water, `drawSwimmingCharacter()` renders the ordinary idle tread while collecting
+and waiting, and the ordinary swimming strokes while returning to the board.
+The crash owns independent stroke/wake state, advanced through shared
+`advanceSwimmingStroke()` and `recordSwimTrail()` helpers; the usual swimmer state
+is preserved. The swimmer continues into the first part of the mount, then the
+articulated climb emerges from the water instead of beginning from a standing pose.
+Land and timber recovery retain their articulated poses. The rider returns to the board, lifts
 the rig and steps aboard one foot at a time. Fixed-length limb solves keep the hands
 and knees natural through the climb. A board stranded on an obstacle is retrieved
 to nearby clear water, facing away from the impact. Remounting rechecks hull clearance
@@ -104,8 +110,13 @@ and remount sequence. Key repeats cannot start or restart a roll.
 Airborne travel retains launch heading and momentum, uses height-aware swept hull checks,
 and emits no hull wake. The complete solved rider, board and rig rotate together around
 the cross-board axis during projection; sail occlusion uses the rotated camera ray.
-The shadow remains on the water. Landing restores normal sailing with a brief splash
-and a small speed loss. `advanceWindsurferWaves()` detects the same visible crest
+The shadow remains on the water. `windsurferBoardPose()` kicks the nose upward on
+takeoff, holds a raised bow on descent, and pivots around the tail at first water contact.
+`advanceWindsurferLanding()` settles the bow over several hundred milliseconds while
+the shared splash progresses from tail to nose. The tracked peak height and downward
+impact speed scale droplet count, size, reach and water rings; higher jumps make a
+significantly larger splash. Completed rolls return to this tail-first landing attitude.
+Landing restores normal sailing with a small speed loss. `advanceWindsurferWaves()` detects the same visible crest
 crossings as boats and passes a board-sized hull through `advanceBoatWaveSpray()`.
 `windsurferSprayEffect()` supplies independent particles, half-sized droplets/mist,
 scaled water rings and fewer particles per section to the shared boat emitter/renderers.

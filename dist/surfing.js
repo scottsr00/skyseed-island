@@ -30,7 +30,15 @@ function surfTakeoffDemand(s=surfSession){
 const size=Math.max(0,Math.min(1,(surfRideScale(s)-.32)/.68));
 return {effort:.65+size*.85,strokes:Math.round(6+size*6)};
 }
-function surfWaveDistance(index,time=surfClock){return 335-((time*.026+index*108)%324);}
+function coastalWavePhase(index,time){return time*.026+index*108;}
+function surfWaveDistance(index,time=surfClock){return 335-coastalWavePhase(index,time)%324;}
+function coastalWaveSize(index,distance,time=surfClock){
+const phase=coastalWavePhase(index,time);
+// Every sixth incoming crest grows in the outer break, then eases back to normal before the middle break.
+const bigSet=index===2&&Math.floor(phase/324)%2===1;
+const offshore=Math.max(0,Math.min(1,(surfWaveDistance(index,time)-227)/33));
+return surfWaveSize(distance)*(1+(bigSet?.45*offshore:0));
+}
 function surfWaveY(x,index,time=surfClock){return beachShoreY(x)-surfWaveDistance(index,time)+Math.sin(x*.018+time*.0014)*3;}
 function prepareSurfPaddleOut(retry=false){
 const s=surfSession;if(!s)return;
@@ -45,13 +53,14 @@ function catchSurfWave(){
 const s=surfSession;if(!s||s.phase!=='paddling'||s.paused||document.querySelector('dialog[open]'))return false;
 const distance=beachShoreY(player.x)-player.y;
 if(distance<65||distance>280||s.paddleTime<400){s.message='Paddle farther out: reach the rolling crests beyond the shore break.';updateSurfUI();return false;}
-if(![0,1,2].some(i=>{
+const caught=[0,1,2].find(i=>{
 const front=beachWaveProfile(player.x,i,surfClock,true).front;
 const lipX=front+Math.round((player.x-front)/600)*600;
 return Math.hypot(player.x-lipX,player.y-beachWaveSurfaceY(lipX,i,surfClock))<30;
-})){s.message='Paddle close to the curling lip, then press Space to catch the wave.';updateSurfUI();return false;}
+});
+if(caught===undefined){s.message='Paddle close to the curling lip, then press Space to catch the wave.';updateSurfUI();return false;}
 if(Math.sin(s.paddleHeading??-Math.PI/2)<Math.SQRT1_2-1e-9){s.message='Turn the board back toward the beach (Down / S), then press Space to catch the wave.';updateSurfUI();return false;}
-prepareSurfTakeoff(surfWaveSize(distance));updateSurfUI();return true;
+prepareSurfTakeoff(coastalWaveSize(caught,distance));updateSurfUI();return true;
 }
 // Catching a coastal lip starts the close-up takeoff on that same wave size.
 function prepareSurfTakeoff(waveSize=surfRideScale()){
@@ -391,7 +400,7 @@ const y=surfWaveY(x,index,time);
 // The breaking section peels right to left along each coastal swell.
 const front=820+((-time*.055+index*197)%600+600)%600;
 const delta=x-front,breaking=Math.exp(-Math.pow(delta/43,2));
-return {y,front,breaking,height:((rental?9:6)+breaking*(rental?18:12))*surfWaveSize(surfWaveDistance(index,time)),foam:Math.max(0,1-Math.abs(delta-48)/100)};
+return {y,front,breaking,height:((rental?9:6)+breaking*(rental?18:12))*coastalWaveSize(index,surfWaveDistance(index,time),time),foam:Math.max(0,1-Math.abs(delta-48)/100)};
 }
 function beachWaveSurfaceY(x,index,time){
 const distance=surfWaveDistance(index,time),collapse=Math.max(0,1-distance/45);
@@ -400,7 +409,7 @@ return beachShoreY(x)-shoreDistance+Math.sin(x*.018+time*.0014)*3*(1-collapse);
 }
 function beachWaveWhitewaterProfile(x,index,time){
 const distance=surfWaveDistance(index,time),collapse=Math.max(0,1-distance/45);
-const height=43.2*surfWaveSize(distance)*(1-collapse*.92),scale=height/50;
+const height=43.2*coastalWaveSize(index,distance,time)*(1-collapse*.92),scale=height/50;
 if(height<5||collapse>.8||distance>325)return null;
 const front=beachWaveProfile(1100,index,time,state.surfRental).front;
 const section=Math.floor((x-front)/600),lipX=front+section*600,offset=x-lipX;
@@ -606,11 +615,12 @@ rect(x-(dy+leftOffset)*scale,y+dx*scale,1,grain>.7?2:1,'#eafff1');
 function drawBeachWaves(){
 const rental=state.surfRental,time=rental?surfClock:frame*16.667;
 ctx.save();clipBeachWaveWater();
-if(camera.y+WORLD.viewHeight>=1320){
+if(camera.y+WORLD.viewHeight>=1280){
 const start=Math.max(WORLD.left,Math.floor(camera.x/3)*3),end=Math.min(WORLD.right,camera.x+WORLD.viewWidth+3);
 for(let i=0;i<3;i++){
 const distance=surfWaveDistance(i,time),fade=Math.min(1,(335-distance)/30);
-const waveSize=surfWaveSize(distance);
+if(fade<=0)continue;
+const waveSize=coastalWaveSize(i,distance,time);
 const shallows=Math.max(0,1-distance/110),collapse=Math.max(0,1-distance/45);
 const waveY=x=>beachWaveSurfaceY(x,i,time);
 for(let x=start;x<=end;x+=3){
